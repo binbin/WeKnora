@@ -1,9 +1,9 @@
--- Migration: 000065_org_units
+-- Migration: 000072_org_units
 -- Description: Hierarchical OrgUnit tree under Tenant for ancestor-readable
 --              knowledge visibility (province → city → county). Orthogonal to
 --              organizations (cross-tenant SharedSpace).
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000065] Creating org_units hierarchy...'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000072] Creating org_units hierarchy...'; END $$;
 
 -- Administrative units within a single tenant (省/市/县/...).
 -- path is a materialized closure string "/id1/id2/id3/" for cheap ancestor
@@ -78,4 +78,4 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_bases_org_unit
 COMMENT ON COLUMN knowledge_bases.org_unit_id IS
     'Owning OrgUnit; empty = tenant-wide unbound KB (legacy)';
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000065] org_units hierarchy ready'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000072] org_units hierarchy ready'; END $$;

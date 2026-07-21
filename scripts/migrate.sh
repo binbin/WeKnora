@@ -83,6 +83,8 @@ case "$1" in
             exit 1
         fi
         echo "Creating migration files for $2..."
+        echo "Note: -seq uses the local directory max+1. Rebase onto main first"
+        echo "      if this branch is long-lived, then run: make check-migrations"
         migrate create -ext sql -dir ${MIGRATIONS_DIR} -seq $2
         echo "Created:"
         echo "  - ${MIGRATIONS_DIR}/$(ls -t ${MIGRATIONS_DIR} | head -1)"

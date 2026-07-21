@@ -1,0 +1,30 @@
+name: Migrations
+
+# Catch duplicate sequential migration versions before merge.
+# Parallel feature branches both calling `make migrate-create` can mint
+# the same NNNNNN_ prefix; golang-migrate only fails once both land.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'migrations/**'
+      - 'scripts/check-migration-versions.sh'
+      - '.github/workflows/migrations.yml'
+  pull_request:
+    paths:
+      - 'migrations/**'
+      - 'scripts/check-migration-versions.sh'
+      - '.github/workflows/migrations.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-versions:
+    name: unique version prefixes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check migration versions
+        run: bash ./scripts/check-migration-versions.sh

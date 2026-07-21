@@ -1,4 +1,4 @@
--- Rollback: 000066_invitation_org_unit
+-- Rollback: 000073_invitation_org_unit
 
 DROP INDEX IF EXISTS idx_tenant_invitations_org_unit;
 ALTER TABLE tenant_invitations DROP COLUMN IF EXISTS org_unit_id;
