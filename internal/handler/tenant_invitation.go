@@ -27,6 +27,7 @@ type TenantInvitationHandler struct {
 	invitationService interfaces.TenantInvitationService
 	userService       interfaces.UserService
 	tenantService     interfaces.TenantService
+	orgUnitService    interfaces.OrgUnitService
 	configInfo        *config.Config
 }
 
@@ -38,24 +39,28 @@ func NewTenantInvitationHandler(
 	invitationService interfaces.TenantInvitationService,
 	userService interfaces.UserService,
 	tenantService interfaces.TenantService,
+	orgUnitService interfaces.OrgUnitService,
 	configInfo *config.Config,
 ) *TenantInvitationHandler {
 	return &TenantInvitationHandler{
 		invitationService: invitationService,
 		userService:       userService,
 		tenantService:     tenantService,
+		orgUnitService:    orgUnitService,
 		configInfo:        configInfo,
 	}
 }
 
 // createInvitationRequest is the JSON body for POST /tenants/:id/invitations.
 // Email is the user-facing identifier; the handler resolves it to a
-// User row before delegating to the service. The optional Message is
-// surfaced in the invitee's inbox.
+// User row before delegating to the service. OrgUnitID binds the
+// invitee to an administrative unit on accept (required when hierarchy
+// exists). The optional Message is surfaced in the invitee's inbox.
 type createInvitationRequest struct {
-	Email   string           `json:"email" binding:"required,email"`
-	Role    types.TenantRole `json:"role" binding:"required"`
-	Message string           `json:"message"`
+	Email     string           `json:"email" binding:"required,email"`
+	Role      types.TenantRole `json:"role" binding:"required"`
+	OrgUnitID string           `json:"org_unit_id"`
+	Message   string           `json:"message"`
 }
 
 // parseInvitationIDFromPath reads :inv_id off the gin context.
@@ -87,6 +92,7 @@ func projectInvitation(
 	inv *types.TenantInvitation,
 	usersByID map[string]*types.User,
 	tenantsByID map[uint64]*types.Tenant,
+	orgUnitsByID map[string]*types.OrgUnit,
 ) types.TenantInvitationResponse {
 	resp := types.TenantInvitationResponse{
 		ID:            inv.ID,
@@ -94,6 +100,7 @@ func projectInvitation(
 		InviteeUserID: inv.InviteeUserID,
 		InvitedBy:     inv.InvitedBy,
 		Role:          inv.Role,
+		OrgUnitID:     inv.OrgUnitID,
 		Status:        inv.Status,
 		Message:       inv.Message,
 		ExpiresAt:     inv.ExpiresAt,
@@ -115,6 +122,11 @@ func projectInvitation(
 	if t, ok := tenantsByID[inv.TenantID]; ok && t != nil {
 		resp.TenantName = t.Name
 	}
+	if inv.OrgUnitID != "" {
+		if unit, ok := orgUnitsByID[inv.OrgUnitID]; ok && unit != nil {
+			resp.OrgUnitName = unit.Name
+		}
+	}
 	return resp
 }
 
@@ -130,8 +142,9 @@ func (h *TenantInvitationHandler) projectInvitationWithLink(
 	inv *types.TenantInvitation,
 	usersByID map[string]*types.User,
 	tenantsByID map[uint64]*types.Tenant,
+	orgUnitsByID map[string]*types.OrgUnit,
 ) types.TenantInvitationResponse {
-	resp := projectInvitation(inv, usersByID, tenantsByID)
+	resp := projectInvitation(inv, usersByID, tenantsByID, orgUnitsByID)
 	if inv.Status == types.TenantInvitationStatusPending && inv.Token != "" {
 		resp.InviteURL = buildInviteRegisterURL(h.configInfo, inv.Token)
 	}
@@ -186,6 +199,34 @@ func (h *TenantInvitationHandler) hydrateTenants(c *gin.Context, invs []*types.T
 	return tenants
 }
 
+// hydrateOrgUnits loads OrgUnit names for invitation projections.
+func (h *TenantInvitationHandler) hydrateOrgUnits(
+	c *gin.Context,
+	invs []*types.TenantInvitation,
+) map[string]*types.OrgUnit {
+	out := map[string]*types.OrgUnit{}
+	if len(invs) == 0 || h.orgUnitService == nil {
+		return out
+	}
+	ctx := c.Request.Context()
+	seen := make(map[string]struct{})
+	for _, inv := range invs {
+		if inv == nil || inv.OrgUnitID == "" {
+			continue
+		}
+		if _, ok := seen[inv.OrgUnitID]; ok {
+			continue
+		}
+		seen[inv.OrgUnitID] = struct{}{}
+		unit, err := h.orgUnitService.Get(ctx, inv.TenantID, inv.OrgUnitID)
+		if err != nil || unit == nil {
+			continue
+		}
+		out[unit.ID] = unit
+	}
+	return out
+}
+
 // ListTenantInvitations godoc
 // @Summary      列出空间邀请
 // @Description  按空间列出待接受 / 历史邀请。query include_terminal=true 时附带 accepted/declined/revoked/expired。
@@ -219,6 +260,7 @@ func (h *TenantInvitationHandler) ListTenantInvitations(c *gin.Context) {
 	}
 
 	usersByID := h.hydrateUsers(c, rows)
+	orgUnitsByID := h.hydrateOrgUnits(c, rows)
 	showShareLinks := types.TenantRoleFromContext(ctx).HasPermission(types.TenantRoleOwner)
 	resp := make([]types.TenantInvitationResponse, 0, len(rows))
 	for _, inv := range rows {
@@ -227,9 +269,9 @@ func (h *TenantInvitationHandler) ListTenantInvitations(c *gin.Context) {
 		// Share-link URLs embed the registration token — only Owners may
 		// re-copy them; other roles see metadata without invite_url.
 		if showShareLinks {
-			resp = append(resp, h.projectInvitationWithLink(inv, usersByID, nil))
+			resp = append(resp, h.projectInvitationWithLink(inv, usersByID, nil, orgUnitsByID))
 		} else {
-			resp = append(resp, projectInvitation(inv, usersByID, nil))
+			resp = append(resp, projectInvitation(inv, usersByID, nil, orgUnitsByID))
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -290,16 +332,28 @@ func (h *TenantInvitationHandler) CreateInvitation(c *gin.Context) {
 		invitedBy = &caller
 	}
 
-	inv, err := h.invitationService.Create(ctx, tenantID, user.ID, req.Role, invitedBy, req.Message)
+	inv, err := h.invitationService.Create(
+		ctx, tenantID, user.ID, req.Role, invitedBy, req.Message, req.OrgUnitID,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidTenantRole):
+			c.Error(apperrors.NewValidationError(err.Error()))
+		case errors.Is(err, service.ErrOnlySystemAdminCanAssignOwner):
+			c.Error(apperrors.NewForbiddenError(err.Error()))
+		case errors.Is(err, service.ErrOrgUnitRequired),
+			errors.Is(err, service.ErrInviterOrgUnitRequired),
+			errors.Is(err, service.ErrOrgUnitNotInviteable):
 			c.Error(apperrors.NewValidationError(err.Error()))
 		case errors.Is(err, service.ErrPendingInvitationExists):
 			c.Error(apperrors.NewConflictError(err.Error()))
 		case errors.Is(err, service.ErrAlreadyMember):
 			c.Error(apperrors.NewConflictError(err.Error()))
 		default:
+			if appErr, ok := apperrors.IsAppError(err); ok {
+				c.Error(appErr)
+				return
+			}
 			logger.Errorf(ctx, "CreateInvitation failed: user=%s tenant=%d err=%v",
 				user.ID, tenantID, err)
 			c.Error(apperrors.NewInternalServerError("failed to create invitation").WithDetails(err.Error()))
@@ -315,7 +369,8 @@ func (h *TenantInvitationHandler) CreateInvitation(c *gin.Context) {
 			usersByID[u.ID] = u
 		}
 	}
-	resp := projectInvitation(inv, usersByID, nil)
+	orgUnitsByID := h.hydrateOrgUnits(c, []*types.TenantInvitation{inv})
+	resp := projectInvitation(inv, usersByID, nil, orgUnitsByID)
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data":    resp,
@@ -409,9 +464,10 @@ func (h *TenantInvitationHandler) ListMyInvitations(c *gin.Context) {
 
 	usersByID := h.hydrateUsers(c, rows)
 	tenantsByID := h.hydrateTenants(c, rows)
+	orgUnitsByID := h.hydrateOrgUnits(c, rows)
 	resp := make([]types.TenantInvitationResponse, 0, len(rows))
 	for _, inv := range rows {
-		resp = append(resp, projectInvitation(inv, usersByID, tenantsByID))
+		resp = append(resp, projectInvitation(inv, usersByID, tenantsByID, orgUnitsByID))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

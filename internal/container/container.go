@@ -161,6 +161,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewMCPOAuthRepository))
 	must(container.Provide(repository.NewCustomAgentRepository))
 	must(container.Provide(repository.NewOrganizationRepository))
+	must(container.Provide(repository.NewOrgUnitRepository))
 	must(container.Provide(repository.NewKBShareRepository))
 	must(container.Provide(repository.NewAgentShareRepository))
 	must(container.Provide(repository.NewEmbedChannelRepository))
@@ -189,6 +190,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewAuditLogRetentionRunner))
 	must(container.Provide(service.NewKnowledgeBaseService))
 	must(container.Provide(service.NewOrganizationService))
+	must(container.Provide(service.NewOrgUnitService))
 	must(container.Provide(service.NewKBShareService)) // KBShareService must be registered before KnowledgeService and KnowledgeTagService
 	must(container.Provide(service.NewAgentShareService))
 	must(container.Provide(service.NewKnowledgeService))
@@ -370,6 +372,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewSkillService))
 	must(container.Provide(handler.NewSkillHandler))
 	must(container.Provide(handler.NewOrganizationHandler))
+	must(container.Provide(handler.NewOrgUnitHandler))
 
 	// Data source handler
 	must(container.Provide(handler.NewDataSourceHandler))

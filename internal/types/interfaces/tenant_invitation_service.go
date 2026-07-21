@@ -25,6 +25,7 @@ type TenantInvitationService interface {
 		role types.TenantRole,
 		invitedBy *string,
 		message string,
+		orgUnitID string,
 	) (*types.TenantInvitation, error)
 
 	// Accept transitions the pending row into accepted AND creates the
@@ -78,6 +79,7 @@ type TenantInvitationService interface {
 		role types.TenantRole,
 		invitedBy *string,
 		message string,
+		orgUnitID string,
 	) (inv *types.TenantInvitation, plainToken string, err error)
 
 	// LookupByToken resolves a plaintext token to its active share-link

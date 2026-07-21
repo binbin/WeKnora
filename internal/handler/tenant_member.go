@@ -205,6 +205,10 @@ func (h *TenantMemberHandler) AddMember(c *gin.Context) {
 		c.Error(apperrors.NewValidationError("role must be one of owner/admin/contributor/viewer"))
 		return
 	}
+	if req.Role == types.TenantRoleOwner && !types.IsSystemAdminActor(ctx) {
+		c.Error(apperrors.NewForbiddenError(service.ErrOnlySystemAdminCanAssignOwner.Error()))
+		return
+	}
 
 	user, err := h.userService.GetUserByEmail(ctx, strings.TrimSpace(req.Email))
 	if err != nil {
@@ -239,6 +243,8 @@ func (h *TenantMemberHandler) AddMember(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrInvalidTenantRole):
 			c.Error(apperrors.NewValidationError(err.Error()))
+		case errors.Is(err, service.ErrOnlySystemAdminCanAssignOwner):
+			c.Error(apperrors.NewForbiddenError(err.Error()))
 		case errors.Is(err, service.ErrMembershipAlreadyExists):
 			// 409 reads better than 400 here: the request was syntactically
 			// fine, the conflict is semantic ("already a member").
@@ -312,6 +318,8 @@ func (h *TenantMemberHandler) UpdateMemberRole(c *gin.Context) {
 			c.Error(apperrors.NewConflictError(err.Error()))
 		case errors.Is(err, service.ErrInvalidTenantRole):
 			c.Error(apperrors.NewValidationError(err.Error()))
+		case errors.Is(err, service.ErrOnlySystemAdminCanAssignOwner):
+			c.Error(apperrors.NewForbiddenError(err.Error()))
 		default:
 			logger.Errorf(ctx, "UpdateRole failed: user=%s tenant=%d err=%v",
 				userID, tenantID, err)

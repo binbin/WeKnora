@@ -86,6 +86,9 @@ type TenantInvitation struct {
 	InvitedBy *string `json:"invited_by,omitempty" gorm:"type:varchar(36)"`
 	// Role the invitee will receive in tenant_members if they accept.
 	Role TenantRole `json:"role" gorm:"type:varchar(20);not null"`
+	// OrgUnitID is the administrative unit the invitee joins on accept.
+	// Empty when the tenant has no hierarchy (legacy flat membership).
+	OrgUnitID string `json:"org_unit_id" gorm:"type:varchar(36);not null;default:''"`
 	// Status holds the lifecycle state. Default pending; mutated to
 	// accepted/declined/revoked/expired exactly once.
 	Status TenantInvitationStatus `json:"status" gorm:"type:varchar(20);not null;default:'pending'"`
@@ -137,6 +140,8 @@ type TenantInvitationResponse struct {
 	InviterEmail  string                 `json:"inviter_email,omitempty"`
 	InviterName   string                 `json:"inviter_name,omitempty"`
 	Role          TenantRole             `json:"role"`
+	OrgUnitID     string                 `json:"org_unit_id,omitempty"`
+	OrgUnitName   string                 `json:"org_unit_name,omitempty"`
 	Status        TenantInvitationStatus `json:"status"`
 	Message       string                 `json:"message,omitempty"`
 	ExpiresAt     time.Time              `json:"expires_at"`

@@ -528,6 +528,7 @@ func CloneContext(ctx context.Context) context.Context {
 		types.SessionTenantIDContextKey,
 		types.EmbedQueryContextKey,
 		types.EmbedVisitorContextKey,
+		types.OrgUnitIDContextKey,
 		// Keep the Langfuse trace alive across CloneContext boundaries so
 		// LLM/Embedder/Reranker/VLM/ASR wrappers attach their generations
 		// to the same trace opened by GinMiddleware, instead of each call

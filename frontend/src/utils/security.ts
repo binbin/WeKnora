@@ -434,6 +434,10 @@ function getProtectedFileRequestHeaders(): Record<string, string> {
       // fetches landing on the home tenant.
       headers['X-Tenant-ID'] = selectedTenantId;
     }
+    const selectedOrgUnitId = (localStorage.getItem('weknora_org_unit_id') || '').trim();
+    if (selectedOrgUnitId) {
+      headers['X-Org-Unit-ID'] = selectedOrgUnitId;
+    }
   } catch {
     // ignore localStorage read errors
   }

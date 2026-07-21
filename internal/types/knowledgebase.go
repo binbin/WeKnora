@@ -69,6 +69,9 @@ type KnowledgeBase struct {
 	Description string `yaml:"description"             json:"description"`
 	// Workspace ID
 	TenantID uint64 `yaml:"tenant_id"               json:"tenant_id"`
+	// OrgUnitID binds this KB to a tenant-scoped OrgUnit (省/市/县).
+	// Empty string means unbound: legacy tenant-wide visibility.
+	OrgUnitID string `yaml:"org_unit_id"             json:"org_unit_id"             gorm:"type:varchar(36);default:'';index"`
 	// CreatorID records the user ID of whoever originally created the KB.
 	// Used by the workspace-level RBAC middleware to let Contributors edit
 	// their own KBs without granting them access to everyone else's.

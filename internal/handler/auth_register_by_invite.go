@@ -210,24 +210,22 @@ func (h *AuthHandler) RegisterByInvite(c *gin.Context) {
 		return
 	}
 
+	// Home tenant IS the invited workspace (no personal Owner space was
+	// created). Mint tokens for that tenant and return full memberships.
 	accessToken, refreshToken, err := h.userService.GenerateTokens(ctx, user)
 	if err != nil {
 		logger.Errorf(ctx, "register-by-invite: token generation failed for user %s: %v", user.ID, err)
 		c.Error(apperrors.NewInternalServerError("token generation failed").WithDetails(err.Error()))
 		return
 	}
-
 	tenant, _ := h.tenantService.GetTenantByID(ctx, inv.TenantID)
+	memberships := h.userService.BuildLoginMemberships(ctx, user, tenant)
 	c.JSON(http.StatusCreated, dto.NewAuthLoginResponse(&types.LoginResponse{
 		Success:      true,
 		Message:      "Registration successful",
 		User:         user,
 		ActiveTenant: tenant,
-		Memberships: []types.Membership{{
-			TenantID:   inv.TenantID,
-			TenantName: tenantNameOrEmpty(tenant),
-			Role:       inv.Role,
-		}},
+		Memberships:  memberships,
 		Token:        accessToken,
 		RefreshToken: refreshToken,
 	}))

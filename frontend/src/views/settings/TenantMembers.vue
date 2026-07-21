@@ -130,6 +130,9 @@
                   {{ $t('tenantMember.role.' + row.role) }}
                 </t-tag>
               </template>
+              <template #org_unit="{ row }">
+                <span>{{ row.org_unit_name || row.org_unit_id || '—' }}</span>
+              </template>
               <template #inviter="{ row }">
                 <span>{{ inviterPrimary(row) }}</span>
               </template>
@@ -221,11 +224,25 @@
                     <t-form-item :label="$t('tenantMember.add.roleLabel')" name="role">
                       <t-select v-model="addForm.role" :options="roleOptions" :popup-props="roleSelectPopupProps" />
                     </t-form-item>
+                    <t-form-item
+                      v-if="hasOrgHierarchy"
+                      :label="$t('tenantInvitation.orgUnitLabel')"
+                      name="org_unit_id"
+                    >
+                      <t-select
+                        v-model="addForm.org_unit_id"
+                        :options="orgUnitOptions"
+                        :placeholder="$t('tenantInvitation.orgUnitPlaceholder')"
+                        :popup-props="roleSelectPopupProps"
+                        clearable
+                      />
+                    </t-form-item>
                   </t-form>
                   <div v-else class="invite-confirm-body">
                     {{ $t('tenantInvitation.confirmInviteBody', {
                       email: addConfirmEmail,
                       role: addConfirmRoleLabel,
+                      orgUnit: addConfirmOrgUnitLabel,
                     }) }}
                   </div>
                   <div class="invite-popup-footer">
@@ -270,6 +287,19 @@
                       <t-form-item :label="$t('tenantMember.add.roleLabel')" name="role">
                         <t-select v-model="shareLinkForm.role" :options="roleOptions"
                           :popup-props="roleSelectPopupProps" />
+                      </t-form-item>
+                      <t-form-item
+                        v-if="hasOrgHierarchy"
+                        :label="$t('tenantInvitation.orgUnitLabel')"
+                        name="org_unit_id"
+                      >
+                        <t-select
+                          v-model="shareLinkForm.org_unit_id"
+                          :options="orgUnitOptions"
+                          :placeholder="$t('tenantInvitation.orgUnitPlaceholder')"
+                          :popup-props="roleSelectPopupProps"
+                          clearable
+                        />
                       </t-form-item>
                     </t-form>
                   </div>
@@ -530,6 +560,12 @@ import {
   type TenantInvitation,
 } from '@/api/tenant/invitations'
 import {
+  getStoredOrgUnitId,
+  listInviteableOrgUnits,
+  listOrgUnits,
+  type OrgUnit,
+} from '@/api/org-unit'
+import {
   listAuditLog,
   type AuditLog,
   type AuditAction,
@@ -560,7 +596,10 @@ const invitePopupVisible = ref(false)
 // invite). shareLinkResult is non-null after a successful create —
 // the popup then switches into "here's your link, copy it" mode.
 const shareLinkPopupVisible = ref(false)
-const shareLinkForm = reactive<{ role: TenantRole }>({ role: 'contributor' })
+const shareLinkForm = reactive<{ role: TenantRole; org_unit_id: string }>({
+  role: 'contributor',
+  org_unit_id: '',
+})
 const creatingShareLink = ref(false)
 const shareLinkResult = ref<TenantInvitation | null>(null)
 // Two-step invite inside the popup: 'form' renders the email/role inputs;
@@ -629,10 +668,69 @@ let auditScrollObserver: IntersectionObserver | null = null
 // inviting a fresh member with viewer is too restrictive for the
 // expected "let them collaborate on KBs" use case, and admin/owner
 // should be a deliberate promote step after the user accepts.
-const addForm = reactive<{ email: string; role: TenantRole }>({
+const addForm = reactive<{ email: string; role: TenantRole; org_unit_id: string }>({
   email: '',
   role: 'contributor',
+  org_unit_id: '',
 })
+
+const orgUnitTree = ref<OrgUnit[]>([])
+const hasOrgHierarchy = ref(false)
+
+const orgUnitOptions = computed(() =>
+  orgUnitTree.value.map((unit) => ({
+    label: `${'—'.repeat(unit.depth || 0)} ${unit.name}`.trim(),
+    value: unit.id,
+  })),
+)
+
+async function refreshHierarchyFlag() {
+  try {
+    const allUnits = await listOrgUnits(false)
+    hasOrgHierarchy.value = allUnits.length > 0
+  } catch {
+    hasOrgHierarchy.value = false
+  }
+}
+
+async function loadOrgUnits(role?: TenantRole) {
+  const selectedRole = role || addForm.role || 'contributor'
+  try {
+    await refreshHierarchyFlag()
+    if (!hasOrgHierarchy.value) {
+      orgUnitTree.value = []
+      return
+    }
+    orgUnitTree.value = await listInviteableOrgUnits(selectedRole)
+    const allowed = new Set(orgUnitTree.value.map((unit) => unit.id))
+    const preferred = getStoredOrgUnitId()
+    if (addForm.org_unit_id && !allowed.has(addForm.org_unit_id)) {
+      addForm.org_unit_id = ''
+    }
+    if (shareLinkForm.org_unit_id && !allowed.has(shareLinkForm.org_unit_id)) {
+      shareLinkForm.org_unit_id = ''
+    }
+    if (!addForm.org_unit_id && preferred && allowed.has(preferred)) {
+      addForm.org_unit_id = preferred
+    }
+    if (!shareLinkForm.org_unit_id && preferred && allowed.has(preferred)) {
+      shareLinkForm.org_unit_id = preferred
+    }
+    // Owner cannot use self/peer — prefer first descendant when empty.
+    if (!addForm.org_unit_id && orgUnitTree.value.length) {
+      addForm.org_unit_id = orgUnitTree.value[0].id
+    }
+    if (!shareLinkForm.org_unit_id && orgUnitTree.value.length) {
+      shareLinkForm.org_unit_id = orgUnitTree.value[0].id
+    }
+  } catch (error: unknown) {
+    orgUnitTree.value = []
+    MessagePlugin.warning(
+      (error as { message?: string })?.message ||
+        t('tenantInvitation.errors.inviterOrgUnitRequired'),
+    )
+  }
+}
 
 // Role-aware gates. The server enforces every mutation; UI gates here
 // are presentational only, matching the security note in stores/auth.ts.
@@ -661,12 +759,18 @@ const currentUserId = computed(() => authStore.user?.id ?? '')
 // don't expose a tenant picker here.
 const activeTenantId = computed(() => Number(authStore.currentTenantId ?? 0))
 
-const roleOptions = computed(() => [
-  { label: t('tenantMember.role.owner'), value: 'owner' },
-  { label: t('tenantMember.role.admin'), value: 'admin' },
-  { label: t('tenantMember.role.contributor'), value: 'contributor' },
-  { label: t('tenantMember.role.viewer'), value: 'viewer' },
-])
+const roleOptions = computed(() => {
+  const options: { label: string; value: TenantRole }[] = [
+    { label: t('tenantMember.role.admin'), value: 'admin' },
+    { label: t('tenantMember.role.contributor'), value: 'contributor' },
+    { label: t('tenantMember.role.viewer'), value: 'viewer' },
+  ]
+  // 顶层所有者仅超级管理员可添加；自助注册会创建个人空间并成为该空间 Owner。
+  if (authStore.isSystemAdmin) {
+    options.unshift({ label: t('tenantMember.role.owner'), value: 'owner' })
+  }
+  return options
+})
 
 /** 下拉层须高于邀请浮层（3050）与组织设置全屏遮罩，否则会被压住 */
 const roleSelectPopupProps = {
@@ -743,13 +847,16 @@ function memberSecondary(row: { username?: string; email?: string }) {
   return ''
 }
 
-const addFormRules = {
+const addFormRules = computed(() => ({
   email: [
     { required: true, message: t('tenantMember.errors.emailRequired'), trigger: 'blur' },
     { email: true, message: t('tenantMember.errors.emailFormat'), trigger: 'blur' },
   ],
   role: [{ required: true, message: t('tenantMember.errors.roleRequired'), trigger: 'change' }],
-}
+  org_unit_id: hasOrgHierarchy.value
+    ? [{ required: true, message: t('tenantInvitation.errors.orgUnitRequired'), trigger: 'change' }]
+    : [],
+}))
 
 // Pretty role tag colour: Owner stands out, Admin is warning, the rest
 // stay neutral so the table doesn't become a confetti cannon.
@@ -857,6 +964,9 @@ watch(searchQuery, () => {
 const invitationColumns = computed(() => [
   { colKey: 'invitee', title: t('tenantInvitation.columns.invitee'), ellipsis: true, minWidth: 160 },
   { colKey: 'role', title: t('tenantInvitation.columns.role'), width: 110 },
+  ...(hasOrgHierarchy.value
+    ? [{ colKey: 'org_unit', title: t('tenantInvitation.columns.orgUnit'), ellipsis: true, minWidth: 120 }]
+    : []),
   { colKey: 'inviter', title: t('tenantInvitation.columns.inviter'), ellipsis: true, minWidth: 140 },
   { colKey: 'expires_at', title: t('tenantInvitation.columns.expiresAt'), width: 160 },
   { colKey: 'status', title: t('tenantInvitation.columns.status'), width: 100 },
@@ -1244,7 +1354,9 @@ watch(invitePopupVisible, (open) => {
   if (!open) return
   addForm.email = ''
   addForm.role = 'contributor'
+  addForm.org_unit_id = getStoredOrgUnitId()
   addDialogStep.value = 'form'
+  void loadOrgUnits(addForm.role)
 })
 
 // Share-link popup: re-init on every open so the operator never sees
@@ -1252,8 +1364,28 @@ watch(invitePopupVisible, (open) => {
 watch(shareLinkPopupVisible, (open) => {
   if (!open) return
   shareLinkForm.role = 'contributor'
+  shareLinkForm.org_unit_id = getStoredOrgUnitId()
   shareLinkResult.value = null
+  void loadOrgUnits(shareLinkForm.role)
 })
+
+watch(
+  () => addForm.role,
+  (role) => {
+    if (invitePopupVisible.value) {
+      void loadOrgUnits(role)
+    }
+  },
+)
+
+watch(
+  () => shareLinkForm.role,
+  (role) => {
+    if (shareLinkPopupVisible.value) {
+      void loadOrgUnits(role)
+    }
+  },
+)
 
 // absoluteInviteURL turns the backend's potentially-host-relative
 // invite_url into a copy-friendly absolute URL. The backend returns
@@ -1277,9 +1409,16 @@ async function copyText(text: string) {
 }
 
 async function submitShareLink() {
+  if (hasOrgHierarchy.value && !shareLinkForm.org_unit_id) {
+    MessagePlugin.warning(t('tenantInvitation.errors.orgUnitRequired'))
+    return
+  }
   creatingShareLink.value = true
   try {
-    const resp = await createInviteLink(activeTenantId.value, { role: shareLinkForm.role })
+    const resp = await createInviteLink(activeTenantId.value, {
+      role: shareLinkForm.role,
+      org_unit_id: shareLinkForm.org_unit_id || undefined,
+    })
     if (!resp.success || !resp.data) {
       MessagePlugin.error(resp.message || t('tenantInvitation.errors.generic'))
       return
@@ -1299,6 +1438,10 @@ async function submitShareLink() {
 // the summary always mirrors the current form state.
 const addConfirmEmail = computed(() => addForm.email.trim())
 const addConfirmRoleLabel = computed(() => t('tenantMember.role.' + addForm.role))
+const addConfirmOrgUnitLabel = computed(() => {
+  const option = orgUnitOptions.value.find((item) => item.value === addForm.org_unit_id)
+  return option?.label?.replace(/^—+\s*/, '') || addForm.org_unit_id || '—'
+})
 
 // submitAdd is wired to the popup footer primary CTA. On step='form' it
 // validates and swaps to summary; on step='confirm' it fires the API.
@@ -1306,10 +1449,14 @@ async function submitAdd() {
   if (addDialogStep.value === 'form') {
     const valid = await addFormRef.value?.validate?.()
     if (valid !== true) return
+    if (hasOrgHierarchy.value && !addForm.org_unit_id) {
+      MessagePlugin.warning(t('tenantInvitation.errors.orgUnitRequired'))
+      return
+    }
     addDialogStep.value = 'confirm'
     return
   }
-  await sendInvitation(addForm.email.trim(), addForm.role)
+  await sendInvitation(addForm.email.trim(), addForm.role, addForm.org_unit_id)
 }
 
 // goBackToForm un-advances from confirm to form inside the popup.
@@ -1325,10 +1472,14 @@ const dialogConfirmLabel = computed(() =>
 )
 
 // sendInvitation actually fires the create-invitation API call.
-async function sendInvitation(email: string, role: TenantRole) {
+async function sendInvitation(email: string, role: TenantRole, orgUnitId: string) {
   adding.value = true
   try {
-    const resp = await createInvitation(activeTenantId.value, { email, role })
+    const resp = await createInvitation(activeTenantId.value, {
+      email,
+      role,
+      org_unit_id: orgUnitId || undefined,
+    })
     if (resp.success) {
       invitationsPage.value = 1
       await loadInvitations()
@@ -1448,6 +1599,7 @@ watch(
       invitationsTotal.value = 0
       loadMembers()
       loadInvitations()
+      void loadOrgUnits('contributor')
     }
   },
   { immediate: true },

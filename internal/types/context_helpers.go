@@ -103,6 +103,19 @@ func IsSystemAdminFromContext(ctx context.Context) bool {
 	return v
 }
 
+// IsSystemAdminActor reports whether the caller is a platform system
+// admin. Checks both the middleware flag and User.IsSystemAdmin so
+// service-layer code works even when only the User is on the context.
+func IsSystemAdminActor(ctx context.Context) bool {
+	if IsSystemAdminFromContext(ctx) {
+		return true
+	}
+	if user, ok := ctx.Value(UserContextKey).(*User); ok && user != nil {
+		return user.IsSystemAdmin
+	}
+	return false
+}
+
 // SessionTenantIDFromContext extracts the session-owner tenant ID from ctx.
 // Falls back to TenantIDFromContext when the session key is absent.
 func SessionTenantIDFromContext(ctx context.Context) (uint64, bool) {
@@ -155,6 +168,18 @@ func IsBackgroundTask(ctx context.Context) bool {
 func LanguageFromContext(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(LanguageContextKey).(string)
 	return v, ok && v != ""
+}
+
+// OrgUnitIDFromContext extracts the active OrgUnit ID from ctx.
+// Returns ("", false) when the key is absent or empty.
+func OrgUnitIDFromContext(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(OrgUnitIDContextKey).(string)
+	return v, ok && v != ""
+}
+
+// WithOrgUnitID returns a child context carrying the active OrgUnit ID.
+func WithOrgUnitID(ctx context.Context, orgUnitID string) context.Context {
+	return context.WithValue(ctx, OrgUnitIDContextKey, orgUnitID)
 }
 
 // LanguageNameFromContext returns the human-readable language name for use in prompts.

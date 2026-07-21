@@ -57,6 +57,10 @@ instance.interceptors.request.use(
       if (selectedTenantId) {
         config.headers["X-Tenant-ID"] = selectedTenantId;
       }
+      const selectedOrgUnitId = localStorage.getItem('weknora_org_unit_id');
+      if (selectedOrgUnitId) {
+        config.headers["X-Org-Unit-ID"] = selectedOrgUnitId;
+      }
     }
     
     config.headers["X-Request-ID"] = `${generateRandomString(12)}`;

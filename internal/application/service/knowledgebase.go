@@ -26,12 +26,14 @@ import (
 var ErrInvalidTenantID = errors.New("invalid tenant ID")
 
 // knowledgeBaseService implements the knowledge base service interface
+// knowledgeBaseService implements the knowledge base service interface
 type knowledgeBaseService struct {
 	repo            interfaces.KnowledgeBaseRepository
 	kgRepo          interfaces.KnowledgeRepository
 	chunkRepo       interfaces.ChunkRepository
 	shareRepo       interfaces.KBShareRepository
 	kbShareService  interfaces.KBShareService
+	orgUnitService  interfaces.OrgUnitService
 	modelService    interfaces.ModelService
 	retrieveEngine  interfaces.RetrieveEngineRegistry
 	ownership       retriever.TenantStoreOwnership
@@ -51,6 +53,7 @@ func NewKnowledgeBaseService(repo interfaces.KnowledgeBaseRepository,
 	chunkRepo interfaces.ChunkRepository,
 	shareRepo interfaces.KBShareRepository,
 	kbShareService interfaces.KBShareService,
+	orgUnitService interfaces.OrgUnitService,
 	modelService interfaces.ModelService,
 	retrieveEngine interfaces.RetrieveEngineRegistry,
 	ownership retriever.TenantStoreOwnership,
@@ -69,6 +72,7 @@ func NewKnowledgeBaseService(repo interfaces.KnowledgeBaseRepository,
 		chunkRepo:       chunkRepo,
 		shareRepo:       shareRepo,
 		kbShareService:  kbShareService,
+		orgUnitService:  orgUnitService,
 		modelService:    modelService,
 		retrieveEngine:  retrieveEngine,
 		ownership:       ownership,
@@ -109,6 +113,13 @@ func (s *knowledgeBaseService) CreateKnowledgeBase(ctx context.Context,
 	kb.CreatedAt = time.Now()
 	kb.TenantID = types.MustTenantIDFromContext(ctx)
 	kb.UpdatedAt = time.Now()
+	// OrgUnit binding comes from the active OrgUnit context only —
+	// never trust a client-supplied org_unit_id (would enable escalation).
+	if orgUnitID, ok := types.OrgUnitIDFromContext(ctx); ok {
+		kb.OrgUnitID = orgUnitID
+	} else {
+		kb.OrgUnitID = ""
+	}
 	// Record the creator so RBAC's RequireOwnershipOrRole can let
 	// Contributors edit their own KBs without granting them tenant-wide
 	// edit rights. The X-API-Key auth path attaches a synthetic
@@ -185,6 +196,35 @@ func (s *knowledgeBaseService) applyAndValidateStorageBackend(ctx context.Contex
 	kb.StorageBackendID = &backend.ID
 	kb.SetStorageProvider(backend.Provider)
 	return nil
+}
+
+// filterKBsByOrgUnit keeps KBs the active OrgUnit may read (self +
+// ancestors + unbound). No-op when OrgUnitService is nil or hierarchy
+// is inactive.
+func (s *knowledgeBaseService) filterKBsByOrgUnit(
+	ctx context.Context,
+	tenantID uint64,
+	kbs []*types.KnowledgeBase,
+) []*types.KnowledgeBase {
+	if s.orgUnitService == nil || len(kbs) == 0 {
+		return kbs
+	}
+	activeID, _ := types.OrgUnitIDFromContext(ctx)
+	filtered := make([]*types.KnowledgeBase, 0, len(kbs))
+	for _, kb := range kbs {
+		if kb == nil {
+			continue
+		}
+		ok, err := s.orgUnitService.CanReadKB(ctx, tenantID, activeID, kb.OrgUnitID)
+		if err != nil {
+			logger.Warnf(ctx, "org unit read check failed for kb %s: %v", kb.ID, err)
+			continue
+		}
+		if ok {
+			filtered = append(filtered, kb)
+		}
+	}
+	return filtered
 }
 
 // applyTenantDefaultStorageProvider fills an empty KB storage provider from the
@@ -335,6 +375,8 @@ func (s *knowledgeBaseService) ListKnowledgeBases(ctx context.Context) ([]*types
 		})
 		return nil, err
 	}
+
+	kbs = s.filterKBsByOrgUnit(ctx, tenantID, kbs)
 
 	// Query knowledge count and chunk count for each knowledge base
 	for _, kb := range kbs {

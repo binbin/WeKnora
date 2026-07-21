@@ -329,6 +329,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useRoleLabel } from '@/composables/useRoleLabel'
 import { notifyLoginSuccess } from '@/utils/loginNotify'
+import { persistLastActiveTenantPreference } from '@/utils/tenantSwitch'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Autoplay, EffectFade, Pagination } from 'swiper/modules'
 import 'swiper/css'
@@ -574,6 +575,10 @@ const persistLoginResponse = async (response: any) => {
     const homeIdNum = Number(homeTenantIdRaw)
     if (Number.isFinite(activeIdNum) && Number.isFinite(homeIdNum) && activeIdNum !== homeIdNum) {
       authStore.setSelectedTenant(activeIdNum, activeTenant?.name || null)
+      // Keep next clean login in the same non-home workspace (invite
+      // register / remembered last-active). Best-effort; do not block
+      // redirect on preference write failure.
+      void persistLastActiveTenantPreference(activeIdNum)
     } else {
       authStore.setSelectedTenant(null, null)
     }

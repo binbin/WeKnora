@@ -6834,8 +6834,10 @@ export default {
     inviteSuccess: 'Invitation sent. Waiting for the invitee to accept.',
     confirmInviteTitle: 'Send invitation?',
     confirmInviteBody:
-      'Send an invitation to {email} (role: {role}). They will join the workspace only after accepting.',
+      'Send an invitation to {email} (role: {role}, org: {orgUnit}). They will join only after accepting.',
     confirmSend: 'Send',
+    orgUnitLabel: 'Organization',
+    orgUnitPlaceholder: 'Own / peer / subordinate (Owner: subordinate only)',
     copyLink: 'Copy invite link',
     copied: 'Copied to clipboard',
     copyFailed: 'Copy failed; please select the text manually',
@@ -6864,6 +6866,7 @@ export default {
     columns: {
       invitee: 'Invitee',
       role: 'Role',
+      orgUnit: 'Organization',
       inviter: 'Inviter',
       expiresAt: 'Expires',
       status: 'Status',
@@ -6899,6 +6902,10 @@ export default {
       expired: 'The invitation has expired.',
       forbidden: 'Only the invitee can accept or decline this invitation.',
       notFound: 'Invitation not found or already withdrawn.',
+      orgUnitRequired: 'Select the organization unit for the invitee.',
+      orgUnitNotInviteable:
+        'Invitees may only join your own, peer, or subordinate units; Owner role is limited to subordinates.',
+      inviterOrgUnitRequired: 'Select your current organization before inviting.',
       generic: 'Something went wrong. Please try again.',
     },
   },

@@ -47,6 +47,7 @@ type RouterParams struct {
 	EvaluationService            interfaces.EvaluationService
 	KBShareService               interfaces.KBShareService
 	AgentShareService            interfaces.AgentShareService
+	OrgUnitService               interfaces.OrgUnitService
 	KBHandler                    *handler.KnowledgeBaseHandler
 	KnowledgeHandler             *handler.KnowledgeHandler
 	TenantHandler                *handler.TenantHandler
@@ -83,6 +84,7 @@ type RouterParams struct {
 	UserFavoriteHandler          *handler.UserResourceFavoriteHandler
 	SkillHandler                 *handler.SkillHandler
 	OrganizationHandler          *handler.OrganizationHandler
+	OrgUnitHandler               *handler.OrgUnitHandler
 	IMHandler                    *handler.IMHandler
 	EmbedChannelHandler          *handler.EmbedChannelHandler
 	EmbedChannelService          interfaces.EmbedChannelService
@@ -112,7 +114,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Embed-Session", "X-External-User-ID", "X-External-User-Token"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Org-Unit-ID", "X-Embed-Session", "X-External-User-ID", "X-External-User-Token"},
 		ExposeHeaders:    []string{"Content-Length", "Access-Control-Allow-Origin"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
@@ -176,6 +178,8 @@ func NewRouter(params RouterParams) *gin.Engine {
 
 	// 认证中间件
 	r.Use(middleware.Auth(params.TenantService, params.UserService, params.TenantMemberService, params.TenantAPIKeyService, params.Config))
+	r.Use(middleware.OrgUnitServiceProvider(params.OrgUnitService))
+	r.Use(middleware.ResolveOrgUnit(params.OrgUnitService))
 
 	// 文件服务：统一代理本地/MinIO/COS/TOS存储后端（需要认证）
 	serveFilesWithResources(r, params.FileService, params.StorageBackendResolver, params.ResourceCatalog)
@@ -262,6 +266,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterUserFavoriteRoutes(v1, params.UserFavoriteHandler, rbacGuards)
 		RegisterSkillRoutes(v1, params.SkillHandler, rbacGuards)
 		RegisterOrganizationRoutes(v1, params.OrganizationHandler, rbacGuards)
+		RegisterOrgUnitRoutes(v1, params.OrgUnitHandler, rbacGuards)
 		RegisterIMChannelRoutes(v1, params.IMHandler, rbacGuards)
 		RegisterEmbedChannelRoutes(v1, params.EmbedChannelHandler, rbacGuards)
 		RegisterDataSourceRoutes(v1, params.DataSourceHandler, params.DataSourceCredentialsHandler, rbacGuards)
@@ -1217,6 +1222,34 @@ func RegisterSkillRoutes(r *gin.RouterGroup, skillHandler *handler.SkillHandler,
 	{
 		// List all preloaded skills — Viewer+
 		skills.GET("", g.Viewer(), skillHandler.ListSkills)
+	}
+}
+
+// RegisterOrgUnitRoutes registers tenant-scoped administrative hierarchy
+// routes (省/市/县 OrgUnit). Orthogonal to /organizations (SharedSpace).
+func RegisterOrgUnitRoutes(
+	r *gin.RouterGroup,
+	orgUnitHandler *handler.OrgUnitHandler,
+	g *rbacGuards,
+) {
+	if orgUnitHandler == nil {
+		return
+	}
+	units := r.Group("/org-units")
+	{
+		units.GET("", g.Viewer(), orgUnitHandler.List)
+		units.GET("/me", g.Viewer(), orgUnitHandler.ListMyMemberships)
+		units.GET("/visibility", g.Viewer(), orgUnitHandler.GetVisibility)
+		units.GET("/inviteable", g.Viewer(), orgUnitHandler.ListInviteable)
+		units.POST("", g.Admin(), orgUnitHandler.Create)
+		units.GET("/:id", g.Viewer(), orgUnitHandler.Get)
+		units.PUT("/:id", g.Admin(), orgUnitHandler.Update)
+		units.DELETE("/:id", g.Admin(), orgUnitHandler.Delete)
+		units.POST("/:id/move", g.Admin(), orgUnitHandler.Move)
+		units.POST("/:id/primary", g.Viewer(), orgUnitHandler.SetPrimary)
+		units.GET("/:id/members", g.Viewer(), orgUnitHandler.ListMembers)
+		units.POST("/:id/members", g.Admin(), orgUnitHandler.AddMember)
+		units.DELETE("/:id/members/:user_id", g.Admin(), orgUnitHandler.RemoveMember)
 	}
 }
 

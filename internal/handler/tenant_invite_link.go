@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	apperrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -48,8 +50,9 @@ func buildInviteRegisterURL(cfg *config.Config, plainToken string) string {
 // Only role + optional message — share-link rows have no specific
 // invitee, so the Owner just picks "what role does the holder get".
 type createInviteLinkRequest struct {
-	Role    types.TenantRole `json:"role"    binding:"required"`
-	Message string           `json:"message"`
+	Role      types.TenantRole `json:"role"    binding:"required"`
+	OrgUnitID string           `json:"org_unit_id"`
+	Message   string           `json:"message"`
 }
 
 // CreateInviteLink godoc
@@ -86,10 +89,27 @@ func (h *TenantInvitationHandler) CreateInviteLink(c *gin.Context) {
 		invitedBy = &caller
 	}
 
-	inv, _, err := h.invitationService.CreateShareLink(ctx, tenantID, req.Role, invitedBy, req.Message)
+	inv, _, err := h.invitationService.CreateShareLink(
+		ctx, tenantID, req.Role, invitedBy, req.Message, req.OrgUnitID,
+	)
 	if err != nil {
-		logger.Errorf(ctx, "CreateShareLink failed: tenant=%d err=%v", tenantID, err)
-		c.Error(apperrors.NewInternalServerError("failed to create share link").WithDetails(err.Error()))
+		switch {
+		case errors.Is(err, service.ErrInvalidTenantRole):
+			c.Error(apperrors.NewValidationError(err.Error()))
+		case errors.Is(err, service.ErrOnlySystemAdminCanAssignOwner):
+			c.Error(apperrors.NewForbiddenError(err.Error()))
+		case errors.Is(err, service.ErrOrgUnitRequired),
+			errors.Is(err, service.ErrInviterOrgUnitRequired),
+			errors.Is(err, service.ErrOrgUnitNotInviteable):
+			c.Error(apperrors.NewValidationError(err.Error()))
+		default:
+			if appErr, ok := apperrors.IsAppError(err); ok {
+				c.Error(appErr)
+				return
+			}
+			logger.Errorf(ctx, "CreateShareLink failed: tenant=%d err=%v", tenantID, err)
+			c.Error(apperrors.NewInternalServerError("failed to create share link").WithDetails(err.Error()))
+		}
 		return
 	}
 	usersByID := map[string]*types.User{}
@@ -98,8 +118,9 @@ func (h *TenantInvitationHandler) CreateInviteLink(c *gin.Context) {
 			usersByID[iu.ID] = iu
 		}
 	}
+	orgUnitsByID := h.hydrateOrgUnits(c, []*types.TenantInvitation{inv})
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"data":    h.projectInvitationWithLink(inv, usersByID, nil),
+		"data":    h.projectInvitationWithLink(inv, usersByID, nil, orgUnitsByID),
 	})
 }

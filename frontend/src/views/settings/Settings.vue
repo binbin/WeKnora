@@ -173,6 +173,10 @@
                     <IntegrationSettingsSection :tab="integrationTabFromSection(currentSection)" />
                   </div>
 
+                  <div v-if="currentSection === 'orgunits'" class="section">
+                    <OrgUnitSettings />
+                  </div>
+
                   <!-- MCP 服务 -->
                   <div v-if="currentSection === 'mcp'" class="section">
                     <McpSettings />
@@ -207,6 +211,7 @@ import ParserEngineSettings from './ParserEngineSettings.vue'
 import StorageEngineSettings from './StorageBackendSettings.vue'
 import WeKnoraCloudSettings from './WeKnoraCloudSettings.vue'
 import TenantMembers from './TenantMembers.vue'
+import OrgUnitSettings from './OrgUnitSettings.vue'
 import SystemSettings from '@/views/system/SystemSettings.vue'
 import RuntimeQueues from '@/views/system/RuntimeQueues.vue'
 import PlatformAPIKeys from '@/views/system/PlatformAPIKeys.vue'
@@ -273,6 +278,7 @@ const SECTION_MIN_ROLE: Record<string, RoleKey> = {
   userprofile: 'viewer',
   tenant: 'viewer',
   members: 'viewer',
+  orgunits: 'viewer',
 }
 
 const SYSTEM_ADMIN_SECTIONS = new Set(['system-global', 'runtime-queues', 'platform-api-keys', 'system-audit-log'])
@@ -351,6 +357,7 @@ const navItems = computed(() => {
     { key: 'userprofile', icon: 'user', label: t('userProfile.title') },
     { key: 'tenant', icon: 'user-circle', label: t('settings.tenantInfo') },
     { key: 'members', icon: 'usergroup', label: t('tenantMember.title') },
+    { key: 'orgunits', icon: 'tree-list', label: '组织层级' },
     ...integrationItems,
   ]
   // currentTenantRole 为空表示「membership 还没加载」—— 比起渲染整套
@@ -378,7 +385,7 @@ const navGroups = computed<NavGroup[]>(() => {
     {
       key: 'workspace',
       label: t('settings.navGroups.workspace'),
-      items: pickItems(['tenant', 'members', 'chathistory']),
+      items: pickItems(['tenant', 'members', 'orgunits', 'chathistory']),
     },
     {
       key: 'models_runtime',

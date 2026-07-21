@@ -36,6 +36,9 @@
             <t-tag :theme="roleTagTheme(row.role)" size="small">
               {{ $t('tenantMember.role.' + row.role) }}
             </t-tag>
+            <t-tag v-if="row.org_unit_name || row.org_unit_id" theme="default" size="small" variant="outline">
+              {{ row.org_unit_name || row.org_unit_id }}
+            </t-tag>
           </div>
           <div class="invitation-card-meta">
             <span class="meta-row">
@@ -81,6 +84,12 @@ import {
   type TenantInvitation,
 } from '@/api/tenant/invitations'
 import type { TenantRole } from '@/api/tenant/members'
+import { useRoleLabel } from '@/composables/useRoleLabel'
+import {
+  navigateAfterTenantSwitch,
+  persistLastActiveTenantPreference,
+  stashTenantSwitchToast,
+} from '@/utils/tenantSwitch'
 
 // v-model:visible — the parent (UserMenu) owns the open/close state
 // so the bell icon stays the single source of truth. Reload is run
@@ -95,6 +104,7 @@ const visibleModel = computed({
 
 const { t, locale } = useI18n()
 const authStore = useAuthStore()
+const { formatRole } = useRoleLabel()
 
 const invitations = ref<TenantInvitation[]>([])
 const loading = ref(false)
@@ -161,6 +171,27 @@ async function onAccept(row: TenantInvitation) {
       invitations.value = invitations.value.filter((x) => x.id !== row.id)
       authStore.setPendingInvitationCount(Math.max(0, authStore.pendingInvitationCount - 1))
       await authStore.refreshFromAuthMe()
+
+      // Accept only adds a membership; the user is still sitting in their
+      // personal home tenant (Owner). Jump into the invited workspace so
+      // the UI shows the invite role (e.g. 编辑) instead of 所有者.
+      const tenantId = Number(row.tenant_id)
+      const tenantName =
+        row.tenant_name || t('tenantInvitation.myInbox.tenantLabel') + ` #${row.tenant_id}`
+      if (Number.isFinite(tenantId) && tenantId > 0) {
+        authStore.setSelectedTenant(tenantId, tenantName)
+        stashTenantSwitchToast({
+          name: tenantName,
+          role: formatRole(row.role) || undefined,
+          roleEnum: row.role || undefined,
+        })
+        visibleModel.value = false
+        const persist = persistLastActiveTenantPreference(tenantId)
+        await Promise.race([persist, new Promise((resolve) => setTimeout(resolve, 400))])
+        navigateAfterTenantSwitch()
+        return
+      }
+
       MessagePlugin.success(
         t('tenantInvitation.myInbox.acceptSuccess', {
           tenant: row.tenant_name || `#${row.tenant_id}`,

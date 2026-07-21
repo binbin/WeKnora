@@ -26,6 +26,8 @@ export interface TenantInvitation {
   inviter_email?: string
   inviter_name?: string
   role: TenantRole
+  org_unit_id?: string
+  org_unit_name?: string
   status: TenantInvitationStatus
   message?: string
   expires_at: string
@@ -73,6 +75,7 @@ function buildTenantInvitationsQuery(options: ListTenantInvitationsParams): stri
 export interface CreateInvitationRequest {
   email: string
   role: TenantRole
+  org_unit_id?: string
   message?: string
 }
 
@@ -207,6 +210,7 @@ export async function declineInvitation(invId: number): Promise<SimpleResponse> 
 
 export interface CreateInviteLinkRequest {
   role: TenantRole
+  org_unit_id?: string
   message?: string
 }
 

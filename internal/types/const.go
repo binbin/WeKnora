@@ -51,6 +51,9 @@ const (
 	// the agent emits a one-shot authorization notice and continues instead of
 	// blocking until the OAuth wait times out. See IsMCPOAuthNonInteractive.
 	MCPOAuthNonInteractiveContextKey ContextKey = "MCPOAuthNonInteractive"
+	// OrgUnitIDContextKey is the caller's active OrgUnit within the
+	// current tenant (from X-Org-Unit-ID or primary membership).
+	OrgUnitIDContextKey ContextKey = "OrgUnitID"
 )
 
 // String returns the string representation of the context key

@@ -283,6 +283,9 @@ func (s *tenantMemberService) UpdateRole(
 	if current.Role == newRole {
 		return nil
 	}
+	if newRole == types.TenantRoleOwner && !types.IsSystemAdminActor(ctx) {
+		return ErrOnlySystemAdminCanAssignOwner
+	}
 	oldRole := current.Role
 	// Owner demotion is the dangerous path: two concurrent demotions of
 	// two different Owners with the old "Get → Count → Update" sequence

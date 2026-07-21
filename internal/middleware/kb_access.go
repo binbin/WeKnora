@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	stderrors "errors"
+	"strings"
 
 	apprepo "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
@@ -341,10 +342,20 @@ func resolveKBAccessOnce(
 
 	// 1. Own KB.
 	if kb.TenantID == tenantID {
+		if err := enforceOrgUnitKBAccess(c, kb, requiredPermission); err != nil {
+			return nil, err
+		}
+		permission := types.OrgRoleAdmin
+		activeID, _ := types.OrgUnitIDFromContext(ctx)
+		kbUnitID := strings.TrimSpace(kb.OrgUnitID)
+		// Ancestor KBs are read-only even though they live in-tenant.
+		if kbUnitID != "" && activeID != "" && kbUnitID != activeID {
+			permission = types.OrgRoleViewer
+		}
 		return &KBAccess{
 			KnowledgeBase:     kb,
 			EffectiveTenantID: tenantID,
-			Permission:        types.OrgRoleAdmin,
+			Permission:        permission,
 		}, nil
 	}
 

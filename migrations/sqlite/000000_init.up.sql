@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     credentials TEXT DEFAULT NULL,
     chat_history_config TEXT,
     retrieval_config TEXT,
+    api_principal_config TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     deleted_at DATETIME
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS knowledges (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     processed_at DATETIME,
     error_message TEXT,
+    pending_subtasks_count INTEGER NOT NULL DEFAULT 0,
     deleted_at DATETIME
 );
 
@@ -281,6 +283,7 @@ CREATE TABLE IF NOT EXISTS users (
     tenant_id INTEGER,
     is_active BOOLEAN NOT NULL DEFAULT 1,
     can_access_all_tenants BOOLEAN NOT NULL DEFAULT 0,
+    is_system_admin BOOLEAN NOT NULL DEFAULT 0,
     -- Per-user JSON preferences (memory toggle, future UI knobs).
     -- SQLite has no JSONB; store as TEXT and let GORM (de)serialise via
     -- the driver.Valuer / sql.Scanner methods on types.UserPreferences.
@@ -294,6 +297,7 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_users_is_system_admin ON users(is_system_admin);
 
 CREATE TABLE IF NOT EXISTS auth_tokens (
     id VARCHAR(36) PRIMARY KEY,

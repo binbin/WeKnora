@@ -54,6 +54,28 @@ var (
 	// a single sentinel so an attacker can't probe which slots used
 	// to exist.
 	ErrInvitationTokenInvalid = errors.New("invitation token is invalid or has been revoked")
+
+	// ErrOrgUnitRequired is returned when the tenant has an OrgUnit
+	// hierarchy and the invitation did not specify which unit the
+	// invitee should join.
+	ErrOrgUnitRequired = errors.New("org_unit_id is required when the tenant has an organization hierarchy")
+
+	// ErrInviterOrgUnitRequired is returned when hierarchy exists but
+	// the inviter has no active OrgUnit (X-Org-Unit-ID / primary).
+	ErrInviterOrgUnitRequired = errors.New("inviter must select a current organization before inviting")
+
+	// ErrOrgUnitNotInviteable is returned when the target OrgUnit is
+	// outside the inviter's peer/self + descendant (or Owner-only
+	// descendant) scope.
+	ErrOrgUnitNotInviteable = errors.New("org unit is outside the inviter's peer or subordinate scope")
+
+	// ErrOnlySystemAdminCanAssignOwner is returned when a non-system-admin
+	// tries to invite or share-link with TenantRoleOwner. Top-level owners
+	// come from self-serve registration (personal workspace) or system
+	// admin assignment — not from peer tenant Owners inviting peers.
+	ErrOnlySystemAdminCanAssignOwner = errors.New(
+		"only system admin can assign the owner role",
+	)
 )
 
 // defaultInvitationTTL is the lifetime of a pending invitation before
@@ -85,26 +107,28 @@ func invitationTTL() time.Duration {
 
 // tenantInvitationService implements interfaces.TenantInvitationService.
 type tenantInvitationService struct {
-	repo      interfaces.TenantInvitationRepository
-	memberSvc interfaces.TenantMemberService
-	audit     interfaces.AuditLogService // optional; nil ⇒ no audit, business ops still succeed
-	now       func() time.Time           // injection seam for tests
+	repo           interfaces.TenantInvitationRepository
+	memberSvc      interfaces.TenantMemberService
+	orgUnitService interfaces.OrgUnitService // optional; nil ⇒ skip hierarchy binding
+	audit          interfaces.AuditLogService // optional; nil ⇒ no audit, business ops still succeed
+	now            func() time.Time           // injection seam for tests
 }
 
 // NewTenantInvitationService wires the dependencies. memberSvc is
-// required (Accept must create the tenant_members row); audit is
-// optional and matches the same nil-safe pattern tenantMemberService
-// uses.
+// required (Accept must create the tenant_members row); orgUnitService
+// and audit are optional.
 func NewTenantInvitationService(
 	repo interfaces.TenantInvitationRepository,
 	memberSvc interfaces.TenantMemberService,
+	orgUnitService interfaces.OrgUnitService,
 	audit interfaces.AuditLogService,
 ) interfaces.TenantInvitationService {
 	return &tenantInvitationService{
-		repo:      repo,
-		memberSvc: memberSvc,
-		audit:     audit,
-		now:       time.Now,
+		repo:           repo,
+		memberSvc:      memberSvc,
+		orgUnitService: orgUnitService,
+		audit:          audit,
+		now:            time.Now,
 	}
 }
 
@@ -119,12 +143,86 @@ func (s *tenantInvitationService) emitAudit(ctx context.Context, entry *types.Au
 // detailsFor packs the role + invitation id into the audit Details so a
 // reader can reconstruct "Alice invited Bob as Admin (inv #42)" without
 // joining back to the invitations table.
-func detailsFor(invID uint64, role types.TenantRole) types.JSON {
-	b, _ := json.Marshal(map[string]any{
+func detailsFor(invID uint64, role types.TenantRole, orgUnitID string) types.JSON {
+	payload := map[string]any{
 		"invitation_id": invID,
 		"role":          string(role),
-	})
+	}
+	if orgUnitID != "" {
+		payload["org_unit_id"] = orgUnitID
+	}
+	b, _ := json.Marshal(payload)
 	return types.JSON(b)
+}
+
+// resolveOrgUnitID validates and normalises the OrgUnit binding for an
+// invitation. When the tenant has no hierarchy the field is cleared.
+// When hierarchy exists, a non-empty unit in the inviter's inviteable
+// scope is required (平级/本级/下级; Owner role → 下级 only).
+func (s *tenantInvitationService) resolveOrgUnitID(
+	ctx context.Context,
+	tenantID uint64,
+	orgUnitID string,
+	role types.TenantRole,
+) (string, error) {
+	orgUnitID = strings.TrimSpace(orgUnitID)
+	if s.orgUnitService == nil {
+		return "", nil
+	}
+	has, err := s.orgUnitService.HasHierarchy(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+	if !has {
+		return "", nil
+	}
+	if orgUnitID == "" {
+		return "", ErrOrgUnitRequired
+	}
+	actorOrgUnitID, _ := types.OrgUnitIDFromContext(ctx)
+	actorOrgUnitID = strings.TrimSpace(actorOrgUnitID)
+	if actorOrgUnitID == "" {
+		// System admin / tenant Owner bootstrap: no current unit yet —
+		// only require the target to exist in this tenant.
+		if !isUnscopedOrgInviter(ctx) {
+			return "", ErrInviterOrgUnitRequired
+		}
+		if _, err := s.orgUnitService.Get(ctx, tenantID, orgUnitID); err != nil {
+			return "", err
+		}
+		return orgUnitID, nil
+	}
+	ok, err := s.orgUnitService.CanInviteToOrgUnit(
+		ctx, tenantID, actorOrgUnitID, orgUnitID, role,
+	)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", ErrOrgUnitNotInviteable
+	}
+	return orgUnitID, nil
+}
+
+// assignOrgUnitMembership places the user into the invitation's OrgUnit
+// as primary. Best-effort after tenant membership succeeds — failure is
+// logged so Accept still returns the membership.
+func (s *tenantInvitationService) assignOrgUnitMembership(
+	ctx context.Context,
+	tenantID uint64,
+	userID string,
+	orgUnitID string,
+) {
+	if s.orgUnitService == nil || orgUnitID == "" || userID == "" {
+		return
+	}
+	if _, err := s.orgUnitService.AddMember(
+		ctx, tenantID, orgUnitID, userID, true,
+	); err != nil {
+		logger.Errorf(ctx,
+			"invitation accepted but org_unit membership failed: tenant=%d user=%s unit=%s err=%v",
+			tenantID, userID, orgUnitID, err)
+	}
 }
 
 // sweep transitions overdue pending rows to expired before any List/
@@ -147,9 +245,17 @@ func (s *tenantInvitationService) Create(
 	role types.TenantRole,
 	invitedBy *string,
 	message string,
+	orgUnitID string,
 ) (*types.TenantInvitation, error) {
 	if !role.IsValid() {
 		return nil, ErrInvalidTenantRole
+	}
+	if role == types.TenantRoleOwner && !types.IsSystemAdminActor(ctx) {
+		return nil, ErrOnlySystemAdminCanAssignOwner
+	}
+	resolvedUnit, err := s.resolveOrgUnitID(ctx, tenantID, orgUnitID, role)
+	if err != nil {
+		return nil, err
 	}
 	// Reject early if the invitee is already an active member; the
 	// handler renders this as "they're already in" rather than the
@@ -168,6 +274,7 @@ func (s *tenantInvitationService) Create(
 		InviteeUserID: inviteeUserID,
 		InvitedBy:     invitedBy,
 		Role:          role,
+		OrgUnitID:     resolvedUnit,
 		Status:        types.TenantInvitationStatusPending,
 		Message:       message,
 		ExpiresAt:     now.Add(invitationTTL()),
@@ -188,7 +295,7 @@ func (s *tenantInvitationService) Create(
 		TargetID:     strconv.FormatUint(inv.ID, 10),
 		TargetUserID: inviteeUserID,
 		Outcome:      types.AuditOutcomeSuccess,
-		Details:      detailsFor(inv.ID, role),
+		Details:      detailsFor(inv.ID, role, resolvedUnit),
 	})
 	return inv, nil
 }
@@ -251,6 +358,7 @@ func (s *tenantInvitationService) Accept(
 		if errors.Is(err, ErrMembershipAlreadyExists) {
 			existing, getErr := s.memberSvc.GetMembership(ctx, inv.InviteeUserID, inv.TenantID)
 			if getErr == nil && existing != nil {
+				s.assignOrgUnitMembership(ctx, inv.TenantID, inv.InviteeUserID, inv.OrgUnitID)
 				s.emitInvitationAccepted(ctx, inv)
 				return existing, nil
 			}
@@ -261,6 +369,7 @@ func (s *tenantInvitationService) Accept(
 		return nil, err
 	}
 
+	s.assignOrgUnitMembership(ctx, inv.TenantID, inv.InviteeUserID, inv.OrgUnitID)
 	s.emitInvitationAccepted(ctx, inv)
 	return member, nil
 }
@@ -278,7 +387,7 @@ func (s *tenantInvitationService) emitInvitationAccepted(ctx context.Context, in
 		TargetID:     strconv.FormatUint(inv.ID, 10),
 		TargetUserID: inv.InviteeUserID,
 		Outcome:      types.AuditOutcomeSuccess,
-		Details:      detailsFor(inv.ID, inv.Role),
+		Details:      detailsFor(inv.ID, inv.Role, inv.OrgUnitID),
 	})
 }
 
@@ -321,7 +430,7 @@ func (s *tenantInvitationService) Decline(
 		TargetID:     strconv.FormatUint(inv.ID, 10),
 		TargetUserID: inv.InviteeUserID,
 		Outcome:      types.AuditOutcomeSuccess,
-		Details:      detailsFor(inv.ID, inv.Role),
+		Details:      detailsFor(inv.ID, inv.Role, inv.OrgUnitID),
 	})
 	return nil
 }
@@ -356,7 +465,7 @@ func (s *tenantInvitationService) Revoke(ctx context.Context, invID uint64) erro
 		TargetID:     strconv.FormatUint(inv.ID, 10),
 		TargetUserID: inv.InviteeUserID,
 		Outcome:      types.AuditOutcomeSuccess,
-		Details:      detailsFor(inv.ID, inv.Role),
+		Details:      detailsFor(inv.ID, inv.Role, inv.OrgUnitID),
 	})
 	return nil
 }
@@ -468,9 +577,17 @@ func (s *tenantInvitationService) CreateShareLink(
 	role types.TenantRole,
 	invitedBy *string,
 	message string,
+	orgUnitID string,
 ) (*types.TenantInvitation, string, error) {
 	if !role.IsValid() {
 		return nil, "", ErrInvalidTenantRole
+	}
+	if role == types.TenantRoleOwner && !types.IsSystemAdminActor(ctx) {
+		return nil, "", ErrOnlySystemAdminCanAssignOwner
+	}
+	resolvedUnit, err := s.resolveOrgUnitID(ctx, tenantID, orgUnitID, role)
+	if err != nil {
+		return nil, "", err
 	}
 	token, err := generateShareLinkToken()
 	if err != nil {
@@ -483,6 +600,7 @@ func (s *tenantInvitationService) CreateShareLink(
 		Token:         token,
 		InvitedBy:     invitedBy,
 		Role:          role,
+		OrgUnitID:     resolvedUnit,
 		Status:        types.TenantInvitationStatusPending,
 		Message:       message,
 		ExpiresAt:     now.Add(invitationTTL()),
@@ -499,7 +617,7 @@ func (s *tenantInvitationService) CreateShareLink(
 		TargetID:    strconv.FormatUint(inv.ID, 10),
 		// TargetUserID intentionally empty — share-link has no invitee yet.
 		Outcome: types.AuditOutcomeSuccess,
-		Details: detailsFor(inv.ID, role),
+		Details: detailsFor(inv.ID, role, resolvedUnit),
 	})
 	return inv, token, nil
 }
@@ -553,6 +671,7 @@ func (s *tenantInvitationService) AcceptByToken(
 		if errors.Is(err, ErrMembershipAlreadyExists) {
 			existing, getErr := s.memberSvc.GetMembership(ctx, newUserID, inv.TenantID)
 			if getErr == nil && existing != nil {
+				s.assignOrgUnitMembership(ctx, inv.TenantID, newUserID, inv.OrgUnitID)
 				return existing, nil
 			}
 		}
@@ -561,6 +680,7 @@ func (s *tenantInvitationService) AcceptByToken(
 			inv.ID, newUserID, err)
 		return nil, err
 	}
+	s.assignOrgUnitMembership(ctx, inv.TenantID, newUserID, inv.OrgUnitID)
 	// Bump usage counter so the management UI can show "N 人已加入".
 	// Best-effort: a failure here doesn't undo the membership the user
 	// just earned — log and move on. The counter is for display only;
@@ -579,7 +699,7 @@ func (s *tenantInvitationService) AcceptByToken(
 		TargetID:     strconv.FormatUint(inv.ID, 10),
 		TargetUserID: newUserID,
 		Outcome:      types.AuditOutcomeSuccess,
-		Details:      detailsFor(inv.ID, inv.Role),
+		Details:      detailsFor(inv.ID, inv.Role, inv.OrgUnitID),
 	})
 	return member, nil
 }
