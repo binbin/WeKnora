@@ -18,6 +18,14 @@ type OrgUnitService interface {
 	Move(ctx context.Context, tenantID uint64, id string, newParentID string) (*types.OrgUnit, error)
 
 	AddMember(ctx context.Context, tenantID uint64, orgUnitID string, userID string, isPrimary bool) (*types.OrgUnitMember, error)
+	// TransferMember moves the user to toOrgUnitID within the tenant,
+	// replacing any existing membership (single-membership model).
+	TransferMember(
+		ctx context.Context,
+		tenantID uint64,
+		userID string,
+		toOrgUnitID string,
+	) (*types.OrgUnitMember, error)
 	RemoveMember(ctx context.Context, tenantID uint64, orgUnitID string, userID string) error
 	ListMembers(ctx context.Context, tenantID uint64, orgUnitID string) ([]*types.OrgUnitMember, error)
 	ListUserMemberships(ctx context.Context, tenantID uint64, userID string) ([]*types.OrgUnitMember, error)

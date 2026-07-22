@@ -66,25 +66,91 @@ func (r *stubOrgUnitRepo) ListByPathPrefix(
 func (r *stubOrgUnitRepo) UpdateSubtreePaths(context.Context, uint64, string, string, int) error {
 	return nil
 }
-func (r *stubOrgUnitRepo) AddMember(context.Context, *types.OrgUnitMember) error { return nil }
-func (r *stubOrgUnitRepo) RemoveMember(context.Context, string, string) error     { return nil }
-func (r *stubOrgUnitRepo) ListMembers(context.Context, string) ([]*types.OrgUnitMember, error) {
-	return nil, nil
+func (r *stubOrgUnitRepo) AddMember(_ context.Context, member *types.OrgUnitMember) error {
+	r.members = append(r.members, member)
+	return nil
+}
+func (r *stubOrgUnitRepo) RemoveMember(
+	_ context.Context, orgUnitID string, userID string,
+) error {
+	kept := r.members[:0]
+	for _, membership := range r.members {
+		if membership == nil {
+			continue
+		}
+		if membership.OrgUnitID == orgUnitID && membership.UserID == userID {
+			continue
+		}
+		kept = append(kept, membership)
+	}
+	r.members = kept
+	return nil
+}
+func (r *stubOrgUnitRepo) ListMembers(
+	_ context.Context, orgUnitID string,
+) ([]*types.OrgUnitMember, error) {
+	out := make([]*types.OrgUnitMember, 0)
+	for _, membership := range r.members {
+		if membership != nil && membership.OrgUnitID == orgUnitID {
+			out = append(out, membership)
+		}
+	}
+	return out, nil
 }
 func (r *stubOrgUnitRepo) ListMembersByOrgUnitIDs(
-	context.Context, []string,
+	_ context.Context, orgUnitIDs []string,
 ) ([]*types.OrgUnitMember, error) {
-	return r.members, nil
+	wanted := make(map[string]struct{}, len(orgUnitIDs))
+	for _, orgUnitID := range orgUnitIDs {
+		wanted[orgUnitID] = struct{}{}
+	}
+	out := make([]*types.OrgUnitMember, 0)
+	for _, membership := range r.members {
+		if membership == nil {
+			continue
+		}
+		if _, ok := wanted[membership.OrgUnitID]; ok {
+			out = append(out, membership)
+		}
+	}
+	return out, nil
 }
-func (r *stubOrgUnitRepo) ListUserMemberships(context.Context, uint64, string) ([]*types.OrgUnitMember, error) {
-	return r.members, nil
+func (r *stubOrgUnitRepo) ListUserMemberships(
+	_ context.Context, tenantID uint64, userID string,
+) ([]*types.OrgUnitMember, error) {
+	out := make([]*types.OrgUnitMember, 0)
+	for _, membership := range r.members {
+		if membership == nil {
+			continue
+		}
+		if membership.TenantID == tenantID && membership.UserID == userID {
+			out = append(out, membership)
+		}
+	}
+	return out, nil
 }
 func (r *stubOrgUnitRepo) ListUserMembershipsByUser(
-	context.Context, string,
+	_ context.Context, userID string,
 ) ([]*types.OrgUnitMember, error) {
-	return r.members, nil
+	out := make([]*types.OrgUnitMember, 0)
+	for _, membership := range r.members {
+		if membership != nil && membership.UserID == userID {
+			out = append(out, membership)
+		}
+	}
+	return out, nil
 }
-func (r *stubOrgUnitRepo) GetMember(context.Context, string, string) (*types.OrgUnitMember, error) {
+func (r *stubOrgUnitRepo) GetMember(
+	_ context.Context, orgUnitID string, userID string,
+) (*types.OrgUnitMember, error) {
+	for _, membership := range r.members {
+		if membership == nil {
+			continue
+		}
+		if membership.OrgUnitID == orgUnitID && membership.UserID == userID {
+			return membership, nil
+		}
+	}
 	return nil, apprepo.ErrOrgUnitMemberNotFound
 }
 func (r *stubOrgUnitRepo) ClearPrimary(context.Context, uint64, string) error { return nil }
@@ -315,5 +381,65 @@ func TestOrgUnitCreateRootRequiresSystemAdmin(t *testing.T) {
 	}
 	if unit == nil || unit.ParentID != "" {
 		t.Fatalf("unexpected unit: %#v", unit)
+	}
+}
+
+func TestAddMemberRejectsSecondOrgUnit(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"city":  {ID: "city", TenantID: 1, Path: "/city/", Name: "City"},
+			"city2": {ID: "city2", TenantID: 1, Path: "/city2/", Name: "City2"},
+		},
+		members: []*types.OrgUnitMember{
+			{ID: "m1", TenantID: 1, OrgUnitID: "city", UserID: "u1", IsPrimary: true},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	_, err := svc.AddMember(context.Background(), 1, "city2", "u1", true)
+	if err == nil {
+		t.Fatal("expected conflict when user already in another org unit")
+	}
+}
+
+func TestAddMemberIdempotentSameUnit(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"city": {ID: "city", TenantID: 1, Path: "/city/", Name: "City"},
+		},
+		members: []*types.OrgUnitMember{
+			{ID: "m1", TenantID: 1, OrgUnitID: "city", UserID: "u1", IsPrimary: true},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	member, err := svc.AddMember(context.Background(), 1, "city", "u1", false)
+	if err != nil {
+		t.Fatalf("AddMember same unit: %v", err)
+	}
+	if member.OrgUnitID != "city" {
+		t.Fatalf("got %#v", member)
+	}
+}
+
+func TestTransferMemberMovesUser(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"city":  {ID: "city", TenantID: 1, Path: "/city/", Name: "City"},
+			"city2": {ID: "city2", TenantID: 1, Path: "/city2/", Name: "City2"},
+		},
+		members: []*types.OrgUnitMember{
+			{ID: "m1", TenantID: 1, OrgUnitID: "city", UserID: "u1", IsPrimary: true},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	member, err := svc.TransferMember(context.Background(), 1, "u1", "city2")
+	if err != nil {
+		t.Fatalf("TransferMember: %v", err)
+	}
+	if member.OrgUnitID != "city2" {
+		t.Fatalf("got %#v", member)
+	}
+	list, err := svc.ListUserMemberships(context.Background(), 1, "u1")
+	if err != nil || len(list) != 1 || list[0].OrgUnitID != "city2" {
+		t.Fatalf("memberships=%#v err=%v", list, err)
 	}
 }
