@@ -92,6 +92,31 @@ func (r *stubOrgUnitRepo) SetPrimary(context.Context, uint64, string, string) er
 	return nil
 }
 
+func (r *stubOrgUnitRepo) RemoveMembersByTenantUser(
+	_ context.Context, tenantID uint64, userID string,
+) error {
+	kept := r.members[:0]
+	for _, membership := range r.members {
+		if membership == nil {
+			continue
+		}
+		if membership.TenantID == tenantID && membership.UserID == userID {
+			continue
+		}
+		kept = append(kept, membership)
+	}
+	r.members = kept
+	return nil
+}
+
+func (r *stubOrgUnitRepo) TransferMember(
+	_ context.Context, member *types.OrgUnitMember,
+) error {
+	_ = r.RemoveMembersByTenantUser(context.Background(), member.TenantID, member.UserID)
+	r.members = append(r.members, member)
+	return nil
+}
+
 func newTestOrgUnitService() interfaces.OrgUnitService {
 	repo := &stubOrgUnitRepo{
 		units: map[string]*types.OrgUnit{
@@ -146,7 +171,9 @@ func TestOrgUnitAncestorReadSelfWrite(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			gotRead, err := svc.CanReadKB(ctx, tenantID, testCase.active, testCase.kbUnit)
+			gotRead, err := svc.CanReadKB(
+				ctx, tenantID, testCase.active, testCase.kbUnit, true,
+			)
 			if err != nil {
 				t.Fatalf("CanReadKB: %v", err)
 			}

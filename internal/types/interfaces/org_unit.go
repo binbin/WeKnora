@@ -113,6 +113,15 @@ type OrgUnitRepository interface {
 	GetMember(ctx context.Context, orgUnitID string, userID string) (*types.OrgUnitMember, error)
 	ClearPrimary(ctx context.Context, tenantID uint64, userID string) error
 	SetPrimary(ctx context.Context, tenantID uint64, userID string, orgUnitID string) error
+	// RemoveMembersByTenantUser deletes all org_unit_members rows for
+	// the user in the tenant (0 or 1 row after unique constraint).
+	RemoveMembersByTenantUser(ctx context.Context, tenantID uint64, userID string) error
+	// TransferMember atomically moves the user to toOrgUnitID within
+	// tenantID (delete any existing memberships, then insert).
+	TransferMember(
+		ctx context.Context,
+		member *types.OrgUnitMember,
+	) error
 }
 
 // OrgUnitWorkspaceRepository persists root-OrgUnit → Tenant bindings.
