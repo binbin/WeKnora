@@ -28,4 +28,4 @@ coverage
 *.sw?
 
 *.tsbuildinfo
-frontend/test-results/
+test-results/
