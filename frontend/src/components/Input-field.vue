@@ -2267,11 +2267,11 @@ const handleGoToAgentSettings = (section?: string) => {
     router.push('/platform/agents');
     return;
   }
-  const query: Record<string, string> = { edit: agent.id };
+  const query: Record<string, string> = {};
   if (section) {
     query.section = section;
   }
-  router.push({ path: '/platform/agents', query });
+  router.push({ path: `/platform/agents/${agent.id}`, query });
 };
 
 const formatAgentNotReadyReasons = (
@@ -2316,9 +2316,8 @@ const goToAgentEditor = (
   sourceTenantId?: string,
 ) => {
   router.push({
-    path: '/platform/agents',
+    path: `/platform/agents/${agent.id}`,
     query: {
-      edit: agent.id,
       section,
       ...(highlight ? { highlight } : {}),
       ...(sourceTenantId ? { sourceTenantId } : {}),

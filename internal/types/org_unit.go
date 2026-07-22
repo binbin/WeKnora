@@ -44,6 +44,21 @@ type OrgUnitMember struct {
 
 func (OrgUnitMember) TableName() string { return "org_unit_members" }
 
+// PlatformOrgTenantID is the catalog tenant for the global OrgUnit tree.
+// Root nodes (ParentID="") created by system admins live here; each root
+// binds to a real business Tenant via OrgUnitWorkspace.
+const PlatformOrgTenantID uint64 = 0
+
+// OrgUnitWorkspace binds a platform root OrgUnit to its business workspace.
+type OrgUnitWorkspace struct {
+	RootOrgUnitID string    `json:"root_org_unit_id" gorm:"type:varchar(36);primaryKey"`
+	TenantID      uint64    `json:"tenant_id"        gorm:"uniqueIndex;not null"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+func (OrgUnitWorkspace) TableName() string { return "org_unit_workspaces" }
+
 // CreateOrgUnitRequest is the body for POST /org-units.
 type CreateOrgUnitRequest struct {
 	Name      string `json:"name"       binding:"required,min=1,max=255"`

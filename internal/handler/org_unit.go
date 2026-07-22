@@ -85,6 +85,12 @@ func (h *OrgUnitHandler) Delete(c *gin.Context) {
 func (h *OrgUnitHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+	// System admins manage the platform catalog (tenant_id=0) from
+	// Settings → 组织层级, independent of the workspace they are browsing.
+	if types.IsSystemAdminActor(ctx) &&
+		(c.Query("scope") == "platform" || c.Query("platform") == "1") {
+		tenantID = types.PlatformOrgTenantID
+	}
 	asTree := c.Query("tree") == "1" || c.Query("tree") == "true"
 	var (
 		units []*types.OrgUnit
@@ -174,6 +180,16 @@ func (h *OrgUnitHandler) ListMyMemberships(c *gin.Context) {
 	if err != nil {
 		c.Error(err)
 		return
+	}
+	// Also surface platform-catalog memberships (tenant_id=0) so users
+	// bound to a root org before workspace provisioning can see them.
+	if tenantID != types.PlatformOrgTenantID {
+		platformMembers, platformErr := h.orgUnitService.ListUserMemberships(
+			ctx, types.PlatformOrgTenantID, userID,
+		)
+		if platformErr == nil && len(platformMembers) > 0 {
+			members = append(members, platformMembers...)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": members})
 }

@@ -4,23 +4,9 @@
       <div class="workspace-mark" aria-hidden="true">
         <t-icon name="system-sum" size="30px" />
       </div>
-      <h1>
-        {{
-          $t(
-            authStore.canCreateTenant
-              ? 'auth.workspaceOnboarding.title'
-              : 'auth.workspaceOnboarding.inviteOnlyTitle',
-          )
-        }}
-      </h1>
+      <h1>{{ $t('auth.workspaceOnboarding.inviteOnlyTitle') }}</h1>
       <p class="workspace-description">
-        {{
-          $t(
-            authStore.canCreateTenant
-              ? 'auth.workspaceOnboarding.description'
-              : 'auth.workspaceOnboarding.inviteOnlyDescription',
-          )
-        }}
+        {{ $t('auth.workspaceOnboarding.inviteOnlyDescription') }}
       </p>
 
       <div v-if="policyLoading" class="policy-loading">
@@ -36,22 +22,13 @@
       </div>
 
       <template v-else>
-        <div v-if="!authStore.canCreateTenant" class="invite-only-notice">
+        <div class="invite-only-notice">
           <t-icon name="lock-on" size="20px" aria-hidden="true" />
           <span>{{ $t('auth.workspaceOnboarding.inviteOnlyNotice') }}</span>
         </div>
 
-        <div class="workspace-actions" :class="{ 'workspace-actions--single': !authStore.canCreateTenant }">
-          <t-button v-if="authStore.canCreateTenant" theme="primary" size="large" @click="createVisible = true">
-            <template #icon><t-icon name="add" /></template>
-            {{ $t('auth.workspaceOnboarding.create') }}
-          </t-button>
-          <t-button
-            :theme="authStore.canCreateTenant ? 'default' : 'primary'"
-            :variant="authStore.canCreateTenant ? 'outline' : 'base'"
-            size="large"
-            @click="invitationsVisible = true"
-          >
+        <div class="workspace-actions workspace-actions--single">
+          <t-button theme="primary" size="large" @click="invitationsVisible = true">
             <template #icon><t-icon name="mail" /></template>
             {{ $t('auth.workspaceOnboarding.invitations') }}
             <template v-if="authStore.pendingInvitationCount > 0">
@@ -62,20 +39,13 @@
       </template>
 
       <p v-if="!policyLoading && !policyLoadFailed" class="workspace-help">
-        {{
-          $t(
-            authStore.canCreateTenant
-              ? 'auth.workspaceOnboarding.help'
-              : 'auth.workspaceOnboarding.inviteOnlyHelp',
-          )
-        }}
+        {{ $t('auth.workspaceOnboarding.inviteOnlyHelp') }}
       </p>
       <button class="logout-link" type="button" @click="handleLogout">
         {{ $t('auth.logout') }}
       </button>
     </section>
 
-    <CreateTenantDialog v-model:visible="createVisible" @created="onTenantCreated" />
     <MyInvitationsDialog v-model:visible="invitationsVisible" />
   </main>
 </template>
@@ -83,15 +53,12 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import CreateTenantDialog from '@/components/CreateTenantDialog.vue'
 import MyInvitationsDialog from '@/components/MyInvitationsDialog.vue'
 import { logout as logoutApi } from '@/api/auth'
-import type { TenantInfo } from '@/api/tenant'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const createVisible = ref(false)
 const invitationsVisible = ref(false)
 const policyLoading = ref(true)
 const policyLoadFailed = ref(false)
@@ -118,20 +85,19 @@ onMounted(async () => {
 watch(
   () => authStore.hasValidTenant,
   (ready) => {
-    if (ready) router.replace('/platform/knowledge-bases')
+    if (ready) {
+      router.replace('/platform/knowledge-bases')
+    }
   },
 )
 
-async function onTenantCreated(tenant: TenantInfo) {
-  await authStore.refreshFromAuthMe()
-  authStore.setSelectedTenant(tenant.id, tenant.name)
-  await router.replace('/platform/knowledge-bases')
-}
-
 async function handleLogout() {
-  await logoutApi()
-  authStore.logout()
-  await router.replace('/login')
+  try {
+    await logoutApi()
+  } finally {
+    authStore.logout()
+    router.replace('/login')
+  }
 }
 </script>
 
@@ -192,6 +158,7 @@ h1 {
 
 .workspace-actions--single {
   grid-template-columns: minmax(220px, 1fr);
+  justify-items: center;
 }
 
 .policy-loading,

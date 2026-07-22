@@ -3,7 +3,8 @@
     <div class="section-header">
       <h3 class="section-title">组织层级</h3>
       <p class="section-desc">
-        省 / 市 / 县行政树。下级可读上级知识，仅本级可写；与共享空间相互独立。
+        平台组织树：根组织由系统管理员创建；成员登录后自动进入「组织名的空间」，
+        本组织与下级组织用户共享该空间。
       </p>
     </div>
 
@@ -114,7 +115,7 @@ async function reload() {
   loading.value = true
   try {
     const [units, mine] = await Promise.all([
-      listOrgUnits(true),
+      listOrgUnits(true, { platform: authStore.isSystemAdmin === true }),
       listMyOrgUnitMemberships(),
     ])
     tree.value = units

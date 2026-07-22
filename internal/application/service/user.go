@@ -83,11 +83,12 @@ func getJwtSecret() string {
 
 // userService implements the UserService interface
 type userService struct {
-	userRepo      interfaces.UserRepository
-	tokenRepo     interfaces.AuthTokenRepository
-	tenantService interfaces.TenantService
-	memberService interfaces.TenantMemberService
-	config        *config.Config
+	userRepo           interfaces.UserRepository
+	tokenRepo          interfaces.AuthTokenRepository
+	tenantService      interfaces.TenantService
+	memberService      interfaces.TenantMemberService
+	orgWorkspaceService interfaces.OrgWorkspaceService
+	config             *config.Config
 }
 
 // NewUserService creates a new user service instance
@@ -97,13 +98,15 @@ func NewUserService(
 	tokenRepo interfaces.AuthTokenRepository,
 	tenantService interfaces.TenantService,
 	memberService interfaces.TenantMemberService,
+	orgWorkspaceService interfaces.OrgWorkspaceService,
 ) interfaces.UserService {
 	return &userService{
-		userRepo:      userRepo,
-		tokenRepo:     tokenRepo,
-		tenantService: tenantService,
-		memberService: memberService,
-		config:        configInfo,
+		userRepo:            userRepo,
+		tokenRepo:           tokenRepo,
+		tenantService:       tenantService,
+		memberService:       memberService,
+		orgWorkspaceService: orgWorkspaceService,
+		config:              configInfo,
 	}
 }
 
@@ -728,6 +731,24 @@ func (s *userService) resolveLoginTenantID(ctx context.Context, user *types.User
 	if user == nil {
 		return 0
 	}
+
+	// Cross-tenant / platform admins never keep a personal home workspace.
+	if user.IsSystemAdmin || user.CanAccessAllTenants {
+		return s.resolveAdminLoginTenantID(ctx, user)
+	}
+
+	if s.orgWorkspaceService != nil {
+		if tenantID, err := s.orgWorkspaceService.EnsureWorkspaceForUser(ctx, user.ID); err != nil {
+			logger.Warnf(ctx,
+				"resolveLoginTenantID: org workspace ensure failed for user %s: %v",
+				user.ID, err,
+			)
+		} else if tenantID > 0 {
+			s.persistResolvedTenantAsHome(ctx, user, tenantID)
+			return tenantID
+		}
+	}
+
 	pref := user.Preferences.LastActiveTenantID
 	if pref == nil || *pref == 0 || *pref == user.TenantID {
 		return s.homeOrFirstMembershipTenant(ctx, user)
@@ -767,6 +788,89 @@ func (s *userService) resolveLoginTenantID(ctx context.Context, user *types.User
 	}
 
 	return preferred
+}
+
+// resolveAdminLoginTenantID picks a workspace for platform/cross-tenant
+// admins who must not own a personal home space. Prefer the earliest
+// platform root OrgUnit workspace; fall back to earliest tenant; keep
+// LastActive when still valid.
+func (s *userService) resolveAdminLoginTenantID(
+	ctx context.Context,
+	user *types.User,
+) uint64 {
+	s.clearPersonalHomeTenant(ctx, user)
+
+	pref := user.Preferences.LastActiveTenantID
+	if pref != nil && *pref > 0 && s.tenantService != nil {
+		if _, err := s.tenantService.GetTenantByID(ctx, *pref); err == nil {
+			return *pref
+		}
+		s.clearLastActiveTenantPreference(ctx, user)
+	}
+
+	if s.orgWorkspaceService != nil {
+		if tenantID, err := s.orgWorkspaceService.EnsureFirstPlatformWorkspace(ctx); err != nil {
+			logger.Warnf(ctx,
+				"resolveAdminLoginTenantID: first platform workspace failed: %v", err,
+			)
+		} else if tenantID > 0 {
+			return tenantID
+		}
+	}
+
+	if s.tenantService == nil {
+		return 0
+	}
+	tenants, err := s.tenantService.ListTenants(ctx)
+	if err != nil || len(tenants) == 0 {
+		return 0
+	}
+	earliest := tenants[0]
+	for _, tenant := range tenants[1:] {
+		if tenant == nil {
+			continue
+		}
+		if earliest == nil || tenant.CreatedAt.Before(earliest.CreatedAt) {
+			earliest = tenant
+		}
+	}
+	if earliest == nil {
+		return 0
+	}
+	return earliest.ID
+}
+
+func (s *userService) clearPersonalHomeTenant(
+	ctx context.Context,
+	user *types.User,
+) {
+	if user == nil || user.TenantID == 0 || s.userRepo == nil {
+		return
+	}
+	user.TenantID = 0
+	if err := s.userRepo.UpdateUser(ctx, user); err != nil {
+		logger.Warnf(ctx,
+			"clearPersonalHomeTenant: failed to clear home for user %s: %v",
+			user.ID, err,
+		)
+	}
+}
+
+func (s *userService) persistResolvedTenantAsHome(
+	ctx context.Context,
+	user *types.User,
+	tenantID uint64,
+) {
+	if user == nil || tenantID == 0 || user.TenantID == tenantID || s.userRepo == nil {
+		return
+	}
+	user.TenantID = tenantID
+	if err := s.userRepo.UpdateUser(ctx, user); err != nil {
+		logger.Warnf(ctx,
+			"persistResolvedTenantAsHome: failed for user %s tenant %d: %v",
+			user.ID, tenantID, err,
+		)
+	}
 }
 
 // homeOrFirstMembershipTenant returns the user's home tenant, or — for a

@@ -23,12 +23,24 @@ func (r *stubOrgUnitRepo) GetByID(_ context.Context, _ uint64, id string) (*type
 	}
 	return unit, nil
 }
+func (r *stubOrgUnitRepo) GetByIDGlobal(_ context.Context, id string) (*types.OrgUnit, error) {
+	return r.GetByID(context.Background(), 0, id)
+}
 func (r *stubOrgUnitRepo) Update(context.Context, *types.OrgUnit) error { return nil }
 func (r *stubOrgUnitRepo) Delete(context.Context, uint64, string) error  { return nil }
 func (r *stubOrgUnitRepo) ListByTenant(context.Context, uint64) ([]*types.OrgUnit, error) {
 	out := make([]*types.OrgUnit, 0, len(r.units))
 	for _, unit := range r.units {
 		out = append(out, unit)
+	}
+	return out, nil
+}
+func (r *stubOrgUnitRepo) ListRoots(_ context.Context, tenantID uint64) ([]*types.OrgUnit, error) {
+	out := make([]*types.OrgUnit, 0)
+	for _, unit := range r.units {
+		if unit != nil && unit.TenantID == tenantID && unit.ParentID == "" {
+			out = append(out, unit)
+		}
 	}
 	return out, nil
 }
@@ -59,7 +71,17 @@ func (r *stubOrgUnitRepo) RemoveMember(context.Context, string, string) error   
 func (r *stubOrgUnitRepo) ListMembers(context.Context, string) ([]*types.OrgUnitMember, error) {
 	return nil, nil
 }
+func (r *stubOrgUnitRepo) ListMembersByOrgUnitIDs(
+	context.Context, []string,
+) ([]*types.OrgUnitMember, error) {
+	return r.members, nil
+}
 func (r *stubOrgUnitRepo) ListUserMemberships(context.Context, uint64, string) ([]*types.OrgUnitMember, error) {
+	return r.members, nil
+}
+func (r *stubOrgUnitRepo) ListUserMembershipsByUser(
+	context.Context, string,
+) ([]*types.OrgUnitMember, error) {
 	return r.members, nil
 }
 func (r *stubOrgUnitRepo) GetMember(context.Context, string, string) (*types.OrgUnitMember, error) {

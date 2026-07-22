@@ -1,9 +1,9 @@
 <template>
   <div class="im-panel">
-    <div class="channels-section">
+    <div v-if="!props.hideChannelList" class="channels-section">
       <div class="channels-header">
         <span class="channels-title">{{ $t('agentEditor.im.channelsTitle') }}</span>
-        <IntegrationsAgentFilter v-model="filterAgentId" :agents="agents" />
+        <IntegrationsAgentFilter v-if="!props.lockAgentFilter" v-model="filterAgentId" :agents="agents" />
         <span class="channels-count">{{ channels.length }}</span>
       </div>
 
@@ -600,10 +600,26 @@ const PLATFORM_LOGO: Record<string, string> = {
 
 const platformLogo = (platform: string): string => (platform ? PLATFORM_LOGO[platform] || '' : '');
 
+const props = withDefaults(
+  defineProps<{
+    hideChannelList?: boolean
+    lockAgentFilter?: boolean
+    platformFilter?: string | string[]
+  }>(),
+  {
+    hideChannelList: false,
+    lockAgentFilter: false,
+  },
+)
+
 const { t } = useI18n();
 const authStore = useAuthStore();
 
 const filterAgentId = defineModel<string>('filterAgentId', { default: '' });
+
+const emit = defineEmits<{
+  changed: [];
+}>();
 
 const agents = ref<CustomAgent[]>([]);
 const agentOptions = computed(() =>
@@ -612,9 +628,19 @@ const agentOptions = computed(() =>
 
 const allChannels = ref<Array<IMChannel | IMChannelOverview>>([]);
 const channels = computed(() => {
+  let list = allChannels.value;
   const filter = filterAgentId.value?.trim();
-  if (!filter) return allChannels.value;
-  return allChannels.value.filter((channel) => channel.agent_id === filter);
+  if (filter) {
+    list = list.filter((channel) => channel.agent_id === filter);
+  }
+  const platforms = props.platformFilter;
+  if (platforms) {
+    const allowed = new Set(
+      (Array.isArray(platforms) ? platforms : [platforms]).map((item) => item.toLowerCase()),
+    );
+    list = list.filter((channel) => allowed.has(String(channel.platform || '').toLowerCase()));
+  }
+  return list;
 });
 const loading = ref(false);
 const saving = ref(false);
@@ -900,6 +926,7 @@ async function loadChannels() {
     allChannels.value = [];
   } finally {
     loading.value = false;
+    emit('changed');
   }
 }
 
@@ -930,11 +957,17 @@ async function copyUrl(channel: IMChannel) {
   }
 }
 
-function openCreate() {
+function openCreate(preferredPlatform?: string) {
   resetForm();
   if (filterAgentId.value) {
     formData.value.target_agent_id = filterAgentId.value;
   }
+  const fromProp = Array.isArray(props.platformFilter)
+    ? props.platformFilter[0]
+    : props.platformFilter;
+  const platform = (preferredPlatform || fromProp || 'wecom') as IMPlatform;
+  formData.value.platform = platform;
+  formData.value.name = defaultChannelName(platform);
   showCreateDialog.value = true;
 }
 
@@ -1073,6 +1106,13 @@ async function handleDelete(id: string) {
 
 onMounted(() => {
   loadChannels();
+});
+
+defineExpose({
+  openCreate,
+  openDrawer,
+  reload: loadChannels,
+  getChannels: () => channels.value,
 });
 
 watch(filterAgentId, (id) => {

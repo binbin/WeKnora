@@ -1,6 +1,6 @@
 <template>
   <div class="kb-list-container">
-    <ListSpaceSidebar v-if="!authStore.isLiteMode" v-model="spaceSelection" :count-all="allKnowledgeBases"
+    <ListSpaceSidebar v-model="spaceSelection" :count-all="allKnowledgeBases"
       :count-mine="kbs.length" :count-by-org="effectiveSharedCountByOrg" :count-favorites="kbFavoritesCount"
       :count-recents="kbRecentsCount" />
     <div class="kb-list-content">
@@ -287,7 +287,7 @@
                     </t-tooltip>
                   </div>
                 </div>
-                <div v-if="!authStore.isLiteMode && showKbOriginBadge(kb)" class="bottom-right">
+                <div v-if="showKbOriginBadge(kb)" class="bottom-right">
                   <ResourceOriginBadge :variant="kbOriginVariant(kb)" :creator-name="kb.creator_name" />
                 </div>
               </div>
@@ -522,7 +522,7 @@
                     </t-tooltip>
                   </div>
                 </div>
-                <div v-if="!authStore.isLiteMode && showKbOriginBadge(kb)" class="bottom-right">
+                <div v-if="showKbOriginBadge(kb)" class="bottom-right">
                   <ResourceOriginBadge :variant="kbOriginVariant(kb)" :creator-name="kb.creator_name" />
                 </div>
               </div>

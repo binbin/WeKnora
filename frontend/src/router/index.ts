@@ -1,10 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { autoSetup, getCurrentUser, userInfoFromApi } from '@/api/auth'
 
-/** Lite /桌面 WebView 硬刷新时可能只打开 `/`，用 session 记住上次页面以便恢复 */
-const LITE_LAST_PATH_KEY = 'weknora_lite_last_path'
 const AUTO_SETUP_FAILED_KEY = 'weknora_auto_setup_failed'
 
 function shouldTryAutoSetup() {
@@ -13,23 +10,6 @@ function shouldTryAutoSetup() {
 
 function markAutoSetupFailed() {
   localStorage.setItem(AUTO_SETUP_FAILED_KEY, 'true')
-}
-
-function isLiteEdition(authStore: ReturnType<typeof useAuthStore>) {
-  return authStore.isLiteMode || localStorage.getItem('weknora_lite_mode') === 'true'
-}
-
-function isLiteSpaDefaultEntry(to: RouteLocationNormalized) {
-  return (
-    to.path === '/' ||
-    to.path === '/platform' ||
-    to.path === '/platform/knowledge-bases' ||
-    to.name === 'knowledgeBaseList'
-  )
-}
-
-function isSafeLiteRestoreTarget(path: string) {
-  return path.startsWith('/platform/') && !path.startsWith('/platform/organizations')
 }
 
 function hasPendingOIDCCallback() {
@@ -135,13 +115,22 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
+          path: "agents/add",
+          name: "agentCreate",
+          component: () => import("../views/agent/AgentEditorPage.vue"),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
+          path: "agents/:agentId",
+          name: "agentEdit",
+          component: () => import("../views/agent/AgentEditorPage.vue"),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
           path: "integrations",
-          redirect: (to) => ({
+          redirect: () => ({
             path: "/platform/settings",
-            query: {
-              ...to.query,
-              section: "integrations",
-            },
+            query: { section: "models" },
           }),
           meta: { requiresInit: true, requiresAuth: true }
         },
@@ -166,7 +155,7 @@ const router = createRouter({
         {
           path: "organizations",
           name: "organizationList",
-          component: () => import("../views/organization/OrganizationList.vue"),
+          redirect: { path: "/platform/knowledge-bases" },
           meta: { requiresInit: true, requiresAuth: true }
         },
         // Compatibility redirects for /platform/system/* URLs. System
@@ -288,7 +277,6 @@ async function hydrateSessionFromToken(authStore: ReturnType<typeof useAuthStore
 }
 
 let autoSetupAttempted = false
-let liteDeepLinkRestoreDone = false
 
 // 路由守卫：检查认证状态和系统初始化状态
 router.beforeEach(async (to, from, next) => {
@@ -299,20 +287,6 @@ router.beforeEach(async (to, from, next) => {
   if (hasPendingOIDCCallback()) {
     next()
     return
-  }
-
-  // Lite：硬刷新后若落在默认首页，恢复本次会话中最后访问的 /platform 子路径
-  if (!liteDeepLinkRestoreDone) {
-    liteDeepLinkRestoreDone = true
-    if (isLiteEdition(authStore)) {
-      const saved = sessionStorage.getItem(LITE_LAST_PATH_KEY)
-      if (saved && isSafeLiteRestoreTarget(saved) && isLiteSpaDefaultEntry(to)) {
-        if (saved !== to.fullPath) {
-          next(saved)
-          return
-        }
-      }
-    }
   }
 
   // Tenantless onboarding still requires a valid user token even though it
@@ -363,7 +337,6 @@ router.beforeEach(async (to, from, next) => {
           const response = await autoSetup()
           if (response.success) {
             persistLoginResponse(authStore, response)
-            authStore.setLiteMode(true)
             next(to.fullPath)
             return
           } else {
@@ -395,13 +368,6 @@ router.beforeEach(async (to, from, next) => {
   }
 
   next()
-})
-
-router.afterEach((to) => {
-  if (!isLiteEdition(useAuthStore())) return
-  if (to.path === '/login') return
-  if (!to.path.startsWith('/platform')) return
-  sessionStorage.setItem(LITE_LAST_PATH_KEY, to.fullPath)
 })
 
 export default router

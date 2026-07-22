@@ -46,8 +46,16 @@ export function setStoredOrgUnitId(orgUnitId: string): void {
   }
 }
 
-export async function listOrgUnits(asTree = true): Promise<OrgUnit[]> {
-  const response = await get(`/api/v1/org-units?tree=${asTree ? '1' : '0'}`)
+export async function listOrgUnits(
+  asTree = true,
+  options?: { platform?: boolean },
+): Promise<OrgUnit[]> {
+  const params = new URLSearchParams()
+  params.set('tree', asTree ? '1' : '0')
+  if (options?.platform) {
+    params.set('scope', 'platform')
+  }
+  const response = await get(`/api/v1/org-units?${params.toString()}`)
   return response?.data ?? []
 }
 

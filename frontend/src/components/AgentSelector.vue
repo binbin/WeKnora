@@ -526,9 +526,8 @@ const goToSettings = (agent: CustomAgent, sourceTenantId?: string) => {
   hideDetailPanel();
   emit('close');
   router.push({
-    path: '/platform/agents',
+    path: `/platform/agents/${agent.id}`,
     query: {
-      edit: agent.id,
       section,
       ...(highlight ? { highlight } : {}),
       ...(sourceTenantId ? { sourceTenantId } : {}),

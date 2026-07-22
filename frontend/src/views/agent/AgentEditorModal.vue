@@ -1,28 +1,61 @@
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div v-if="visible" class="settings-overlay" @click.self="handleClose">
-        <div class="settings-modal">
-          <!-- 关闭按钮 -->
-          <button class="close-btn" @click="handleClose" :aria-label="$t('common.close')">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            </svg>
-          </button>
+  <div class="agent-editor-page">
+    <div class="settings-modal settings-modal--workspace settings-modal--page">
+      <div class="workspace-shell">
+            <header class="workspace-topbar">
+              <div class="workspace-topbar__lead">
+                <button
+                  type="button"
+                  class="workspace-back workspace-back--text"
+                  @click="handleClose"
+                >
+                  {{ $t('agentEditor.workspace.backToAll') }}
+                </button>
+                <nav class="workspace-tabs" aria-label="agent editor tabs">
+                  <button
+                    v-for="tab in workspaceTabs"
+                    :key="tab.key"
+                    type="button"
+                    :class="['workspace-tab', { 'is-active': workspaceTab === tab.key }]"
+                    :data-testid="`agent-workspace-tab-${tab.key}`"
+                    @click="setWorkspaceTab(tab.key)"
+                  >
+                    {{ tab.label }}
+                  </button>
+                </nav>
+              </div>
+              <div v-if="workspaceTab === 'config'" class="workspace-topbar__actions">
+                <t-button variant="outline" @click="handleClose">
+                  {{ props.readOnly ? $t('common.close') : $t('common.cancel') }}
+                </t-button>
+                <t-button
+                  v-if="!props.readOnly"
+                  theme="primary"
+                  data-guide="agent-create-submit"
+                  :loading="saving"
+                  @click="handleSave"
+                >
+                  {{ $t('common.save') }}
+                </t-button>
+              </div>
+            </header>
 
-          <div class="settings-container">
+            <div class="workspace-body">
+              <!-- 应用配置：左导航 + 表单 + 调试预览 -->
+              <div v-show="workspaceTab === 'config'" class="workspace-config">
             <!-- 左侧导航 -->
             <div class="settings-sidebar">
-              <div class="sidebar-header">
-                <h2 class="sidebar-title">{{ editorMode === 'create' ? $t('agent.editor.createTitle') :
-                  $t('agent.editor.editTitle') }}</h2>
-              </div>
               <div class="settings-nav" data-guide="agent-editor-sidebar">
                 <template v-for="group in navGroups" :key="group.key">
                   <div class="nav-group-title">{{ group.label }}</div>
-                  <div v-for="(item, index) in group.items" :key="index"
-                    :class="['nav-item', { 'active': currentSection === item.key }]"
-                    :data-guide="`agent-editor-nav-${item.key}`" @click="currentSection = item.key">
+                  <div
+                    v-for="(item, index) in group.items"
+                    :key="index"
+                    :class="['nav-item', { 'active': isNavItemActive(item.key) }]"
+                    :data-guide="`agent-editor-nav-${item.key}`"
+                    :data-testid="`agent-editor-nav-${item.key}`"
+                    @click="handleNavItemClick(item.key)"
+                  >
                     <t-icon :name="item.icon" class="nav-icon" />
                     <span class="nav-label">{{ item.label }}</span>
                     <span v-if="item.key === 'prompts' && promptNavItems.length > 1" class="nav-badge">
@@ -33,7 +66,7 @@
               </div>
             </div>
 
-            <!-- 右侧内容区域 -->
+            <!-- 中间表单区域 -->
             <div class="settings-content">
               <div ref="contentWrapperRef" class="content-wrapper" :class="{ 'content-wrapper--prompts': currentSection === 'prompts' }">
                 <!-- 基础设置 -->
@@ -71,21 +104,21 @@
                       </div>
                     </div>
 
-                    <!-- 集成渠道状态（编辑模式，配置在集成中心） -->
-                    <div v-if="editorMode === 'edit' && editorAgent?.id" class="setting-row">
+                    <!-- 发布渠道快捷入口 -->
+                    <div v-if="editorMode === 'edit' && editorAgent?.id && !editorAgent?.is_builtin" class="setting-row">
                       <div class="setting-info">
                         <label>{{ $t('integrations.agentEditor.label') }}</label>
-                        <p class="desc">{{ $t('integrations.agentEditor.desc') }}</p>
+                        <p class="desc">{{ $t('agentEditor.workspace.publishShortcutDesc') }}</p>
                       </div>
                       <div class="setting-control">
                         <div class="integration-inline">
-                          <button type="button" class="integration-inline__stat integration-inline__link" @click="gotoIntegrations('im')">
-                            <span>{{ $t('integrations.tabs.im') }} · {{ agentIMChannelCount }}</span>
+                          <button type="button" class="integration-inline__stat integration-inline__link" @click="setWorkspaceTab('publish')">
+                            <span>{{ $t('integrations.tabs.embed') }} · {{ agentEmbedChannelCount }}</span>
                             <t-icon name="chevron-right" size="14px" />
                           </button>
                           <span class="integration-inline__sep" aria-hidden="true">|</span>
-                          <button type="button" class="integration-inline__stat integration-inline__link" @click="gotoIntegrations('embed')">
-                            <span>{{ $t('integrations.tabs.embed') }} · {{ agentEmbedChannelCount }}</span>
+                          <button type="button" class="integration-inline__stat integration-inline__link" @click="setWorkspaceTab('publish')">
+                            <span>{{ $t('integrations.tabs.im') }} · {{ agentIMChannelCount }}</span>
                             <t-icon name="chevron-right" size="14px" />
                           </button>
                         </div>
@@ -1609,31 +1642,66 @@
                   <AgentShareSettings :agent-id="editorAgent.id" :agent="editorAgent" />
                 </div>
               </div>
+            </div>
 
-              <!-- 底部操作栏 -->
-              <div class="settings-footer">
-                <t-button variant="outline" @click="handleClose">{{ props.readOnly ? $t('common.close') :
-                  $t('common.cancel')
-                  }}</t-button>
-                <t-button v-if="!props.readOnly" theme="primary" data-guide="agent-create-submit" :loading="saving"
-                  @click="handleSave">{{
-                  $t('common.save')
-                  }}</t-button>
+            <aside class="workspace-debug">
+              <AgentDebugPreview
+                :agent-id="debugAgentId"
+                :agent-mode="agentMode"
+                :disabled-reason="debugDisabledReason"
+              />
+            </aside>
+              </div>
+
+              <!-- 发布渠道 -->
+              <div
+                v-show="workspaceTab === 'publish'"
+                class="workspace-panel"
+                data-testid="agent-publish-panel"
+              >
+                <div
+                  v-if="canManagePublishChannels"
+                  class="workspace-panel__fill"
+                  data-testid="agent-publish-channels"
+                >
+                  <AgentPublishChannels
+                    :agent-id="debugAgentId"
+                    :can-manage="!props.readOnly"
+                    @goto-share="goToShareSection"
+                  />
+                </div>
+                <div
+                  v-else
+                  class="workspace-panel__empty"
+                  data-testid="agent-publish-empty"
+                >
+                  <t-empty :description="publishEmptyDescription" />
+                </div>
+              </div>
+
+              <!-- 对话日志 -->
+              <div v-show="workspaceTab === 'logs'" class="workspace-panel">
+                <AgentConversationLogs
+                  :agent-id="debugAgentId"
+                  @close="handleClose"
+                />
               </div>
             </div>
           </div>
         </div>
       </div>
-    </Transition>
-  </Teleport>
 
-  <AgentCreateContextualGuide :when="visible && editorMode === 'create'" :is-agent-mode="isAgentMode" />
+  <AgentCreateContextualGuide :when="editorMode === 'create'" :is-agent-mode="isAgentMode" />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import AgentCreateContextualGuide from '@/components/AgentCreateContextualGuide.vue';
+import AgentShareSettings from '@/components/AgentShareSettings.vue';
+import AgentDebugPreview from '@/components/AgentDebugPreview.vue';
+import AgentConversationLogs from '@/components/AgentConversationLogs.vue';
+import AgentPublishChannels from '@/components/AgentPublishChannels.vue';
 import {
   AGENT_EDITOR_FOCUS_SECTION_EVENT,
   markContextualGuideDone,
@@ -1665,7 +1733,6 @@ import AgentAvatar from '@/components/AgentAvatar.vue';
 import PromptTemplateSelector from '@/components/PromptTemplateSelector.vue';
 import ModelSelector from '@/components/ModelSelector.vue';
 import KBParserSettings, { type ParserEngineRule } from '@/views/knowledge/settings/KBParserSettings.vue';
-import AgentShareSettings from '@/components/AgentShareSettings.vue';
 import { listEmbedChannels } from '@/api/embed';
 import { getRootZoom, rectToCssPx } from '@/utils/zoom';
 import {
@@ -1685,6 +1752,7 @@ const CHAT_PARSER_EXTENSIONS = [
 const uiStore = useUIStore();
 const authStore = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 const orgStore = useOrganizationStore();
 const chatResources = useChatResourcesStore();
 const editorResources = useEditorResourcesStore();
@@ -1692,11 +1760,11 @@ const editorResources = useEditorResourcesStore();
 const { t, locale: i18nLocale } = useI18n();
 
 const props = defineProps<{
-  visible: boolean;
   mode: 'create' | 'edit';
   agent?: CustomAgent | null;
   initialSection?: string;
   initialHighlightField?: string;
+  initialWorkspaceTab?: 'config' | 'publish' | 'logs';
   // readOnly hides the save button so a Viewer who clicks an agent
   // card to inspect its config doesn't see a "确定" that 403s on the
   // backend update endpoint. Field-level disable is intentionally NOT
@@ -1706,7 +1774,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:visible', visible: boolean): void;
+  (e: 'close'): void;
   (e: 'success', agent?: CustomAgent): void;
 }>();
 
@@ -1740,6 +1808,65 @@ const copyAgentId = async () => {
 };
 
 const currentSection = ref(props.initialSection || 'basic');
+type WorkspaceTabKey = 'config' | 'publish' | 'logs';
+const workspaceTab = ref<WorkspaceTabKey>(props.initialWorkspaceTab || 'config');
+const workspaceTabs = computed(() => [
+  { key: 'config' as const, label: t('agentEditor.workspace.tabConfig') },
+  { key: 'publish' as const, label: t('agentEditor.workspace.tabPublish') },
+  { key: 'logs' as const, label: t('agentEditor.workspace.tabLogs') },
+]);
+function resolveAgentIdCandidate(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const agentId = raw.trim();
+  if (!agentId || agentId === 'add') return '';
+  return agentId;
+}
+
+function resolveAgentIdFromPath(pathname: string): string {
+  const matched = pathname.match(/\/agents\/([^/]+)\/?$/);
+  return resolveAgentIdCandidate(matched?.[1] || '');
+}
+
+const debugAgentId = computed(() => {
+  // 路由 / 路径最稳：编辑页本身就带真实 id，不依赖异步 form 初始化
+  const fromRoute = resolveAgentIdCandidate(route.params.agentId);
+  const fromPath = resolveAgentIdFromPath(route.path || '');
+  const fromProp = resolveAgentIdCandidate(props.agent?.id);
+  const fromSaved = resolveAgentIdCandidate(savedAgent.value?.id);
+  const fromForm = resolveAgentIdCandidate(
+    (formData.value as { id?: string } | null)?.id,
+  );
+  return fromRoute || fromPath || fromProp || fromSaved || fromForm || '';
+});
+const debugDisabledReason = computed(() => {
+  if (!debugAgentId.value) {
+    return t('agentEditor.workspace.debugNeedSave');
+  }
+  return '';
+});
+const isCurrentAgentBuiltin = computed(() => {
+  const agentId = debugAgentId.value;
+  if (!agentId) return false;
+  if (props.agent?.is_builtin || savedAgent.value?.is_builtin) return true;
+  if ((formData.value as { is_builtin?: boolean }).is_builtin) return true;
+  return agentId.startsWith('builtin-');
+});
+const canManagePublishChannels = computed(() => {
+  if (!debugAgentId.value) return false;
+  if (isCurrentAgentBuiltin.value) return false;
+  return true;
+});
+const publishEmptyDescription = computed(() => {
+  if (isCurrentAgentBuiltin.value) {
+    return t('agentEditor.workspace.publishBuiltinBlocked');
+  }
+  return t('agentEditor.workspace.publishNeedSave');
+});
+
+function goToShareSection() {
+  setWorkspaceTab('config');
+  currentSection.value = 'share';
+}
 const suggestionTab = ref<'starters' | 'followUps'>('starters');
 const contentWrapperRef = ref<HTMLElement | null>(null);
 const highlightedField = ref<AgentNotReadyReasonKey | null>(null);
@@ -2233,12 +2360,52 @@ const navItems = computed(() => {
   if (isAgentMode.value && skillsAvailable.value) {
     items.push({ key: 'skills', icon: 'lightbulb', label: t('agent.editor.skillsConfig') });
   }
-  // 发布（仅编辑模式）
-  if (editorMode.value === 'edit' && editorAgent.value?.id && !editorAgent.value?.is_builtin && !authStore.isLiteMode) {
+  // 发布渠道走顶栏 Tab；共享留在应用配置左栏
+  if (editorMode.value === 'edit' && editorAgent.value?.id && !editorAgent.value?.is_builtin) {
     items.push({ key: 'share', icon: 'share', label: t('knowledgeEditor.sidebar.share') });
   }
   return items;
 });
+
+function isNavItemActive(sectionKey: string): boolean {
+  return workspaceTab.value === 'config' && currentSection.value === sectionKey;
+}
+
+function handleNavItemClick(sectionKey: string): void {
+  setWorkspaceTab('config');
+  currentSection.value = sectionKey;
+}
+
+function setWorkspaceTab(tab: WorkspaceTabKey): void {
+  workspaceTab.value = tab;
+  const nextQuery = { ...route.query } as Record<string, string | string[]>;
+  if (tab === 'config') {
+    delete nextQuery.tab;
+  } else {
+    nextQuery.tab = tab;
+  }
+  void router.replace({ query: nextQuery });
+}
+
+function normalizeWorkspaceTab(
+  raw: unknown,
+): WorkspaceTabKey | null {
+  const tab = Array.isArray(raw) ? raw[0] : raw;
+  if (tab === 'publish' || tab === 'logs' || tab === 'config') return tab;
+  return null;
+}
+
+// URL ?tab= 与顶栏 Tab 双向同步，避免硬刷新后停在应用配置却看起来像发布页空白
+watch(
+  () => route.query.tab,
+  (tabQuery) => {
+    const tab = normalizeWorkspaceTab(tabQuery);
+    if (tab && workspaceTab.value !== tab) {
+      workspaceTab.value = tab;
+    }
+  },
+  { immediate: true },
+);
 
 // 左侧导航分组（参考「头像-设置」的分组方式）
 const navGroups = computed(() => {
@@ -2522,13 +2689,6 @@ async function loadAgentIntegrationCounts(agentId: string) {
     agentIMChannelCount.value = 0;
     agentEmbedChannelCount.value = 0;
   }
-}
-
-function gotoIntegrations(tab: 'im' | 'embed') {
-  const agentId = editorAgent.value?.id;
-  if (!agentId) return;
-  handleClose();
-  router.push({ path: '/platform/settings', query: { section: 'integrations', agentId, tab } });
 }
 
 const filteredIntentPlaceholders = computed(() => {
@@ -2892,11 +3052,15 @@ const needsRerankModel = computed(() => {
   return false;
 });
 
-// 监听可见性变化，重置表单
-watch(() => props.visible, async (val) => {
-  if (val) {
-    savedAgent.value = null;
+const initializeEditor = async () => {
+    // 编辑态先保留 agent，避免 await 期间发布渠道 / 调试预览丢失 id
+    if (props.mode === 'edit' && props.agent?.id) {
+      savedAgent.value = props.agent;
+    } else {
+      savedAgent.value = null;
+    }
     currentSection.value = props.initialSection || 'basic';
+    workspaceTab.value = props.initialWorkspaceTab || 'config';
     // 先加载依赖数据（包括默认配置）
     await loadDependencies();
 
@@ -2951,7 +3115,13 @@ watch(() => props.visible, async (val) => {
 
       // 设置初始化标志，防止 watch 自动添加工具
       isInitializing.value = true;
+      // 保留已保存智能体，发布渠道 / 调试预览依赖 editorAgent.id
+      savedAgent.value = props.agent;
       formData.value = agentData;
+      // defaultFormData 无 id 字段，显式回写避免发布渠道误判未保存
+      if (props.agent.id) {
+        (formData.value as { id?: string }).id = props.agent.id;
+      }
       // 初始化知识库选择模式
       initKbSelectionMode();
       initMcpSelectionMode();
@@ -3034,12 +3204,7 @@ watch(() => props.visible, async (val) => {
     if (props.initialHighlightField) {
       await applyInitialFieldHighlight(props.initialHighlightField);
     }
-  } else {
-    clearFieldHighlight();
-    agentIMChannelCount.value = 0;
-    agentEmbedChannelCount.value = 0;
-  }
-});
+};
 
 // 初始化知识库选择模式
 const initKbSelectionMode = () => {
@@ -3256,7 +3421,7 @@ watch(isAgentMode, (isAgent) => {
 
 // 监听设置弹窗关闭，刷新模型列表
 watch(() => uiStore.showSettingsModal, async (visible, prevVisible) => {
-  if (prevVisible && !visible && props.visible) {
+  if (prevVisible && !visible) {
     try {
       await Promise.all([
         chatResources.ensureModels(true),
@@ -3366,6 +3531,15 @@ const loadDependencies = async () => {
   }
 };
 
+// 必须在 loadDependencies / init* 全部声明后再注册，避免 immediate watch 踩到 TDZ
+watch(
+  () => [props.mode, props.agent?.id, props.initialSection, props.initialWorkspaceTab] as const,
+  () => {
+    void initializeEditor();
+  },
+  { immediate: true },
+);
+
 // 跳转到模型管理页面添加模型
 const handleAddModel = (subSection: string) => {
   uiStore.openSettings('models', subSection);
@@ -3378,7 +3552,7 @@ const handleClose = () => {
   rewriteSystemPopup.value.show = false;
   rewriteUserPopup.value.show = false;
   fallbackPromptPopup.value.show = false;
-  emit('update:visible', false);
+  emit('close');
 };
 
 // 过滤后的占位符列表
@@ -4110,18 +4284,19 @@ const handlePlaceholderClick = (type: 'system' | 'context' | 'rewriteSystem' | '
   }
 };
 
-// 监听 visible 变化设置事件监听
-watch(() => props.visible, (val) => {
-  if (val) {
-    nextTick(() => {
-      setupTextareaEventListeners();
-      setupContextTemplateEventListeners();
-      setupGenericTextareaEventListeners('intent', intentPromptPopup, () => filteredIntentPlaceholders.value);
-      setupGenericTextareaEventListeners('rewriteSystem', rewriteSystemPopup, () => filteredRewriteSystemPlaceholders.value);
-      setupGenericTextareaEventListeners('rewriteUser', rewriteUserPopup, () => filteredRewriteUserPlaceholders.value);
-      setupGenericTextareaEventListeners('fallback', fallbackPromptPopup, () => filteredFallbackPlaceholders.value);
-    });
-  }
+const setupEditorTextareaListeners = () => {
+  nextTick(() => {
+    setupTextareaEventListeners();
+    setupContextTemplateEventListeners();
+    setupGenericTextareaEventListeners('intent', intentPromptPopup, () => filteredIntentPlaceholders.value);
+    setupGenericTextareaEventListeners('rewriteSystem', rewriteSystemPopup, () => filteredRewriteSystemPlaceholders.value);
+    setupGenericTextareaEventListeners('rewriteUser', rewriteUserPopup, () => filteredRewriteUserPlaceholders.value);
+    setupGenericTextareaEventListeners('fallback', fallbackPromptPopup, () => filteredFallbackPlaceholders.value);
+  });
+};
+
+onMounted(() => {
+  setupEditorTextareaListeners();
 });
 
 // 模板选择处理函数
@@ -4265,14 +4440,29 @@ const handleSave = async () => {
         throw new Error(result?.message || t('agent.messages.saveFailed'));
       }
       savedAgent.value = created;
-      formData.value.id = created.id;
+      (formData.value as { id?: string }).id = created.id;
       markContextualGuideDone('agentCreate')
       MessagePlugin.success(t('agent.messages.created'));
       emit('success', created);
     } else {
-      await updateAgent(formData.value.id, formData.value);
+      const agentId =
+        (formData.value as { id?: string }).id
+        || props.agent?.id
+        || savedAgent.value?.id
+        || '';
+      if (!agentId) {
+        throw new Error(t('agent.messages.saveFailed'));
+      }
+      (formData.value as { id?: string }).id = agentId;
+      const result: any = await updateAgent(agentId, formData.value);
+      const updated = (result?.data as CustomAgent | undefined) || {
+        ...(props.agent as CustomAgent),
+        ...formData.value,
+        id: agentId,
+      };
+      savedAgent.value = updated;
       MessagePlugin.success(t('agent.messages.updated'));
-      emit('success');
+      emit('success', updated);
     }
   } catch (e: any) {
     MessagePlugin.error(e?.message || t('agent.messages.saveFailed'));
@@ -4283,56 +4473,192 @@ const handleSave = async () => {
 </script>
 
 <style scoped lang="less">
-// 复用创建知识库的样式
-.settings-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+.agent-editor-page {
+  height: 100%;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--td-bg-color-container);
 }
 
 .settings-modal {
   position: relative;
-  width: 90vw;
-  max-width: 1100px;
-  height: 85vh;
-  max-height: 750px;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
   background: var(--td-bg-color-container);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border-radius: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.close-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+.settings-modal--page {
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+}
+
+.workspace-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--td-component-stroke);
+  background: var(--td-bg-color-container);
+}
+
+.workspace-topbar__lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.workspace-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   height: 32px;
   border: none;
-  background: transparent;
   border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: transparent;
   color: var(--td-text-color-secondary);
-  transition: all 0.2s ease;
-  z-index: 10;
+  cursor: pointer;
+  flex-shrink: 0;
 
   &:hover {
     background: var(--td-bg-color-container-hover);
     color: var(--td-text-color-primary);
   }
+
+  &--text {
+    width: auto;
+    height: auto;
+    padding: 6px 10px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
+.workspace-topbar__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--td-text-color-primary);
+  white-space: nowrap;
+}
+
+.workspace-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.workspace-tab {
+  border: none;
+  background: transparent;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: var(--td-bg-color-container-hover);
+    color: var(--td-text-color-primary);
+  }
+
+  &.is-active {
+    background: color-mix(in srgb, var(--td-brand-color) 12%, transparent);
+    color: var(--td-brand-color);
+  }
+}
+
+.workspace-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.workspace-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-config {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.workspace-debug {
+  width: min(380px, 32vw);
+  flex-shrink: 0;
+  border-left: 1px solid var(--td-component-stroke);
+  background: var(--td-bg-color-container);
+  min-height: 0;
+  overflow: hidden;
+
+  @media (max-width: 1100px) {
+    display: none;
+  }
+}
+
+.workspace-panel {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-panel__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 20px;
+}
+
+.workspace-panel__fill {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-panel__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
 }
 
 .settings-container {
@@ -4977,21 +5303,6 @@ const handleSave = async () => {
   color: var(--td-brand-color);
   font-size: 13px;
   line-height: 1.5;
-}
-
-// 过渡动画
-.modal-enter-active,
-.modal-leave-active {
-  transition: all 0.3s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-
-  .settings-modal {
-    transform: scale(0.95);
-  }
 }
 
 // Slider 样式

@@ -92,7 +92,7 @@ func TestCreateTenantRejectsRegularUserWhenSelfServiceDisabled(t *testing.T) {
 	}
 }
 
-func TestCreateTenantAllowsCrossTenantSuperuserWhenSelfServiceDisabled(t *testing.T) {
+func TestCreateTenantRejectsCrossTenantSuperuserSelfService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tenants := &tenantPolicyTenantService{}
 	h := &TenantHandler{
@@ -106,18 +106,18 @@ func TestCreateTenantAllowsCrossTenantSuperuserWhenSelfServiceDisabled(t *testin
 		systemSettingSvc: &tenantPolicySettingService{enabled: false},
 	}
 	r := gin.New()
-	r.Use(errorCapture())
+	r.Use(tenantPolicyErrorCapture())
 	r.POST("/tenants", h.CreateTenant)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/tenants", bytes.NewBufferString(`{"name":"admin-created"}`))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusCreated {
+	if w.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
-	if tenants.createCalls != 1 {
-		t.Fatalf("CreateTenant called %d times, want 1", tenants.createCalls)
+	if tenants.createCalls != 0 {
+		t.Fatalf("CreateTenant called %d times, want 0", tenants.createCalls)
 	}
 }
 

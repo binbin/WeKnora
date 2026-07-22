@@ -36,14 +36,6 @@
                         <line x1="2.94" y1="12.5" x2="15.06" y2="12.5" stroke="currentColor" stroke-width="1.2"
                           stroke-linecap="round" />
                       </svg>
-                      <!-- WeKnora Cloud 使用自定义 W 图标 -->
-                      <svg v-else-if="item.key === 'weknoracloud'" width="17" height="17" viewBox="0 0 18 18"
-                        fill="none" xmlns="http://www.w3.org/2000/svg" class="nav-icon">
-                        <rect x="1.5" y="1.5" width="15" height="15" rx="3.5" stroke="currentColor" stroke-width="1.2"
-                          fill="none" />
-                        <path d="M4.5 5.5L6.5 12.5L9 7.5L11.5 12.5L13.5 5.5" stroke="currentColor" stroke-width="1.3"
-                          stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                      </svg>
                       <span v-else-if="item.emoji" class="nav-icon nav-icon-emoji">{{ item.emoji }}</span>
                       <t-icon v-else :name="item.icon" class="nav-icon" />
                       <span class="nav-label">{{ item.label }}</span>
@@ -71,7 +63,7 @@
             <div class="settings-content">
               <div class="content-wrapper" :class="{
                 'content-wrapper--wide': currentSection === 'members',
-                'content-wrapper--full': SYSTEM_ADMIN_SECTIONS.has(currentSection) || isIntegrationSection(currentSection),
+                'content-wrapper--full': SYSTEM_ADMIN_SECTIONS.has(currentSection),
               }">
                 <!-- 角色不允许访问当前 section（deep-link 进来 / 跨空间切换后角色降级）—— 优先于具体 section 渲染。
                      正常导航走 navItems filter 不会到这里，但 watch(navItems) 的 fallback 会在角色降级
@@ -87,16 +79,6 @@
                   <!-- 常规设置 -->
                   <div v-if="currentSection === 'general'" class="section">
                     <GeneralSettings />
-                  </div>
-
-                  <!-- Ollama 设置 -->
-                  <div v-if="currentSection === 'ollama'" class="section">
-                    <OllamaSettings />
-                  </div>
-
-                  <!-- WeKnora Cloud -->
-                  <div v-if="currentSection === 'weknoracloud'" class="section">
-                    <WeKnoraCloudSettings />
                   </div>
 
                   <!-- 模型配置 -->
@@ -168,11 +150,6 @@
                     <TenantMembers />
                   </div>
 
-                  <!-- 发布集成 -->
-                  <div v-if="isIntegrationSection(currentSection)" class="section">
-                    <IntegrationSettingsSection :tab="integrationTabFromSection(currentSection)" />
-                  </div>
-
                   <div v-if="currentSection === 'orgunits'" class="section">
                     <OrgUnitSettings />
                   </div>
@@ -202,27 +179,18 @@ import TenantInfo from './TenantInfo.vue'
 import UserProfile from './UserProfile.vue'
 import GeneralSettings from './GeneralSettings.vue'
 import ModelSettings from './ModelSettings.vue'
-import OllamaSettings from './OllamaSettings.vue'
 import McpSettings from './McpSettings.vue'
 import WebSearchSettings from './WebSearchSettings.vue'
 import ChatHistorySettings from './ChatHistorySettings.vue'
 import VectorStoreSettings from './VectorStoreSettings.vue'
 import ParserEngineSettings from './ParserEngineSettings.vue'
 import StorageEngineSettings from './StorageBackendSettings.vue'
-import WeKnoraCloudSettings from './WeKnoraCloudSettings.vue'
 import TenantMembers from './TenantMembers.vue'
 import OrgUnitSettings from './OrgUnitSettings.vue'
 import SystemSettings from '@/views/system/SystemSettings.vue'
 import RuntimeQueues from '@/views/system/RuntimeQueues.vue'
 import PlatformAPIKeys from '@/views/system/PlatformAPIKeys.vue'
 import SystemAuditLog from '@/views/system/SystemAuditLog.vue'
-import IntegrationSettingsSection from '@/views/integrations/IntegrationSettingsSection.vue'
-import {
-  INTEGRATION_PREVIEW_ITEMS,
-  INTEGRATION_TAB_MIN_ROLE,
-  INTEGRATION_TABS,
-  type IntegrationTab,
-} from '@/config/integrations'
 
 const route = useRoute()
 const router = useRouter()
@@ -250,7 +218,7 @@ type NavGroup = {
 
 // 设置二级导航的最低可见角色：和 internal/router/router.go 的守卫矩阵对齐。
 // 以「页面里至少有 1 个有意义的写操作所要求的最低角色」为基准，把基础设
-// 施配置（models 写、ollama 下载、websearch 写、parser/storage/vector/mcp
+// 施配置（models 写、websearch 写、parser/storage/vector/mcp
 // CRUD、chat-history 配置）统一收到 admin；只读类（general / system info /
 // tenant-info / members 名册）保留 viewer 可见；最高敏感的 reset api
 // key 是 owner-only。改这张表前请在 router.go 里复核对应路由组。
@@ -265,8 +233,6 @@ type NavGroup = {
 type RoleKey = 'viewer' | 'contributor' | 'admin' | 'owner'
 const SECTION_MIN_ROLE: Record<string, RoleKey> = {
   general: 'viewer',
-  ollama: 'admin',
-  weknoracloud: 'admin',
   models: 'viewer',
   websearch: 'admin',
   chathistory: 'admin',
@@ -282,42 +248,27 @@ const SECTION_MIN_ROLE: Record<string, RoleKey> = {
 }
 
 const SYSTEM_ADMIN_SECTIONS = new Set(['system-global', 'runtime-queues', 'platform-api-keys', 'system-audit-log'])
-const INTEGRATION_SECTION_PREFIX = 'integration-'
 
-const integrationSectionKey = (tab: IntegrationTab) => `${INTEGRATION_SECTION_PREFIX}${tab}`
-
-const integrationTabFromSection = (section: string): IntegrationTab => {
-  const raw = section.startsWith(INTEGRATION_SECTION_PREFIX)
-    ? section.slice(INTEGRATION_SECTION_PREFIX.length)
-    : section
-  if (INTEGRATION_TABS.includes(raw as IntegrationTab)) {
-    return raw as IntegrationTab
-  }
-  return 'im'
-}
-
-const isIntegrationSection = (section: string) => {
-  return section.startsWith(INTEGRATION_SECTION_PREFIX) &&
-    INTEGRATION_TABS.includes(integrationTabFromSection(section))
-}
+const REMOVED_SETTINGS_SECTIONS = new Set([
+  'ollama',
+  'weknoracloud',
+  'integrations',
+  'api',
+  'integration-im',
+  'integration-embed',
+  'integration-api',
+  'integration-chrome',
+  'integration-claw',
+])
 
 const normalizeSettingsSection = (section: string) => {
-  if (section === 'api') {
-    return integrationSectionKey('api')
-  }
-  if (section === 'integrations') {
-    return integrationSectionKey(integrationTabFromSection((route.query.tab as string) || 'im'))
+  if (REMOVED_SETTINGS_SECTIONS.has(section) || section.startsWith('integration-')) {
+    return 'models'
   }
   return section
 }
 
 const canSeeSection = (key: string): boolean => {
-  if (isIntegrationSection(key)) {
-    const min = INTEGRATION_TAB_MIN_ROLE[integrationTabFromSection(key)]
-    if (!min) return true
-    if (authStore.canAccessAllTenants) return true
-    return authStore.hasRole(min)
-  }
   if (SYSTEM_ADMIN_SECTIONS.has(key)) {
     return authStore.isSystemAdmin
   }
@@ -332,16 +283,8 @@ const navItems = computed(() => {
   // 一律走 SECTION_MIN_ROLE 表，避免 ad-hoc isAdmin/isOwner 散落在多处。
   // 服务端在每条路由上仍以 g.Viewer/Admin/Owner 为准，这里只决定 UI 是
   // 否露入口；改动入口规则请同步更新 SECTION_MIN_ROLE 注释里的对照路由。
-  const integrationItems: NavItem[] = INTEGRATION_PREVIEW_ITEMS.map((item) => ({
-    key: integrationSectionKey(item.key),
-    icon: item.icon.type === 'icon' ? item.icon.name : 'integration',
-    emoji: item.icon.type === 'emoji' ? item.icon.value : undefined,
-    label: t(`integrations.tabs.${item.key}`),
-  }))
   const all: NavItem[] = [
     { key: 'general', icon: 'setting', label: t('general.title') },
-    { key: 'ollama', icon: 'server', label: 'Ollama' },
-    { key: 'weknoracloud', icon: '', label: 'WeKnora Cloud' },
     { key: 'models', icon: 'control-platform', label: t('settings.modelManagement') },
     { key: 'websearch', icon: 'search', label: t('settings.webSearchConfig') },
     { key: 'chathistory', icon: 'chat', label: t('chatHistorySettings.title') },
@@ -358,7 +301,6 @@ const navItems = computed(() => {
     { key: 'tenant', icon: 'user-circle', label: t('settings.tenantInfo') },
     { key: 'members', icon: 'usergroup', label: t('tenantMember.title') },
     { key: 'orgunits', icon: 'tree-list', label: '组织层级' },
-    ...integrationItems,
   ]
   // currentTenantRole 为空表示「membership 还没加载」—— 比起渲染整套
   // viewer 入口然后角色一返回又消失，先卡住不渲染更稳，跟原先 members
@@ -372,10 +314,7 @@ const navItems = computed(() => {
 const navGroups = computed<NavGroup[]>(() => {
   const itemMap = new Map(navItems.value.map((item) => [item.key, item]))
   const pickItems = (keys: string[]) => keys.map((key) => itemMap.get(key)).filter(Boolean) as NavItem[]
-  // 分组：账户 → 空间 → 模型 → 发布集成 → 数据与扩展 → 系统管理 → 平台
-  // 关键调整：把个人偏好(general)和用户信息收进「账户」；
-  // 把空间内功能开关(chathistory)从「平台」挪到「空间」；
-  // 把检索引擎和外部集成合并为「数据与扩展」，避免两个 2~3 项的窄分组。
+  // 分组：账户 → 空间 → 模型 → 数据与扩展 → 系统管理 → 平台
   return [
     {
       key: 'account',
@@ -390,18 +329,7 @@ const navGroups = computed<NavGroup[]>(() => {
     {
       key: 'models_runtime',
       label: t('settings.navGroups.modelsRuntime'),
-      items: pickItems(['models', 'ollama', 'weknoracloud']),
-    },
-    {
-      key: 'integrations',
-      label: t('integrations.title'),
-      items: pickItems([
-        integrationSectionKey('im'),
-        integrationSectionKey('embed'),
-        integrationSectionKey('api'),
-        integrationSectionKey('chrome'),
-        integrationSectionKey('claw'),
-      ]),
+      items: pickItems(['models']),
     },
     {
       key: 'data_extensions',
@@ -444,16 +372,7 @@ const handleNavClick = (item: any) => {
 
   // 切换到对应页面
   currentSection.value = item.key
-  if (route.path === '/platform/settings' && isIntegrationSection(item.key)) {
-    router.replace({
-      path: '/platform/settings',
-      query: {
-        ...route.query,
-        section: 'integrations',
-        tab: integrationTabFromSection(item.key),
-      },
-    })
-  } else if (route.path === '/platform/settings' && SYSTEM_ADMIN_SECTIONS.has(item.key)) {
+  if (route.path === '/platform/settings' && SYSTEM_ADMIN_SECTIONS.has(item.key)) {
     const query = { ...route.query }
     delete query.tab
     router.replace({

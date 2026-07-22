@@ -215,10 +215,6 @@
                 <span v-if="wkcState === 'expired'">{{ $t('settings.weknoraCloud.credentialExpired') }}</span>
                 <span v-else>{{ $t('settings.weknoraCloud.unconfigured') }}</span>
               </span>
-              <a class="inline-alert__action" @click="goToWkcSettings">
-                {{ $t('settings.weknoraCloud.goToSettings') }}
-                <t-icon name="chevron-right" />
-              </a>
             </div>
           </template>
         </section>
@@ -372,9 +368,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { MessagePlugin } from 'tdesign-vue-next'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
@@ -389,7 +384,6 @@ import {
 import { getWeKnoraCloudStatus } from '@/api/model'
 
 const { t } = useI18n()
-const uiStore = useUIStore()
 const authStore = useAuthStore()
 
 const CONFIGURABLE_ENGINES = new Set(['mineru', 'mineru_cloud', 'paddleocr_vl', 'paddleocr_vl_cloud'])
@@ -692,14 +686,6 @@ async function checkWkcStatus() {
   } catch {
     wkcState.value = 'unconfigured'
   }
-}
-
-async function goToWkcSettings() {
-  if (uiStore.showSettingsModal) {
-    uiStore.closeSettings()
-    await nextTick()
-  }
-  uiStore.openSettings('weknoracloud')
 }
 
 onMounted(loadAll)

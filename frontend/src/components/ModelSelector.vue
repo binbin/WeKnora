@@ -93,13 +93,12 @@ const selectedModel = computed(() => {
   return models.value.find(m => m.id === props.selectedModelId)
 })
 
-// 加载模型列表（仅在未提供 allModels 时调用）
+// 加载模型列表（仅在未提供 allModels，或父级传入空列表时回退自拉）
 const loadModels = async () => {
-  // 如果外部提供了 allModels，则不需要加载
-  if (props.allModels) {
+  if (Array.isArray(props.allModels) && props.allModels.length > 0) {
     return
   }
-  
+
   loading.value = true
   try {
     const result = await listModels()
@@ -134,8 +133,7 @@ defineExpose({
 })
 
 onMounted(() => {
-  // 只有在没有提供 allModels 时才加载
-  if (!props.allModels) {
+  if (!(Array.isArray(props.allModels) && props.allModels.length > 0)) {
     loadModels()
   }
 })

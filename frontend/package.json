@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "test": "tsx --test"
+    "test": "tsx --test",
+    "test:e2e": "PW_WORKERS=2 playwright test"
   },
   "dependencies": {
     "@microsoft/fetch-event-source": "^2.0.1",
@@ -40,6 +41,7 @@
     "xlsx": "file:./packages/xlsx-0.20.2.tgz"
   },
   "devDependencies": {
+    "@playwright/test": "1.49.1",
     "@tsconfig/node22": "^22.0.5",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "6.0.6",

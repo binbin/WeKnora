@@ -42,7 +42,7 @@
                  FAQ 类型知识库不传 supportedFileTypes，可上传格式行会自动隐藏。 -->
             <div class="kb-title-actions">
               <KBInfoPopover
-                v-if="kbInfo && !authStore.isLiteMode"
+                v-if="kbInfo"
                 :kb-info="kbInfo"
               />
               <t-tooltip v-if="canManage" :content="$t('knowledgeBase.settings')" placement="top">

@@ -1,6 +1,6 @@
 <template>
   <div class="agent-list-container">
-    <ListSpaceSidebar v-if="!authStore.isLiteMode" v-model="spaceSelection" :count-all="allAgentsCount"
+    <ListSpaceSidebar v-model="spaceSelection" :count-all="allAgentsCount"
       :count-mine="agents.length" :count-by-org="effectiveSharedCountByOrg" :count-favorites="agentFavoritesCount"
       :count-recents="agentRecentsCount" />
     <div class="agent-list-content">
@@ -799,12 +799,7 @@
       </div>
     </Transition>
 
-    <!-- 智能体编辑器弹窗 -->
-    <AgentEditorModal :visible="editorVisible" :mode="editorMode" :agent="editingAgent"
-      :initialSection="editorInitialSection"
-      :initialHighlightField="editorInitialHighlightField"
-      :readOnly="editorMode === 'edit' && editingAgent != null && !canManageAgent(editingAgent as AgentWithUI)"
-      @update:visible="editorVisible = $event" @success="handleEditorSuccess" />
+    <!-- 编辑器已迁移为 /platform/agents/add 与 /platform/agents/:id 页面 -->
 
     <TenantModelsGuide :when="showAgentTenantModelsGuide" variant="agent" />
     <ContextualGuide tour="agentList" :when="showAgentListContextualGuide" />
@@ -825,7 +820,6 @@ import { setSharedAgentDisabledByMe, listOrganizationSharedAgents } from '@/api/
 import { useSettingsStore } from '@/stores/settings'
 import { useMenuStore } from '@/stores/menu'
 import type { SharedAgentInfo, OrganizationSharedAgentItem } from '@/api/organization'
-import AgentEditorModal from './AgentEditorModal.vue'
 import ContextualGuide from '@/components/ContextualGuide.vue'
 import TenantModelsGuide from '@/components/TenantModelsGuide.vue'
 import { markContextualGuideDone } from '@/config/contextualGuides'
@@ -1076,11 +1070,6 @@ const sharedAgentMcpScopeText = computed(() => {
   if (c.mcp_selection_mode === 'selected' && c.mcp_services?.length) return t('agent.shareScope.mcpSelected', { count: c.mcp_services.length })
   return t('agent.shareScope.mcpNone')
 })
-const editorVisible = ref(false)
-const editorMode = ref<'create' | 'edit'>('create')
-const editingAgent = ref<CustomAgent | null>(null)
-const editorInitialSection = ref<string>('basic')
-const editorInitialHighlightField = ref<string>('')
 /** 当前打开三点菜单的卡片 agent.id（用于受控弹出层，避免 computed 项无持久引用导致菜单不响应） */
 const openMoreAgentId = ref<string | null>(null)
 
@@ -1097,7 +1086,7 @@ const showAgentTenantModelsGuide = computed(
 )
 
 const showAgentListContextualGuide = computed(
-  () => showAgentListEmpty.value && isReadyForAgent.value && !editorVisible.value,
+  () => showAgentListEmpty.value && isReadyForAgent.value,
 )
 
 const applyAgentListData = (res: { data: CustomAgent[]; disabled_own_agent_ids: string[] }) => {
@@ -1107,7 +1096,7 @@ const applyAgentListData = (res: { data: CustomAgent[]; disabled_own_agent_ids: 
     showMore: false,
     disabled_by_me: disabledOwnIds.includes(agent.id)
   }))
-  checkAndOpenEditModal()
+  redirectLegacyEditQuery()
 }
 
 const fetchList = (force = false) => {
@@ -1117,71 +1106,44 @@ const fetchList = (force = false) => {
     orgStore.fetchOrganizations({ force }),
     orgStore.fetchSharedAgents({ force }),
   ]).finally(() => { loading.value = false }).then(() => {
-    checkAndOpenEditModal()
+    redirectLegacyEditQuery()
     // 各空间智能体数量已由 GET /organizations 的 resource_counts 带回，存于 orgStore.resourceCounts
     const counts = orgStore.resourceCounts?.agents?.by_organization
     if (counts) spaceAgentCountByOrg.value = { ...counts }
   })
 }
 
-// 检查 URL 参数并打开编辑模态框
-const resolveAgentForEdit = (editId: string, sourceTenantId?: string): CustomAgent | null => {
-  const own = agents.value.find(a => a.id === editId)
-  if (own) return own
-  if (sourceTenantId) {
-    const shared = sharedAgents.value.find(
-      s => s.agent?.id === editId && String(s.source_tenant_id) === sourceTenantId,
-    )
-    if (shared?.agent) return shared.agent as CustomAgent
-  }
-  return null
-}
-
-const checkAndOpenEditModal = () => {
+// 兼容旧深链 ?edit=id → /platform/agents/:id
+const redirectLegacyEditQuery = () => {
   const editId = route.query.edit as string
   const section = route.query.section as string
   const sourceTenantId = route.query.sourceTenantId as string | undefined
   if (editId && (section === 'im' || section === 'embed' || section === 'integrations')) {
-    const tab = section === 'embed' ? 'embed' : 'im'
     router.replace({
-      path: '/platform/settings',
-      query: { section: 'integrations', tab, agentId: editId },
+      path: `/platform/agents/${editId}`,
+      query: { tab: 'publish' },
     })
     return
   }
   if (editId) {
-    const agent = resolveAgentForEdit(editId, sourceTenantId)
-    if (agent) {
-      editingAgent.value = agent
-      editorMode.value = 'edit'
-      editorInitialSection.value = section || 'basic'
-      editorInitialHighlightField.value = (route.query.highlight as string) || ''
-      editorVisible.value = true
-    }
-    // Drop the transient edit/section params but preserve other filter
-    // state (scope / creator / q) so refreshing doesn't reset the view.
-    const { edit: _e, section: _s, highlight: _h, sourceTenantId: _st, ...rest } = route.query
-    router.replace({ path: route.path, query: rest })
+    const query: Record<string, string> = {}
+    if (section) query.section = section
+    if (route.query.highlight) query.highlight = String(route.query.highlight)
+    if (sourceTenantId) query.sourceTenantId = sourceTenantId
+    router.replace({ path: `/platform/agents/${editId}`, query })
   }
 }
 
-// Also re-run when the query mutates while this view is already mounted —
-// e.g. the IM overview dialog navigating here via router.push lands on the
-// same route, so onMounted alone never fires and the editor would only open
-// after a manual refresh.
 watch(
   () => route.query.edit,
-  (v) => {
-    if (v && (agents.value.length > 0 || sharedAgents.value.length > 0)) {
-      checkAndOpenEditModal()
-    }
+  (editId) => {
+    if (editId) redirectLegacyEditQuery()
   },
 )
 
-// 监听菜单创建智能体事件
 const handleOpenAgentEditor = (event: CustomEvent) => {
   if (event.detail?.mode === 'create') {
-    openCreateModal()
+    openCreatePage()
   }
 }
 
@@ -1306,11 +1268,7 @@ async function handleUseSharedAgentInChat(shared: SharedAgentInfo) {
 
 const handleEdit = (agent: AgentWithUI) => {
   openMoreAgentId.value = null
-  editingAgent.value = agent
-  editorMode.value = 'edit'
-  editorInitialSection.value = 'basic'
-  editorInitialHighlightField.value = ''
-  editorVisible.value = true
+  router.push({ path: `/platform/agents/${agent.id}` })
 }
 
 // canManageAgent mirrors the server-side OwnedAgentOrAdmin guard
@@ -1544,29 +1502,15 @@ const confirmDelete = () => {
   })
 }
 
-const handleEditorSuccess = (agent?: CustomAgent) => {
-  if (agent) {
-    editingAgent.value = agent
-    editorMode.value = 'edit'
-  }
-  fetchList(true)
-}
-
 const formatDate = (dateStr: string) => {
   if (!dateStr) return ''
   return formatStringDate(new Date(dateStr))
 }
 
-// 暴露创建方法供外部调用
-const openCreateModal = () => {
-  editingAgent.value = null
-  editorMode.value = 'create'
-  editorInitialSection.value = 'basic'
-  editorInitialHighlightField.value = ''
-  editorVisible.value = true
+const openCreatePage = () => {
+  router.push({ path: '/platform/agents/add' })
 }
 
-// 创建智能体
 const handleCreateAgent = () => {
   if (!isReadyForAgent.value) {
     MessagePlugin.warning(t('contextualGuide.tenantModels.needChatModelFirst'))
@@ -1574,11 +1518,11 @@ const handleCreateAgent = () => {
     return
   }
   markContextualGuideDone('agentList')
-  openCreateModal()
+  openCreatePage()
 }
 
 defineExpose({
-  openCreateModal
+  openCreateModal: openCreatePage,
 })
 </script>
 

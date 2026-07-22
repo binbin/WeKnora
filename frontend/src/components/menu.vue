@@ -4,7 +4,6 @@
         <div class="logo_row" v-if="!uiStore.sidebarCollapsed">
             <div class="logo_box" @click="router.push('/platform/knowledge-bases')" style="cursor: pointer;">
                 <img class="logo" src="@/assets/img/weknora.png" alt="">
-                <sup v-if="isLiteEdition" class="lite-badge">Lite</sup>
             </div>
             <div class="logo_actions">
                 <t-tooltip placement="bottom">
@@ -254,7 +253,6 @@ import { MessagePlugin, DialogPlugin, Icon as TIcon } from "tdesign-vue-next";
 import UserMenu from '@/components/UserMenu.vue';
 import TenantSelector from '@/components/TenantSelector.vue';
 import { useI18n } from 'vue-i18n';
-import { getSystemInfo } from '@/api/system';
 
 const chatResources = useChatResourcesStore();
 // Platform logos reused from IMChannelsOverviewPanel — keeps the session list
@@ -338,7 +336,6 @@ const hasAnySession = computed(() =>
 type MenuItem = { title: string; icon: string; path: string; childrenPath?: string; children?: any[] };
 const { menuArr, visibleMenuArr } = storeToRefs(usemenuStore);
 let activeSubmenu = ref<string>('');
-const isLiteEdition = ref(false);
 
 // 批量管理状态
 const batchMode = ref(false)
@@ -974,14 +971,6 @@ onMounted(async () => {
 
     window.addEventListener(SESSION_MUTATION_EVENT, handleSessionMutation);
 
-    isLiteEdition.value = authStore.isLiteMode
-    getSystemInfo().then(res => {
-        if (res.data?.edition === 'lite') {
-            isLiteEdition.value = true
-            authStore.setLiteMode(true)
-        }
-    }).catch(() => { })
-
     await loadCurrentKbInfo((route.params as any)?.kbId as string)
 
     await loadSessionOriginMeta();
@@ -1273,17 +1262,6 @@ const onDragHandleMouseDown = (e: MouseEvent) => {
         .logo {
             width: 128px;
             height: auto;
-        }
-
-        .lite-badge {
-            margin-left: 2px;
-            align-self: flex-start;
-            margin-top: 2px;
-            font-size: 9px;
-            font-weight: 600;
-            color: var(--td-text-color-placeholder);
-            user-select: none;
-            white-space: nowrap;
         }
     }
 

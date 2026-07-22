@@ -41,16 +41,24 @@ func (s *orgUnitService) Create(
 			"only system admin can create a top-level organization",
 		)
 	}
+
 	depth := 0
 	pathPrefix := ""
-	if parentID != "" {
+	if parentID == "" && types.IsSystemAdminActor(ctx) {
+		// Platform catalog roots always use tenant_id=0.
+		tenantID = types.PlatformOrgTenantID
+	} else if parentID != "" {
 		parent, err := s.repo.GetByID(ctx, tenantID, parentID)
+		if err != nil && types.IsSystemAdminActor(ctx) {
+			parent, err = s.repo.GetByIDGlobal(ctx, parentID)
+		}
 		if err != nil {
 			if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 				return nil, apperrors.NewNotFoundError("parent org unit not found")
 			}
 			return nil, err
 		}
+		tenantID = parent.TenantID
 		depth = parent.Depth + 1
 		pathPrefix = parent.Path
 	}

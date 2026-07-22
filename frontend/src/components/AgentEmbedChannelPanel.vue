@@ -1,9 +1,9 @@
 <template>
   <div class="embed-panel">
-    <div class="channels-section">
+    <div v-if="!props.hideChannelList" class="channels-section">
       <div class="channels-header">
         <span class="channels-title">{{ $t('embedPublish.channelsTitle') }}</span>
-        <IntegrationsAgentFilter v-model="filterAgentId" :agents="agents" />
+        <IntegrationsAgentFilter v-if="!props.lockAgentFilter" v-model="filterAgentId" :agents="agents" />
         <span class="channels-count">{{ channels.length }}</span>
       </div>
 
@@ -429,7 +429,22 @@ import {
 import { listAgents, type CustomAgent } from '@/api/agent'
 import IntegrationsAgentFilter from '@/components/IntegrationsAgentFilter.vue'
 
+const props = withDefaults(
+  defineProps<{
+    hideChannelList?: boolean
+    lockAgentFilter?: boolean
+  }>(),
+  {
+    hideChannelList: false,
+    lockAgentFilter: false,
+  },
+)
+
 const filterAgentId = defineModel<string>('filterAgentId', { default: '' })
+
+const emit = defineEmits<{
+  changed: []
+}>()
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -696,6 +711,7 @@ const load = async () => {
     }))
   } finally {
     loading.value = false
+    emit('changed')
   }
 }
 
@@ -707,6 +723,13 @@ watch(filterAgentId, (id) => {
 
 onMounted(() => {
   void load()
+})
+
+defineExpose({
+  openCreate,
+  openDrawer,
+  reload: load,
+  getChannels: () => channels.value,
 })
 
 watch(stepTitles, (titles) => {

@@ -44,7 +44,6 @@ export const useAuthStore = defineStore('auth', () => {
   // v1 deployments will typically have length 1; the field is wired now
   // so PR 3 can render a tenant-switcher UI without a store migration.
   const memberships = ref<Array<{ tenant_id: number; tenant_name?: string; role: string }>>([])
-  const isLiteMode = ref(false)
   // pendingInvitationCount is the number of pending tenant invitations
   // addressed to the current user. Renders as a badge next to the
   // avatar; updated by fetchPendingInvitationCount, which runs after
@@ -378,15 +377,6 @@ export const useAuthStore = defineStore('auth', () => {
     return selectedTenantId.value
   }
 
-  const setLiteMode = (value: boolean) => {
-    isLiteMode.value = value
-    if (value) {
-      localStorage.setItem('weknora_lite_mode', 'true')
-    } else {
-      localStorage.removeItem('weknora_lite_mode')
-    }
-  }
-
   const logout = () => {
     // 清空状态
     user.value = null
@@ -413,8 +403,8 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('weknora_selected_tenant_id')
     localStorage.removeItem('weknora_selected_tenant_name')
     localStorage.removeItem('weknora_memberships')
+    // 清理历史 Lite 遗留标记（功能已移除）
     localStorage.removeItem('weknora_lite_mode')
-    isLiteMode.value = false
     try {
       sessionStorage.removeItem('weknora_lite_last_path')
     } catch {
@@ -504,7 +494,13 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
 
-    isLiteMode.value = localStorage.getItem('weknora_lite_mode') === 'true'
+    // 一次性清掉已废弃的 Lite 客户端标记，避免脏数据影响行为
+    localStorage.removeItem('weknora_lite_mode')
+    try {
+      sessionStorage.removeItem('weknora_lite_last_path')
+    } catch {
+      /* ignore */
+    }
   }
 
   // 初始化时从localStorage恢复状态
@@ -536,7 +532,6 @@ export const useAuthStore = defineStore('auth', () => {
     currentTenantRole,
     hasRole,
     effectiveTenantId,
-    isLiteMode,
 
     // 方法
     setUser,
@@ -553,7 +548,6 @@ export const useAuthStore = defineStore('auth', () => {
     fetchPendingInvitationCount,
     refreshFromAuthMe,
     getSelectedTenant,
-    setLiteMode,
     logout,
     initFromStorage
   }

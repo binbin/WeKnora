@@ -71,9 +71,13 @@ type OrgUnitService interface {
 type OrgUnitRepository interface {
 	Create(ctx context.Context, unit *types.OrgUnit) error
 	GetByID(ctx context.Context, tenantID uint64, id string) (*types.OrgUnit, error)
+	// GetByIDGlobal looks up an OrgUnit by id without tenant scope
+	// (platform catalog + legacy in-tenant trees).
+	GetByIDGlobal(ctx context.Context, id string) (*types.OrgUnit, error)
 	Update(ctx context.Context, unit *types.OrgUnit) error
 	Delete(ctx context.Context, tenantID uint64, id string) error
 	ListByTenant(ctx context.Context, tenantID uint64) ([]*types.OrgUnit, error)
+	ListRoots(ctx context.Context, tenantID uint64) ([]*types.OrgUnit, error)
 	CountByTenant(ctx context.Context, tenantID uint64) (int64, error)
 	CountChildren(ctx context.Context, tenantID uint64, parentID string) (int64, error)
 	ListByPathPrefix(ctx context.Context, tenantID uint64, pathPrefix string) ([]*types.OrgUnit, error)
@@ -82,8 +86,33 @@ type OrgUnitRepository interface {
 	AddMember(ctx context.Context, member *types.OrgUnitMember) error
 	RemoveMember(ctx context.Context, orgUnitID string, userID string) error
 	ListMembers(ctx context.Context, orgUnitID string) ([]*types.OrgUnitMember, error)
+	ListMembersByOrgUnitIDs(ctx context.Context, orgUnitIDs []string) ([]*types.OrgUnitMember, error)
 	ListUserMemberships(ctx context.Context, tenantID uint64, userID string) ([]*types.OrgUnitMember, error)
+	ListUserMembershipsByUser(ctx context.Context, userID string) ([]*types.OrgUnitMember, error)
 	GetMember(ctx context.Context, orgUnitID string, userID string) (*types.OrgUnitMember, error)
 	ClearPrimary(ctx context.Context, tenantID uint64, userID string) error
 	SetPrimary(ctx context.Context, tenantID uint64, userID string, orgUnitID string) error
+}
+
+// OrgUnitWorkspaceRepository persists root-OrgUnit → Tenant bindings.
+type OrgUnitWorkspaceRepository interface {
+	GetByRootOrgUnitID(ctx context.Context, rootOrgUnitID string) (*types.OrgUnitWorkspace, error)
+	GetByTenantID(ctx context.Context, tenantID uint64) (*types.OrgUnitWorkspace, error)
+	Create(ctx context.Context, binding *types.OrgUnitWorkspace) error
+}
+
+// OrgWorkspaceService lazily provisions business Tenants for platform
+// root OrgUnits and keeps org members enrolled in that workspace.
+type OrgWorkspaceService interface {
+	// EnsureWorkspaceForUser resolves the caller's primary (or first)
+	// OrgUnit membership, walks to the root org, creates「{name}的空间」
+	// if missing, enrolls the user (and syncs sibling/descendant
+	// members), and returns the workspace tenant id. Returns 0 when the
+	// user has no OrgUnit binding.
+	EnsureWorkspaceForUser(ctx context.Context, userID string) (uint64, error)
+
+	// EnsureFirstPlatformWorkspace returns the workspace for the
+	// earliest platform root OrgUnit (created_at ASC), creating it if
+	// needed. Returns 0 when the platform catalog has no roots.
+	EnsureFirstPlatformWorkspace(ctx context.Context) (uint64, error)
 }

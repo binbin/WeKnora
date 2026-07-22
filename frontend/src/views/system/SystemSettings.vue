@@ -620,9 +620,6 @@ type SettingsSection = 'access' | 'tenant' | 'runtime' | 'security' | 'other'
 const SETTINGS_SECTION_KEYS: Record<Exclude<SettingsSection, 'other'>, readonly string[]> = {
   access: [
     'auth.registration_mode',
-    'auth.default_tenant_mode',
-    'tenant.self_service_creation_enabled',
-    'tenant.max_owned_per_user',
   ],
   tenant: [
     'tenant.default_storage_quota_gb',
@@ -670,7 +667,7 @@ const activeSectionDescription = computed(() =>
 function sectionTabLabel(section: SettingsSection): string {
   const count = section === 'other'
     ? unknownSettings.value.length
-    : SETTINGS_SECTION_KEYS[section].filter((key) => settingsByKey.value.has(key)).length + (section === 'access' ? 2 : 0)
+    : SETTINGS_SECTION_KEYS[section].filter((key) => settingsByKey.value.has(key)).length
   return t(`system.globalSettings.sections.${section}.tab`, { count })
 }
 

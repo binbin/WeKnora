@@ -1,7 +1,6 @@
 import { reactive, ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import i18n from '@/i18n'
-import { useAuthStore } from '@/stores/auth'
 
 type MenuChild = Record<string, any>
 
@@ -28,7 +27,6 @@ export const useMenuStore = defineStore('menuStore', () => {
     },
     { title: '', titleKey: 'menu.knowledgeBase', icon: 'zhishiku', path: 'knowledge-bases' },
     { title: '', titleKey: 'menu.agents', icon: 'agent', path: 'agents' },
-    { title: '', titleKey: 'menu.organizations', icon: 'organization', path: 'organizations' },
     { title: '', titleKey: 'menu.settings', icon: 'setting', path: 'settings' },
     { title: '', titleKey: 'menu.logout', icon: 'logout', path: 'logout' }
   ])
@@ -58,22 +56,8 @@ export const useMenuStore = defineStore('menuStore', () => {
     }
   )
 
-  const liteHiddenPaths = new Set(['logout', 'organizations'])
-
-  // 共享空间 (organizations) 仅对当前空间的 admin / owner 暴露入口。
-  // viewer / contributor 即便在共享空间里拥有资源，也无需自行管理共享关系，
-  // 入口在侧栏只会徒增噪音；后端 RBAC 才是权限的最终来源（见 middleware/rbac.go）。
   const visibleMenuArr = computed(() => {
-    const authStore = useAuthStore()
-    return menuArr.filter(item => {
-      if (authStore.isLiteMode && liteHiddenPaths.has(item.path)) {
-        return false
-      }
-      if (item.path === 'organizations' && !authStore.hasRole('admin')) {
-        return false
-      }
-      return true
-    })
+    return menuArr
   })
 
   const chatMenuIndex = menuArr.findIndex(item => item.path === 'creatChat')

@@ -52,20 +52,11 @@
             <t-loading size="small" />
           </div>
         </div>
-
-        <!-- 自助创建入口与 /auth/me 返回的后端能力保持一致。 -->
-        <div v-if="authStore.canCreateTenant" class="tenant-create-action" @click="openCreateDialog">
-          <t-icon name="add" class="tenant-create-icon" />
-          <span class="tenant-create-label">{{ $t('tenant.create.action') }}</span>
-        </div>
       </div>
     </Transition>
 
     <!-- 遮罩层 -->
     <div v-if="showDropdown" class="tenant-overlay" @click="closeDropdown"></div>
-
-    <!-- 创建工作区弹窗：复用共享组件，TenantSelector 与 UserMenu 都用它 -->
-    <CreateTenantDialog v-model:visible="createDialogVisible" @created="onTenantCreated" />
   </div>
 </template>
 
@@ -80,7 +71,6 @@ import {
   persistLastActiveTenantPreference,
   stashTenantSwitchToast,
 } from '@/utils/tenantSwitch'
-import CreateTenantDialog from '@/components/CreateTenantDialog.vue'
 import { useRoleLabel } from '@/composables/useRoleLabel'
 
 const { t } = useI18n()
@@ -267,35 +257,6 @@ const handleScroll = () => {
     currentPage.value++
     loadTenants(true)
   }
-}
-
-// ---- 创建新工作区 ----
-// dialog 由共享组件 CreateTenantDialog 渲染，这里只负责打开 / 接收创建结果。
-const createDialogVisible = ref(false)
-
-const openCreateDialog = () => {
-  closeDropdown()
-  if (!authStore.canCreateTenant) {
-    MessagePlugin.info(t('tenant.create.disabled'))
-    return
-  }
-  createDialogVisible.value = true
-}
-
-const onTenantCreated = async (newTenant: TenantInfo) => {
-  // 把新空间合并进当前列表并切过去。和 selectTenant 走同一条链路：
-  // setSelectedTenant + navigateAfterTenantSwitch。后端 X-Tenant-ID 中
-  // 间件会查 tenant_members 校验，EnsureOwner 已经在后端写好 owner 行。
-  tenants.value = [newTenant, ...tenants.value.filter(t => t.id !== newTenant.id)]
-  total.value = total.value + 1
-  authStore.setAllTenants(tenants.value)
-  await authStore.refreshFromAuthMe()
-  authStore.setSelectedTenant(newTenant.id, newTenant.name)
-  // Newly-created tenant becomes the user's "last active" so re-login
-  // lands here. Race against the existing grace window before reload.
-  const persist = persistLastActiveTenantPreference(newTenant.id)
-  Promise.race([persist, new Promise((r) => setTimeout(r, 300))])
-    .finally(() => navigateAfterTenantSwitch())
 }
 
 onMounted(() => {
@@ -572,37 +533,6 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   padding: 8px;
-}
-
-.tenant-create-action {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  margin: 4px 6px 6px;
-  border-top: .5px solid var(--td-component-stroke);
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--td-brand-color);
-  font-size: 13px;
-  font-weight: 500;
-  transition: background 0.15s;
-
-  &:hover {
-    background: rgba(7, 192, 95, 0.08);
-  }
-}
-
-.tenant-create-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.tenant-create-label {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 // 下拉动画

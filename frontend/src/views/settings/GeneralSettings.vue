@@ -121,8 +121,8 @@
         </div>
       </div>
 
-      <!-- 自动下载更新开关 (Lite edition only) -->
-      <div class="setting-row" v-if="authStore.isLiteMode">
+      <!-- 自动下载更新开关（仅桌面端） -->
+      <div class="setting-row" v-if="isDesktopApp">
         <div class="setting-info">
           <label>{{ $t('settings.autoCheckUpdate') }}</label>
           <p class="desc">{{ $t('settings.autoCheckUpdateDesc') }}</p>
@@ -142,7 +142,6 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useSettingsStore } from '@/stores/settings'
-import { useAuthStore } from '@/stores/auth'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import {
   useFont,
@@ -157,7 +156,6 @@ import {
 
 const { t, locale } = useI18n()
 const settingsStore = useSettingsStore()
-const authStore = useAuthStore()
 const { currentTheme, setTheme } = useTheme()
 const {
   currentSans,
@@ -168,6 +166,14 @@ const {
   setFontSize,
 } = useFont()
 
+const isDesktopApp = computed(() => {
+  if (typeof window === 'undefined') return false
+  const runtime = (window as Window & {
+    go?: { main?: { App?: unknown } }
+    runtime?: unknown
+  })
+  return !!(runtime.go?.main?.App || runtime.runtime)
+})
 // 本地状态
 const localLanguage = ref('zh-CN')
 const localTheme = ref<ThemeMode>(currentTheme.value)

@@ -44,6 +44,23 @@ func (r *orgUnitRepository) GetByID(
 	return &unit, nil
 }
 
+func (r *orgUnitRepository) GetByIDGlobal(
+	ctx context.Context,
+	id string,
+) (*types.OrgUnit, error) {
+	var unit types.OrgUnit
+	err := r.db.WithContext(ctx).
+		Where("id = ?", id).
+		First(&unit).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrOrgUnitNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &unit, nil
+}
+
 func (r *orgUnitRepository) Update(ctx context.Context, unit *types.OrgUnit) error {
 	return r.db.WithContext(ctx).Save(unit).Error
 }
@@ -73,6 +90,18 @@ func (r *orgUnitRepository) ListByTenant(
 	err := r.db.WithContext(ctx).
 		Where("tenant_id = ?", tenantID).
 		Order("depth ASC, sort_order ASC, name ASC").
+		Find(&units).Error
+	return units, err
+}
+
+func (r *orgUnitRepository) ListRoots(
+	ctx context.Context,
+	tenantID uint64,
+) ([]*types.OrgUnit, error) {
+	var units []*types.OrgUnit
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND parent_id = ?", tenantID, "").
+		Order("created_at ASC, sort_order ASC, name ASC").
 		Find(&units).Error
 	return units, err
 }
@@ -183,6 +212,21 @@ func (r *orgUnitRepository) ListMembers(
 	return members, err
 }
 
+func (r *orgUnitRepository) ListMembersByOrgUnitIDs(
+	ctx context.Context,
+	orgUnitIDs []string,
+) ([]*types.OrgUnitMember, error) {
+	if len(orgUnitIDs) == 0 {
+		return nil, nil
+	}
+	var members []*types.OrgUnitMember
+	err := r.db.WithContext(ctx).
+		Where("org_unit_id IN ?", orgUnitIDs).
+		Order("created_at ASC").
+		Find(&members).Error
+	return members, err
+}
+
 func (r *orgUnitRepository) ListUserMemberships(
 	ctx context.Context,
 	tenantID uint64,
@@ -192,6 +236,19 @@ func (r *orgUnitRepository) ListUserMemberships(
 	err := r.db.WithContext(ctx).
 		Preload("OrgUnit").
 		Where("tenant_id = ? AND user_id = ?", tenantID, userID).
+		Order("is_primary DESC, created_at ASC").
+		Find(&members).Error
+	return members, err
+}
+
+func (r *orgUnitRepository) ListUserMembershipsByUser(
+	ctx context.Context,
+	userID string,
+) ([]*types.OrgUnitMember, error) {
+	var members []*types.OrgUnitMember
+	err := r.db.WithContext(ctx).
+		Preload("OrgUnit").
+		Where("user_id = ?", userID).
 		Order("is_primary DESC, created_at ASC").
 		Find(&members).Error
 	return members, err

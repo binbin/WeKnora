@@ -50,7 +50,7 @@
           </div>
         </div>
 
-        <div v-if="userName && !authStore.isLiteMode" ref="tenantMenuItemRef" class="dropdown-tenant-panel" :class="{
+        <div v-if="userName" ref="tenantMenuItemRef" class="dropdown-tenant-panel" :class="{
           'is-open': tenantSubmenuOpen,
           'is-clickable': showTenantSwitcher,
         }" @mouseenter="showTenantSwitcher && showTenantSubmenu()"
@@ -99,10 +99,6 @@
           <t-icon name="tools" class="menu-icon" />
           <span>{{ $t('settings.mcpService') }}</span>
         </div>
-        <div v-if="canSeeQuickNav('integration-api')" class="menu-item" @click="handleQuickNav('integration-api')">
-          <t-icon name="secured" class="menu-icon" />
-          <span>{{ $t('integrations.tabs.api') }}</span>
-        </div>
         <div class="menu-divider"></div>
         <div class="menu-item" @click="handleSettings">
           <t-icon name="setting" class="menu-icon" />
@@ -131,13 +127,11 @@
             </svg>
           </span>
         </div>
-        <template v-if="!authStore.isLiteMode">
-          <div class="menu-divider"></div>
-          <div class="menu-item danger" @click="handleLogout">
-            <t-icon name="logout" class="menu-icon" />
-            <span>{{ $t('auth.logout') }}</span>
-          </div>
-        </template>
+        <div class="menu-divider"></div>
+        <div class="menu-item danger" @click="handleLogout">
+          <t-icon name="logout" class="menu-icon" />
+          <span>{{ $t('auth.logout') }}</span>
+        </div>
       </div>
     </Transition>
 
@@ -185,16 +179,8 @@
             {{ $t('tenant.switcher.empty') }}
           </div>
         </div>
-        <!-- 自助创建入口与 /auth/me 返回的后端能力保持一致。 -->
-        <div v-if="authStore.canCreateTenant" class="tenant-submenu-create" @click="openCreateTenantDialog">
-          <t-icon name="add" class="tenant-submenu-create-icon" />
-          <span class="tenant-submenu-create-label">{{ $t('tenant.create.action') }}</span>
-        </div>
       </div>
     </Teleport>
-
-    <!-- 创建工作区弹窗 -->
-    <CreateTenantDialog v-model:visible="createTenantDialogVisible" @created="onTenantCreated" />
   </div>
 </template>
 
@@ -206,13 +192,11 @@ import { useAuthStore } from '@/stores/auth'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { getCurrentUser, logout as logoutApi, userInfoFromApi } from '@/api/auth'
 import { useI18n } from 'vue-i18n'
-import CreateTenantDialog from '@/components/CreateTenantDialog.vue'
 import {
   navigateAfterTenantSwitch,
   persistLastActiveTenantPreference,
   stashTenantSwitchToast,
 } from '@/utils/tenantSwitch'
-import type { TenantInfo } from '@/api/tenant'
 import { useRoleLabel, useHomeTenant } from '@/composables/useRoleLabel'
 import { getRootZoom, rectToCssPx, cssViewportSize } from '@/utils/zoom'
 import { openNewUserGuide } from '@/config/contextualGuides'
@@ -240,9 +224,8 @@ const currentRoleIcon = computed(() => roleIcon(authStore.currentTenantRole))
 
 // 单空间用户（memberships <= 1 且非 superuser）= 永远 home + owner，第三
 // 行就是 user-email 信息的重复，没必要占视觉空间；只对多空间 / superuser
-// 渲染。Lite 模式下没有 RBAC 概念，统一隐藏。
+// 渲染。
 const showTenantIdentityLine = computed(() => {
-  if (authStore.isLiteMode) return false
   if (authStore.canAccessAllTenants) return true
   return (authStore.memberships ?? []).length > 1
 })
@@ -254,7 +237,6 @@ const QUICKNAV_MIN_ROLE: Record<string, 'viewer' | 'contributor' | 'admin' | 'ow
   models: 'viewer',
   websearch: 'admin',
   mcp: 'admin',
-  'integration-api': 'owner',
 }
 const canSeeQuickNav = (key: string): boolean => {
   if (authStore.canAccessAllTenants) return true
@@ -293,11 +275,7 @@ const toggleMenu = () => {
 const handleQuickNav = (section: string) => {
   menuVisible.value = false
   uiStore.openSettings()
-  if (section === 'integration-api') {
-    router.push({ path: '/platform/settings', query: { section: 'integrations', tab: 'api' } })
-  } else {
-    router.push('/platform/settings')
-  }
+  router.push('/platform/settings')
 
   // 延迟一下，确保设置页面已经渲染
   setTimeout(() => {
@@ -330,30 +308,6 @@ const handleSystemAdmin = () => {
 const closeAll = () => {
   tenantSubmenuOpen.value = false
   menuVisible.value = false
-}
-
-// ---------- Create new tenant ----------
-// 普通用户在空间子菜单底部点 "+ 创建新工作区" → 弹 CreateTenantDialog →
-// 后端写一行 owner 的 tenant_members → 直接切到新空间。复用 switchToTenant
-// 同款的 setSelectedTenant + navigateAfterTenantSwitch 链路，避免 token
-// 依然指向旧空间带来的 SSE / store 不一致。
-const createTenantDialogVisible = ref(false)
-
-const openCreateTenantDialog = () => {
-  closeAll()
-  if (!authStore.canCreateTenant) {
-    MessagePlugin.info(t('tenant.create.disabled'))
-    return
-  }
-  createTenantDialogVisible.value = true
-}
-
-const onTenantCreated = async (newTenant: TenantInfo) => {
-  await authStore.refreshFromAuthMe()
-  authStore.setSelectedTenant(newTenant.id, newTenant.name)
-  const persist = persistLastActiveTenantPreference(newTenant.id)
-  Promise.race([persist, new Promise((r) => setTimeout(r, 300))])
-    .finally(() => navigateAfterTenantSwitch())
 }
 
 // ---------- Tenant switcher submenu ----------
@@ -1234,38 +1188,6 @@ onUnmounted(() => {
     text-align: center;
     font-size: 12px;
     color: var(--td-text-color-placeholder);
-  }
-
-  .tenant-submenu-create {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 10px;
-    margin: 3px 4px 5px;
-    border-top: .5px solid var(--td-component-stroke);
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--td-brand-color);
-    font-size: 14px;
-    font-weight: 500;
-    transition: background 0.15s;
-
-    &:hover {
-      background: rgba(7, 192, 95, 0.08);
-    }
-
-    .tenant-submenu-create-icon {
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-
-    .tenant-submenu-create-label {
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-size: 12px;
-    }
   }
 }
 </style>

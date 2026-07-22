@@ -246,9 +246,9 @@ func (t *TenantConfig) IsRBACEnforced() bool {
 }
 
 // IsSelfServiceCreationEnabled reports whether ordinary users may create
-// tenants. Nil keeps the historical behaviour enabled.
+// tenants. Nil defaults to disabled (workspaces are org-provisioned).
 func (t *TenantConfig) IsSelfServiceCreationEnabled() bool {
-	return t == nil || t.SelfServiceCreationEnabled == nil || *t.SelfServiceCreationEnabled
+	return t != nil && t.SelfServiceCreationEnabled != nil && *t.SelfServiceCreationEnabled
 }
 
 // AuditConfig governs durable audit log behaviour. Writes happen on
@@ -845,7 +845,7 @@ func applyAuthAndTenantDefaults(cfg *Config) {
 		cfg.Auth.DefaultTenantMode = value
 	}
 	if strings.TrimSpace(cfg.Auth.DefaultTenantMode) == "" {
-		cfg.Auth.DefaultTenantMode = AuthDefaultTenantModeCreatePersonal
+		cfg.Auth.DefaultTenantMode = AuthDefaultTenantModeTenantless
 	}
 
 	if value := strings.TrimSpace(os.Getenv("WEKNORA_TENANT_ENABLE_RBAC")); value != "" {
@@ -870,8 +870,8 @@ func applyAuthAndTenantDefaults(cfg *Config) {
 		}
 	}
 	if cfg.Tenant.SelfServiceCreationEnabled == nil {
-		on := true
-		cfg.Tenant.SelfServiceCreationEnabled = &on
+		off := false
+		cfg.Tenant.SelfServiceCreationEnabled = &off
 	}
 
 	if value := strings.TrimSpace(os.Getenv("WEKNORA_TENANT_MAX_OWNED_PER_USER")); value != "" {
