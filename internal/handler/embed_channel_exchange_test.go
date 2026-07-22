@@ -44,6 +44,9 @@ func (f *exchangeEmbedSvc) LookupForEmbed(context.Context, string, string) (*typ
 func (f *exchangeEmbedSvc) LookupEnabledChannel(context.Context, string) (*types.EmbedChannel, error) {
 	return nil, nil
 }
+func (f *exchangeEmbedSvc) LookupByWebSlug(context.Context, string) (*types.EmbedChannel, error) {
+	return nil, service.ErrEmbedChannelNotFound
+}
 func (f *exchangeEmbedSvc) IssueSessionToken(context.Context, string) (string, int, error) {
 	if f.err != nil {
 		return "", 0, f.err

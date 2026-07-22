@@ -36,8 +36,7 @@ func (f *fakeVLM) GetModelID() string   { return "fake" }
 
 // promptAwareVLM distinguishes OCR calls from caption calls by inspecting the
 // prompt, so tests can assert the OCR-first cascade (caption only fires as a
-// fallback). The caption prompt is the only one mentioning a "description of
-// the main content" of the image.
+// fallback). The caption prompt asks for a brief description of the image.
 type promptAwareVLM struct {
 	ocrResponse     string
 	captionResponse string
@@ -50,7 +49,8 @@ type promptAwareVLM struct {
 func (f *promptAwareVLM) Predict(_ context.Context, _ [][]byte, prompt string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if strings.Contains(prompt, "description of the main content") {
+	if strings.Contains(prompt, "description of the main content") ||
+		strings.Contains(prompt, "对图片主要内容做简要") {
 		f.captionCalls++
 		return f.captionResponse, nil
 	}

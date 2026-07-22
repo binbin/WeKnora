@@ -11,32 +11,7 @@
         </div>
 
         <div class="agent-selector-content" @scroll="hideDetailPanel">
-          <!-- 内置智能体 -->
-          <div class="agent-group">
-            <div class="agent-group-title">{{ $t('agent.builtinAgents') }}</div>
-            <div v-for="agent in builtinAgents" :key="agent.id" class="agent-option"
-              :class="{ selected: isMyAgentSelected(agent) }" @mouseenter="onOptionEnter(agent, $event)"
-              @mouseleave="onOptionLeave" @click="selectAgent(agent)">
-              <div v-if="agent.id === BUILTIN_QUICK_ANSWER_ID || agent.id === BUILTIN_SMART_REASONING_ID"
-                class="builtin-icon" :class="agent.config?.agent_mode === 'smart-reasoning' ? 'agent' : 'normal'">
-                <TIcon :name="agent.config?.agent_mode === 'smart-reasoning' ? 'control-platform' : 'chat'"
-                  size="13px" />
-              </div>
-              <div v-else-if="agent.avatar" class="builtin-avatar">{{ agent.avatar }}</div>
-              <div v-else class="builtin-icon normal">
-                <TIcon name="app" size="13px" />
-              </div>
-              <span class="agent-option-name">{{ agent.name }}</span>
-              <div v-if="getAgentNotReadyLabels(agent).length" class="agent-option-actions">
-                <t-tooltip :content="$t('agent.selector.notReadyHint', { items: formatNotReadyHint(agent) })"
-                  placement="top">
-                  <TIcon name="error-circle" size="14px" class="not-ready-icon" @click.stop />
-                </t-tooltip>
-              </div>
-            </div>
-          </div>
-
-          <!-- 自定义智能体 -->
+          <!-- 自定义智能体（内置已停用，不再展示） -->
           <div v-if="customAgents.length > 0" class="agent-group">
             <div class="agent-group-title">{{ $t('agent.customAgents') }}</div>
             <div v-for="agent in customAgents" :key="agent.id" class="agent-option"
@@ -74,7 +49,7 @@
             </div>
           </div>
 
-          <div v-if="builtinAgents.length === 0 && customAgents.length === 0 && sharedAgentsList.length === 0"
+          <div v-if="customAgents.length === 0 && sharedAgentsList.length === 0"
             class="agent-option empty">
             {{ $t('agent.noAgents') }}
           </div>
@@ -249,20 +224,11 @@ const DETAIL_HIDE_DELAY_MS = 400;
 const agentsList = computed(() => props.agents ?? []);
 const webSearchProviders = computed(() => chatResources.webSearchProviders);
 
-const builtinAgents = computed(() => {
-  const apiBuiltins = agentsList.value.filter(a => a.is_builtin);
-  return apiBuiltins.map(agent => {
-    if (agent.id === BUILTIN_QUICK_ANSWER_ID) {
-      return { ...agent, name: t('input.normalMode'), description: t('input.normalModeDesc') };
-    }
-    if (agent.id === BUILTIN_SMART_REASONING_ID) {
-      return { ...agent, name: t('input.agentMode'), description: t('input.agentModeDesc') };
-    }
-    return agent;
-  });
-});
-
-const customAgents = computed(() => agentsList.value.filter(a => !a.is_builtin));
+const customAgents = computed(() =>
+  agentsList.value.filter(
+    (agent) => !agent.is_builtin && !agent.id.startsWith('builtin-'),
+  ),
+);
 
 const toCustomAgent = (agent: SharedAgentInfo['agent']): CustomAgent => ({
   is_builtin: false,

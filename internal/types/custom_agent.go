@@ -77,6 +77,9 @@ type CustomAgent struct {
 	TenantID uint64 `yaml:"tenant_id" json:"tenant_id" gorm:"primaryKey"`
 	// Created by user ID
 	CreatedBy string `yaml:"created_by" json:"created_by" gorm:"type:varchar(36)"`
+	// OrgUnitID is stamped at create time from the active org unit so chat
+	// visibility stays on the creating department (exact match, no descendants).
+	OrgUnitID string `yaml:"org_unit_id" json:"org_unit_id" gorm:"type:varchar(36);default:'';index:idx_custom_agents_tenant_org_unit"`
 
 	// Agent configuration
 	Config CustomAgentConfig `yaml:"config" json:"config" gorm:"type:json"`

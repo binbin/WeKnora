@@ -12,10 +12,10 @@ func TestFinalAnswerImageRequirement(t *testing.T) {
 
 	got := finalAnswerImageRequirement(true)
 	for _, required := range []string{
-		"MUST include at least one relevant Markdown image",
-		"Preserve its complete URL exactly",
-		"ASCII half-width parentheses",
-		"silently verify",
+		"最终回答必须至少包含一张从工具结果原样复制的相关 Markdown 图片",
+		"完整保留其 URL",
+		"ASCII 半角括号",
+		"静默检查",
 	} {
 		if !strings.Contains(got, required) {
 			t.Fatalf("expected %q in final-answer image requirement:\n%s", required, got)

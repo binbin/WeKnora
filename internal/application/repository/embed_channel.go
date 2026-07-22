@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -36,6 +37,24 @@ func (r *embedChannelRepository) GetByID(ctx context.Context, id string) (*types
 func (r *embedChannelRepository) GetByPublishToken(ctx context.Context, token string) (*types.EmbedChannel, error) {
 	var ch types.EmbedChannel
 	err := r.db.WithContext(ctx).Where("publish_token = ?", token).First(&ch).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
+}
+
+func (r *embedChannelRepository) GetByWebSlug(
+	ctx context.Context, slug string,
+) (*types.EmbedChannel, error) {
+	slug = strings.TrimSpace(slug)
+	if slug == "" {
+		return nil, nil
+	}
+	var ch types.EmbedChannel
+	err := r.db.WithContext(ctx).Where("web_slug = ?", slug).First(&ch).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

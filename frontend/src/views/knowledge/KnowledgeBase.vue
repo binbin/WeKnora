@@ -218,27 +218,11 @@ const goToParserSettings = () => {
   }
 }
 
-// Permission control: check if current user owns this KB or has edit/manage permission
+// Permission control for KB content vs configuration.
 //
-// "Owner" here is "the original creator of this KB" (PR 5 introduced
-// CreatorID). The previous version compared kb.tenant_id to the active
-// tenant id, which only answers "is this KB inside our tenant" — that
-// is true even for a Viewer in someone else's tenant, so the gate
-// silently bypassed every role check below. Now we require an explicit
-// creator match, and the role-aware fallbacks below decide whether a
-// non-creator may edit / manage.
-const isOwner = computed(() => {
-  if (!kbInfo.value) return false;
-  const creatorId = (kbInfo.value as any).creator_id || '';
-  const userId = authStore.user?.id || '';
-  // creator_id may be empty for legacy KBs created before PR 5; treat
-  // those as tenant-owned so the role gate applies (Admin+ can manage,
-  // Viewer cannot).
-  if (!creatorId) return false;
-  return creatorId === userId;
-});
-
-// Current KB's shared record (when accessed via organization share)
+// Content (upload / FAQ / tags): Contributor+ in the home tenant, or a
+// share grant of editor/admin when viewing via organization share.
+// Configuration (settings / delete / create): Admin+ or system admin only.
 const currentSharedKb = computed(() =>
   orgStore.sharedKnowledgeBases.find((s) => s.knowledge_base?.id === kbId.value) ?? null,
 );
@@ -256,44 +240,25 @@ const currentSharedKb = computed(() =>
 // in the share list is the authoritative signal.
 const isViaShare = computed(() => !!currentSharedKb.value);
 
-// Can edit: when accessed via an organization share, ONLY the share grant
-// counts — even if the current user happens to be the original creator of
-// the KB. The backend's RBAC middleware authorizes based on the active
-// tenant, not on creator_id, so a creator viewing their own KB from a
-// different tenant context will be 403'd on write. Otherwise: KB creator
-// (any role) or tenant Admin+ in the home tenant.
-//
-// hasRole('contributor') is intentionally NOT here — being a Contributor
-// in a tenant does not by itself grant edit on someone else's KB.
+// Content edit: Contributor+ in home tenant, or share editor/admin when
+// viewing via organization share. Viewers stay read-only.
 const canEdit = computed(() => {
   if (isViaShare.value) return orgStore.canEditKB(kbId.value, false);
-  if (isOwner.value) return true;
-  if (authStore.hasRole('admin')) return true;
+  if (authStore.hasRole('contributor')) return true;
   return orgStore.canEditKB(kbId.value, false);
 });
 
-// Can manage (delete, settings, etc.): same isViaShare-first rule. For
-// shared KBs only an 'admin' share grant qualifies — editor/viewer (and
-// even being the creator viewed via share) never grant delete/settings.
+// KB settings / delete: Admin+ or system admin only (not KB creator alone).
 const canManage = computed(() => {
   if (isViaShare.value) return orgStore.canManageKB(kbId.value, false);
-  if (isOwner.value) return true;
-  if (authStore.hasRole('admin')) return true;
-  return orgStore.canManageKB(kbId.value, false);
+  return authStore.canManageKnowledgeBase;
 });
 
-// Can mutate knowledge (move / batch-delete): the backend gate for these
-// two endpoints is g.Contributor(), so the caller MUST be Contributor+
-// in their tenant on top of having KB edit permission. Without the extra
-// role check, an org-share-editor whose tenant role is Viewer would see
-// the "Move" / "Batch manage" entries and 403 on click. For shared KBs
-// the local tenant role is irrelevant — canEdit already encodes the share
-// grant, so trust it.
+// Can mutate knowledge (move / batch-delete): backend is g.Contributor()
+// plus KB write access. Shared-space editors trust canEdit.
 const canMutateKnowledge = computed(() => {
   if (!canEdit.value) return false;
   if (isViaShare.value) return true;
-  if (isOwner.value) return true;
-  if (authStore.hasRole('admin')) return true;
   return authStore.hasRole('contributor');
 });
 

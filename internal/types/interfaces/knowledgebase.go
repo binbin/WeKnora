@@ -72,6 +72,7 @@ type KnowledgeBaseService interface {
 	//   - Possible errors such as not existing, insufficient permissions, etc.
 	UpdateKnowledgeBase(ctx context.Context,
 		id string, name string, description string, config *types.KnowledgeBaseConfig,
+		shareWithDescendants *bool,
 	) (*types.KnowledgeBase, error)
 
 	// DeleteKnowledgeBase deletes a knowledge base

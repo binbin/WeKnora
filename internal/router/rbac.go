@@ -212,6 +212,14 @@ func (g *rbacGuards) Owner() gin.HandlerFunc {
 	return middleware.RequireRole(types.TenantRoleOwner, g.cfg)
 }
 
+// OwnerOrSystemAdmin is a deprecated alias of AdminOrSystemAdmin.
+// Product no longer distinguishes Owner vs Admin for workspace settings;
+// Admin (and legacy Owner, which satisfies Admin via role hierarchy)
+// plus platform system admins may mutate tenant infrastructure.
+func (g *rbacGuards) OwnerOrSystemAdmin() gin.HandlerFunc {
+	return g.AdminOrSystemAdmin()
+}
+
 // API-key authorization — a SEPARATE authority from the JWT role/ownership
 // guards above. Instead of stacking a per-route guard that also had to know
 // the caller's ownership, every API-key-accessible route declares one
@@ -459,6 +467,12 @@ func (g *rbacGuards) OwnedKBOrAdminFromKbIDParam() gin.HandlerFunc {
 // lookup returns "" and only Admin+ may mutate them.
 func (g *rbacGuards) OwnedAgentOrAdmin() gin.HandlerFunc {
 	return middleware.RequireOwnershipOrRole(types.TenantRoleAdmin, g.agentCreator, g.cfg)
+}
+
+// OwnedAgentOrSystemAdmin: only the creator or a platform system admin may
+// mutate the agent. Tenant admins cannot edit peers' agents.
+func (g *rbacGuards) OwnedAgentOrSystemAdmin() gin.HandlerFunc {
+	return middleware.RequireOwnershipOrSystemAdmin(g.agentCreator, g.cfg)
 }
 
 // OwnedKnowledgeKBOrAdmin: per-knowledge mutations (update / delete /

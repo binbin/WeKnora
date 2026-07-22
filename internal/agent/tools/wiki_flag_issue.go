@@ -20,9 +20,9 @@ func NewWikiFlagIssueTool(wikiService interfaces.WikiPageService, kbIDs []string
 	return &wikiFlagIssueTool{
 		BaseTool: NewBaseTool(
 			ToolWikiFlagIssue,
-			`Flag a wiki page that contains errors, mixed entities, or outdated information.
-Use this tool when you or the user identifies that a wiki page is factually incorrect or wrongly merged (e.g., a page contains information about two different products).
-This will log an issue for human review or automated maintenance.`,
+			`标记包含错误、混入实体或过时信息的 wiki 页面。
+当你或用户发现某 wiki 页面事实有误或错误合并时使用（例如一页混入了两个不同产品的信息）。
+这将记录一条问题，供人工复核或自动维护处理。`,
 			json.RawMessage(`{
   "type": "object",
   "properties": {

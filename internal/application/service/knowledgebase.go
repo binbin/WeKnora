@@ -215,7 +215,9 @@ func (s *knowledgeBaseService) filterKBsByOrgUnit(
 		if kb == nil {
 			continue
 		}
-		ok, err := s.orgUnitService.CanReadKB(ctx, tenantID, activeID, kb.OrgUnitID)
+		ok, err := s.orgUnitService.CanReadKB(
+			ctx, tenantID, activeID, kb.OrgUnitID, kb.ShareWithDescendants,
+		)
 		if err != nil {
 			logger.Warnf(ctx, "org unit read check failed for kb %s: %v", kb.ID, err)
 			continue
@@ -510,6 +512,7 @@ func (s *knowledgeBaseService) UpdateKnowledgeBase(ctx context.Context,
 	name string,
 	description string,
 	config *types.KnowledgeBaseConfig,
+	shareWithDescendants *bool,
 ) (*types.KnowledgeBase, error) {
 	if id == "" {
 		logger.Error(ctx, "Knowledge base ID is empty")
@@ -530,6 +533,9 @@ func (s *knowledgeBaseService) UpdateKnowledgeBase(ctx context.Context,
 	// Update the knowledge base properties
 	kb.Name = name
 	kb.Description = description
+	if shareWithDescendants != nil {
+		kb.ShareWithDescendants = *shareWithDescendants
+	}
 	if config != nil {
 		kb.ChunkingConfig = config.ChunkingConfig
 		kb.ImageProcessingConfig = config.ImageProcessingConfig

@@ -11,6 +11,7 @@ type EmbedChannelRepository interface {
 	Create(ctx context.Context, ch *types.EmbedChannel) error
 	GetByID(ctx context.Context, id string) (*types.EmbedChannel, error)
 	GetByPublishToken(ctx context.Context, token string) (*types.EmbedChannel, error)
+	GetByWebSlug(ctx context.Context, slug string) (*types.EmbedChannel, error)
 	ListByAgent(ctx context.Context, tenantID uint64, agentID string) ([]*types.EmbedChannel, error)
 	ListByTenant(ctx context.Context, tenantID uint64) ([]*types.EmbedChannel, error)
 	Update(ctx context.Context, ch *types.EmbedChannel) error
@@ -27,6 +28,7 @@ type EmbedChannelService interface {
 	RotateToken(ctx context.Context, tenantID uint64, id string) (*types.EmbedChannel, string, error)
 	LookupForEmbed(ctx context.Context, channelID, token string) (*types.EmbedChannel, error)
 	LookupEnabledChannel(ctx context.Context, channelID string) (*types.EmbedChannel, error)
+	LookupByWebSlug(ctx context.Context, slug string) (*types.EmbedChannel, error)
 	IssueSessionToken(ctx context.Context, channelID string) (sessionToken string, expiresIn int, err error)
 	IssuePreviewSession(ctx context.Context, tenantID uint64, channelID string) (sessionToken string, expiresIn int, err error)
 	ResolveSessionToken(ctx context.Context, token string) (channelID string, err error)

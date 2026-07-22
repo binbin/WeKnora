@@ -221,13 +221,13 @@ export interface CreateInviteLinkResponse {
 }
 
 /**
- * Generate a multi-use share-link invitation for the tenant. The
+ * Generate a one-time share-link invitation for the tenant. The
  * returned row carries `invite_url` (composed from the persisted
  * plaintext token) which the SPA copies into clipboards. The link
- * stays valid until expiry or revocation; revoking is the same DELETE
- * as a per-user invitation.
+ * becomes invalid after the first successful join, or on expiry /
+ * revoke. Revoking uses the same DELETE as a per-user invitation.
  *
- * Backend: POST /api/v1/tenants/:id/invite-links (Owner+).
+ * Backend: POST /api/v1/tenants/:id/invite-links (Admin+).
  */
 export async function createInviteLink(
   tenantId: number,

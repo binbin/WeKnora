@@ -279,6 +279,8 @@ export function useEmbedChatSession(options: {
       return
     }
 
+    const isFirstUserTurn = !messagesList.some((message) => message.role === 'user')
+
     messagesList.push({
       content: value,
       role: 'user',
@@ -287,6 +289,13 @@ export function useEmbedChatSession(options: {
       attachments: displayAttachments,
       channel: 'embed',
     })
+    if (isFirstUserTurn) {
+      // Provisional sidebar title until the server emits session_title.
+      const provisional = value.trim().replace(/\s+/g, ' ').slice(0, 40)
+      if (provisional) {
+        options.onSessionTitle?.(provisional)
+      }
+    }
     postEmbedMessageSent(options.channelId, options.sessionId.value, value)
     relayEmbedWebhookEvent(
       options.channelId,

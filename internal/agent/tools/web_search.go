@@ -15,56 +15,56 @@ import (
 
 var webSearchTool = BaseTool{
 	name: ToolWebSearch,
-	description: `Search the web for current information and news. This tool searches the internet to find up-to-date information that may not be in the knowledge base.
+	description: `搜索互联网以获取最新信息与新闻。用于查找知识库中可能没有的最新信息。
 
-## CRITICAL - KB First Rule
-**ABSOLUTE RULE**: You MUST complete KB retrieval (grep_chunks AND knowledge_search) FIRST before using this tool.
-- NEVER use web_search without first trying grep_chunks and knowledge_search
-- ONLY use web_search if BOTH grep_chunks AND knowledge_search return insufficient/no results
-- KB retrieval is MANDATORY - you CANNOT skip it
+## 关键——知识库优先规则
+**绝对规则**：使用本工具前，必须先完成知识库检索（grep_chunks 与 knowledge_search）。
+- 未先尝试 grep_chunks 与 knowledge_search 前，绝不要使用 web_search
+- 仅当 grep_chunks 与 knowledge_search **都**返回不足或无结果时，才使用 web_search
+- 知识库检索是强制的——不可跳过
 
-## Features
-- Real-time web search: Search the internet for current information
-- RAG compression: Automatically compresses and extracts relevant content from search results
-- Session-scoped caching: Maintains temporary knowledge base for session to avoid re-indexing
+## 功能
+- 实时网页搜索：从互联网搜索当前信息
+- RAG 压缩：自动压缩并提取搜索结果中的相关内容
+- 会话级缓存：为会话维护临时知识库，避免重复索引
 
-## Usage
+## 用法
 
-**Use when**:
-- **ONLY after** completing grep_chunks AND knowledge_search
-- KB retrieval returned insufficient or no results
-- Need current or real-time information (news, events, recent updates)
-- Information is not available in knowledge bases
-- Need to verify or supplement information from knowledge bases
-- Searching for recent developments or trends
+**何时使用**：
+- **仅在**完成 grep_chunks 与 knowledge_search **之后**
+- 知识库检索结果不足或为空
+- 需要当前或实时信息（新闻、事件、近期更新）
+- 信息在知识库中不可用
+- 需要验证或补充知识库信息
+- 搜索近期发展或趋势
 
-**Parameters**:
-- query (required): Search query string
+**参数**：
+- query（必需）：搜索查询字符串
 
-**Returns**: Web search results with title, short wN page ID, snippet, and content (up to %d results)
+**返回**：带标题、网页短 ID wN、摘要与内容的网页搜索结果（最多 %d 条）
 
-## Examples
+## 示例
 
 ` + "`" + `
-# Search for current information
+# 搜索当前信息
 {
   "query": "latest developments in AI"
 }
 
-# Search for recent news
+# 搜索近期新闻
 {
   "query": "Python 3.12 release notes"
 }
 ` + "`" + `
 
-## Tips
+## 提示
 
-- Results are automatically compressed using RAG to extract relevant content
-- Search results are stored in a temporary knowledge base for the session
-- Use this tool when knowledge bases don't have the information you need
-- Results include a short wN page ID, title, snippet, and content snippet (may be truncated)
-- **CRITICAL**: If content is truncated or you need full details, pass that wN value to **web_fetch** to fetch complete page content
-- Maximum %d results will be returned per search`,
+- 结果会通过 RAG 自动压缩以提取相关内容
+- 搜索结果会存入会话临时知识库
+- 仅在知识库没有所需信息时使用本工具
+- 结果包含短 ID wN、标题、摘要与内容片段（可能被截断）
+- **关键**：若内容被截断或需要完整细节，将该 wN 传给 **web_fetch** 拉取完整页面
+- 每次搜索最多返回 %d 条结果`,
 	schema: utils.GenerateSchema[WebSearchInput](),
 }
 

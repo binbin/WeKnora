@@ -30,6 +30,8 @@ type KnowledgeBase struct {
 	StorageProviderConfig *StorageProviderConfig `json:"storage_provider_config"`
 	StorageConfig         StorageConfig          `json:"storage_config"`
 	ExtractConfig         *ExtractConfig         `json:"extract_config"`
+	OrgUnitID             string                 `json:"org_unit_id,omitempty"`
+	ShareWithDescendants  bool                   `json:"share_with_descendants"`
 	CreatedAt             time.Time              `json:"created_at"`
 	UpdatedAt             time.Time              `json:"updated_at"`
 	// Computed fields (not stored in database)
@@ -311,9 +313,10 @@ func (c *Client) ListKnowledgeBases(ctx context.Context) ([]KnowledgeBase, error
 
 // UpdateKnowledgeBaseRequest update knowledge base request
 type UpdateKnowledgeBaseRequest struct {
-	Name        string               `json:"name"`
-	Description string               `json:"description"`
-	Config      *KnowledgeBaseConfig `json:"config"`
+	Name                 string               `json:"name"`
+	Description          string               `json:"description"`
+	Config               *KnowledgeBaseConfig `json:"config"`
+	ShareWithDescendants *bool                `json:"share_with_descendants,omitempty"`
 }
 
 // UpdateKnowledgeBase updates a knowledge base

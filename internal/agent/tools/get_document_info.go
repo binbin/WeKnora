@@ -13,38 +13,38 @@ import (
 
 var getDocumentInfoTool = BaseTool{
 	name: ToolGetDocumentInfo,
-	description: `Retrieve detailed metadata information about documents.
+	description: `获取文档的详细元数据信息。
 
-## When to Use
+## 何时使用
 
-Use this tool when:
-- Need to understand document basic information (title, type, size, etc.)
-- Check if document exists and is available
-- Batch query metadata for multiple documents
-- Understand document processing status
+在以下情况使用本工具：
+- 需要了解文档基本信息（标题、类型、大小等）
+- 检查文档是否存在且可用
+- 批量查询多个文档的元数据
+- 了解文档处理状态
 
-Do not use when:
-- Need document content (use knowledge_search)
-- Need specific text chunks (search results already contain full content)
-
-
-## Returned Information
-
-- Basic info: title, description, source type
-- File info: filename, type, size
-- Processing status: whether processed, chunk count
-- Metadata: custom tags and properties
+不要在以下情况使用：
+- 需要文档内容（请用 knowledge_search）
+- 需要特定文本分块（搜索结果已含完整内容）
 
 
-## Notes
+## 返回信息
 
-- Concurrent query for multiple documents provides better performance
-- Returns complete document metadata, not just title
-- Can check document processing status (parse_status)
+- 基本信息：标题、描述、来源类型
+- 文件信息：文件名、类型、大小
+- 处理状态：是否已处理、分块数量
+- 元数据：自定义标签与属性
 
-## IDs
-- knowledge_ids: regular documents, using the short dN IDs from retrieval results
-- faq_ids: individual FAQ entries, using the short cN chunk IDs. Returns the standard question and answers, not the container title.`,
+
+## 注意事项
+
+- 多文档并发查询性能更好
+- 返回完整文档元数据，不仅是标题
+- 可检查文档处理状态（parse_status）
+
+## ID
+- knowledge_ids：普通文档，使用检索结果中的短 ID dN
+- faq_ids：单条 FAQ，使用短 ID cN。返回标准问题与答案，而非容器标题。`,
 	schema: json.RawMessage(`{
   "type": "object",
   "properties": {

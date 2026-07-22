@@ -107,11 +107,14 @@ func (h *CustomAgentHandler) CreateAgent(c *gin.Context) {
 	createdAgent, err := h.service.CreateAgent(ctx, agent)
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, nil)
-		if err == service.ErrAgentNameRequired {
+		switch err {
+		case service.ErrAgentNameRequired, service.ErrBuiltinModelRequired:
 			c.Error(errors.NewBadRequestError(err.Error()))
-			return
+		case service.ErrBuiltinAgentDisabled:
+			c.Error(errors.NewForbiddenError(err.Error()))
+		default:
+			c.Error(errors.NewInternalServerError(err.Error()))
 		}
-		c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
@@ -184,28 +187,32 @@ func (h *CustomAgentHandler) GetAgent(c *gin.Context) {
 func (h *CustomAgentHandler) ListAgents(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get all agents for this tenant
-	agents, err := h.service.ListAgents(ctx)
+	purpose := strings.ToLower(strings.TrimSpace(c.Query("purpose")))
+	if purpose == "" {
+		// Legacy creator filter maps to manage (own / others).
+		creatorFilter := strings.ToLower(strings.TrimSpace(c.Query("creator")))
+		if creatorFilter == "mine" || creatorFilter == "others" {
+			purpose = "manage"
+		} else {
+			purpose = "chat"
+		}
+	}
+
+	agents, err := h.service.ListAgents(ctx, purpose)
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, nil)
 		c.Error(errors.NewInternalServerError(err.Error()))
 		return
 	}
 
-	// Optional creator filter — see the matching block in
-	// KnowledgeBaseHandler.ListKnowledgeBases for rationale. Built-in
-	// agents (IsBuiltin=true, CreatedBy="") are tenant-level fixtures
-	// rather than user creations; we always keep them regardless of the
-	// filter so the conversation dropdown never silently loses
-	// quick-answer / smart-reasoning when a user picks "Created by me".
+	// Optional creator filter on manage lists (super-admin seeing all).
 	creatorFilter := strings.ToLower(strings.TrimSpace(c.Query("creator")))
-	if creatorFilter == "mine" || creatorFilter == "others" {
+	if purpose == "manage" && (creatorFilter == "mine" || creatorFilter == "others") {
 		callerUserID, _ := c.Get(types.UserIDContextKey.String())
 		callerUserIDStr, _ := callerUserID.(string)
 		filtered := make([]*types.CustomAgent, 0, len(agents))
 		for _, ag := range agents {
-			if ag.IsBuiltin {
-				filtered = append(filtered, ag)
+			if ag.IsBuiltin || types.IsBuiltinAgentID(ag.ID) {
 				continue
 			}
 			if ag.CreatedBy == "" {
@@ -243,8 +250,6 @@ func (h *CustomAgentHandler) ListAgents(c *gin.Context) {
 	}
 
 	// 批量回填 creator_name，作用同 KB 列表：让前端能区分「我创建」与「同空间其他成员」。
-	// 内建 agent（IsBuiltin=true, CreatedBy=""）不会有 creator_name，前端按 builtin
-	// 分支单独渲染。
 	enrichAgentCreatorNames(ctx, h.userService, agents)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -356,9 +361,9 @@ func (h *CustomAgentHandler) UpdateAgent(c *gin.Context) {
 		switch err {
 		case service.ErrAgentNotFound:
 			c.Error(errors.NewNotFoundError("Agent not found"))
-		case service.ErrCannotModifyBuiltin:
-			c.Error(errors.NewForbiddenError("Cannot modify built-in agent"))
-		case service.ErrAgentNameRequired:
+		case service.ErrCannotModifyBuiltin, service.ErrBuiltinAgentDisabled:
+			c.Error(errors.NewForbiddenError(err.Error()))
+		case service.ErrAgentNameRequired, service.ErrBuiltinModelRequired:
 			c.Error(errors.NewBadRequestError(err.Error()))
 		default:
 			c.Error(errors.NewInternalServerError(err.Error()))

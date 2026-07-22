@@ -292,6 +292,33 @@ func TestGetSessionDeniesViewerOnIMSession(t *testing.T) {
 	require.Equal(t, "feishu", got.IMPlatform)
 }
 
+func TestGetSessionAllowsEmbedSessionOwner(t *testing.T) {
+	svc, db := newTestSessionService(t)
+	owner := types.EmbedSessionPrincipal(1, "ch-1", "sess-embed")
+	embed := &types.Session{
+		ID:          "sess-embed",
+		TenantID:    1,
+		Title:       "embed chat",
+		Description: types.EmbedSessionMarkerPrefix + "ch-1",
+		UserID:      owner.StorageID(),
+	}
+	require.NoError(t, db.Create(embed).Error)
+
+	// Unrelated web viewer still cannot open the embed session.
+	viewerCtx := testSessionScopeContext(1, "alice")
+	_, err := svc.GetSession(viewerCtx, embed.ID)
+	require.ErrorIs(t, err, apperrors.ErrSessionNotFound)
+
+	// The embed session principal (visitor) can load its own history.
+	embedCtx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
+	embedCtx = context.WithValue(embedCtx, types.UserIDContextKey, "embed-ch-1")
+	embedCtx = types.WithPrincipal(embedCtx, owner)
+	embedCtx = context.WithValue(embedCtx, types.TenantRoleContextKey, types.TenantRoleViewer)
+	got, err := svc.GetSession(embedCtx, embed.ID)
+	require.NoError(t, err)
+	require.Equal(t, embed.ID, got.ID)
+}
+
 // testListSessionsIMChannelSession lets QueryPaged's LEFT JOIN resolve against a
 // real table in the in-memory SQLite database.
 type testListSessionsIMChannelSession struct {

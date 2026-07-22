@@ -492,6 +492,7 @@ func (s *orgUnitService) CanReadKB(
 	tenantID uint64,
 	activeOrgUnitID string,
 	kbOrgUnitID string,
+	shareWithDescendants bool,
 ) (bool, error) {
 	has, err := s.HasHierarchy(ctx, tenantID)
 	if err != nil {
@@ -512,6 +513,10 @@ func (s *orgUnitService) CanReadKB(
 	}
 	if kbOrgUnitID == activeOrgUnitID {
 		return true, nil
+	}
+	// Descendants may read an ancestor KB only when the owner opted in.
+	if !shareWithDescendants {
+		return false, nil
 	}
 	ancestors, err := s.ListAncestorIDs(ctx, tenantID, activeOrgUnitID)
 	if err != nil {
@@ -560,8 +565,9 @@ func (s *orgUnitService) HasHierarchy(
 	return count > 0, nil
 }
 
-// ListInviteableOrgUnits implements peer/self + descendant scope.
-// Owner role is restricted to descendants only (所有者只能挂到下级).
+// ListInviteableOrgUnits implements peer/self + descendant scope for
+// contributor/viewer invites. Admin and Owner roles are restricted to
+// descendants only (同级不可再任命管理员).
 //
 // When the actor has no current OrgUnit, system admins / cross-tenant
 // superusers / tenant Owners (bootstrap first user) may list the full
@@ -602,10 +608,12 @@ func (s *orgUnitService) ListInviteableOrgUnits(
 		return nil, err
 	}
 
-	ownerOnlyDescendants := role == types.TenantRoleOwner
+	// 管理员/所有者只能挂到下级，避免同级再产生管理员。
+	descendantsOnly := role == types.TenantRoleOwner ||
+		role == types.TenantRoleAdmin
 	out := make([]*types.OrgUnit, 0)
 
-	if !ownerOnlyDescendants {
+	if !descendantsOnly {
 		out = append(out, actor)
 		all, listErr := s.repo.ListByTenant(ctx, tenantID)
 		if listErr != nil {
@@ -706,4 +714,147 @@ func (s *orgUnitService) CanInviteToOrgUnit(
 		}
 	}
 	return false, nil
+}
+
+// Member-management scope errors for org-scoped admins.
+var (
+	// ErrMemberOutsideManageScope is returned when the target member is
+	// neither a peer non-admin nor a subordinate.
+	ErrMemberOutsideManageScope = errors.New(
+		"can only manage same-level non-admins or subordinate members",
+	)
+
+	// ErrCannotManagePeerAdmin is returned when the target is another
+	// admin/owner at the same org level (本级/平级).
+	ErrCannotManagePeerAdmin = errors.New(
+		"cannot manage another same-level admin",
+	)
+
+	// ErrCannotPromotePeerToAdmin is returned when promoting a peer
+	// non-admin to admin (or owner).
+	ErrCannotPromotePeerToAdmin = errors.New(
+		"cannot promote a same-level member to admin",
+	)
+
+	// ErrActorOrgUnitRequired is returned when a scoped admin has no
+	// active OrgUnit selected while the tenant has a hierarchy.
+	ErrActorOrgUnitRequired = errors.New(
+		"current org unit is required to manage members",
+	)
+)
+
+func isAdminOrHigherRole(role types.TenantRole) bool {
+	return role == types.TenantRoleAdmin || role == types.TenantRoleOwner
+}
+
+func primaryOrgUnitIDFromMemberships(
+	memberships []*types.OrgUnitMember,
+) string {
+	for _, membership := range memberships {
+		if membership != nil && membership.IsPrimary &&
+			strings.TrimSpace(membership.OrgUnitID) != "" {
+			return membership.OrgUnitID
+		}
+	}
+	for _, membership := range memberships {
+		if membership != nil && strings.TrimSpace(membership.OrgUnitID) != "" {
+			return membership.OrgUnitID
+		}
+	}
+	return ""
+}
+
+// orgUnitRelation classifies target relative to actor.
+type orgUnitRelation int
+
+const (
+	orgUnitRelationOutside orgUnitRelation = iota
+	orgUnitRelationPeer
+	orgUnitRelationDescendant
+)
+
+func classifyOrgUnitRelation(
+	actor *types.OrgUnit,
+	target *types.OrgUnit,
+) orgUnitRelation {
+	if actor == nil || target == nil {
+		return orgUnitRelationOutside
+	}
+	if target.ID == actor.ID || target.ParentID == actor.ParentID {
+		return orgUnitRelationPeer
+	}
+	if actor.Path != "" &&
+		strings.HasPrefix(target.Path, actor.Path) &&
+		target.ID != actor.ID {
+		return orgUnitRelationDescendant
+	}
+	return orgUnitRelationOutside
+}
+
+// AssertCanManageTenantMember enforces org-scoped admin member limits.
+// newRole may be "" for remove-only operations.
+func (s *orgUnitService) AssertCanManageTenantMember(
+	ctx context.Context,
+	tenantID uint64,
+	targetUserID string,
+	targetRole types.TenantRole,
+	newRole types.TenantRole,
+) error {
+	if isUnscopedOrgInviter(ctx) {
+		return nil
+	}
+	hasHierarchy, err := s.HasHierarchy(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if !hasHierarchy {
+		return nil
+	}
+
+	actorOrgUnitID, _ := types.OrgUnitIDFromContext(ctx)
+	actorOrgUnitID = strings.TrimSpace(actorOrgUnitID)
+	if actorOrgUnitID == "" {
+		return ErrActorOrgUnitRequired
+	}
+
+	actorUnit, err := s.repo.GetByID(ctx, tenantID, actorOrgUnitID)
+	if err != nil {
+		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
+			return ErrActorOrgUnitRequired
+		}
+		return err
+	}
+
+	targetUserID = strings.TrimSpace(targetUserID)
+	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, targetUserID)
+	if err != nil {
+		return err
+	}
+	targetOrgUnitID := primaryOrgUnitIDFromMemberships(memberships)
+	if targetOrgUnitID == "" {
+		return ErrMemberOutsideManageScope
+	}
+	targetUnit, err := s.repo.GetByID(ctx, tenantID, targetOrgUnitID)
+	if err != nil {
+		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
+			return ErrMemberOutsideManageScope
+		}
+		return err
+	}
+
+	relation := classifyOrgUnitRelation(actorUnit, targetUnit)
+	switch relation {
+	case orgUnitRelationDescendant:
+		return nil
+	case orgUnitRelationPeer:
+		if isAdminOrHigherRole(targetRole) {
+			return ErrCannotManagePeerAdmin
+		}
+		if newRole != "" && isAdminOrHigherRole(newRole) {
+			return ErrCannotPromotePeerToAdmin
+		}
+		return nil
+	default:
+		return ErrMemberOutsideManageScope
+	}
 }

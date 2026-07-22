@@ -75,6 +75,20 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	return Principal{}, false
 }
 
+// IsEmbedPrincipal reports whether ctx is an embed channel / session / visitor.
+func IsEmbedPrincipal(ctx context.Context) bool {
+	p, ok := PrincipalFromContext(ctx)
+	if !ok {
+		return false
+	}
+	switch p.Type {
+	case PrincipalEmbedChannel, PrincipalEmbedSession, PrincipalEmbedVisitor:
+		return true
+	default:
+		return false
+	}
+}
+
 func WithEmbedVisitorID(ctx context.Context, visitorID string) context.Context {
 	visitorID = strings.TrimSpace(visitorID)
 	if visitorID == "" {

@@ -8,33 +8,20 @@
         <div class="header-title" style="--wails-draggable: drag">
           <div class="title-row" style="--wails-draggable: drag">
             <h2 style="--wails-draggable: drag">{{ $t('agent.title') }}</h2>
-            <t-tooltip v-if="authStore.hasRole('contributor')" :content="$t('agent.createAgent')" placement="bottom">
-              <t-button variant="text" theme="default" size="small" class="header-action-btn"
-                data-guide="agent-list-create" style="--wails-draggable: no-drag" @click="handleCreateAgent">
-                <template #icon>
-                  <span class="btn-icon-wrapper">
-                    <svg class="sparkles-icon" width="19" height="19" viewBox="0 0 20 20" fill="none"
-                      xmlns="http://www.w3.org/2000/svg">
-                      <path
-                        d="M10 3L10.8 6.2C10.9 6.7 11.3 7.1 11.8 7.2L15 8L11.8 8.8C11.3 8.9 10.9 9.3 10.8 9.8L10 13L9.2 9.8C9.1 9.3 8.7 8.9 8.2 8.8L5 8L8.2 7.2C8.7 7.1 9.1 6.7 9.2 6.2L10 3Z"
-                        fill="currentColor" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"
-                        stroke-linejoin="round" />
-                      <path
-                        d="M15.5 4L15.8 5.2C15.85 5.45 16.05 5.65 16.3 5.7L17.5 6L16.3 6.3C16.05 6.35 15.85 6.55 15.8 6.8L15.5 8L15.2 6.8C15.15 6.55 14.95 6.35 14.7 6.3L13.5 6L14.7 5.7C14.95 5.65 15.15 5.45 15.2 5.2L15.5 4Z"
-                        fill="currentColor" stroke="currentColor" stroke-width="0.6" stroke-linecap="round"
-                        stroke-linejoin="round" />
-                      <path
-                        d="M4.5 13L4.8 14.2C4.85 14.45 5.05 14.65 5.3 14.7L6.5 15L5.3 15.3C5.05 15.35 4.85 15.55 4.8 15.8L4.5 17L4.2 15.8C4.15 15.55 3.95 15.35 3.7 15.3L2.5 15L3.7 14.7C3.95 14.65 4.15 14.45 4.2 14.2L4.5 13Z"
-                        fill="currentColor" stroke="currentColor" stroke-width="0.6" stroke-linecap="round"
-                        stroke-linejoin="round" />
-                    </svg>
-                  </span>
-                </template>
-              </t-button>
-            </t-tooltip>
           </div>
           <p class="header-subtitle" style="--wails-draggable: drag">{{ $t('agent.subtitle') }}</p>
         </div>
+        <t-button
+          v-if="canCreateOrCopyAgent"
+          theme="primary"
+          data-guide="agent-list-create"
+          class="header-create-btn"
+          style="--wails-draggable: no-drag"
+          @click="handleCreateAgent"
+        >
+          <template #icon><t-icon name="add" /></template>
+          {{ $t('agent.createAgent') }}
+        </t-button>
       </div>
       <div class="agent-list-main">
         <!-- creator filter removed; see KnowledgeBaseList for rationale.
@@ -195,7 +182,7 @@
                   <span class="card-title" :title="agent.name">{{ agent.name }}</span>
                 </div>
                 <t-popup
-                  v-if="agent.isMine && (canManageAgent(agent) || authStore.hasRole('contributor') || authStore.hasRole('admin'))"
+                  v-if="agent.isMine && (canManageAgent(agent) || canCreateOrCopyAgent)"
                   :visible="openMoreAgentId === agent.id" trigger="hover" overlayClassName="card-more-popup"
                   destroy-on-close placement="bottom-right" @visible-change="onVisibleChange"
                   @update:visible="(v: boolean) => { if (!v) openMoreAgentId = null }">
@@ -207,7 +194,7 @@
                     <div class="popup-menu">
                       <div v-if="canManageAgent(agent)" class="popup-menu-item" @click="handleEdit(agent)"><t-icon
                           class="menu-icon" name="edit" /><span>{{ $t('common.edit') }}</span></div>
-                      <div v-if="authStore.hasRole('contributor')" class="popup-menu-item" @click="handleCopy(agent)">
+                      <div v-if="canCreateOrCopyAgent" class="popup-menu-item" @click="handleCopy(agent)">
                         <t-icon class="menu-icon" name="file-copy" /><span>{{ $t('common.copy') }}</span>
                       </div>
                       <div v-if="authStore.hasRole('admin')" class="popup-menu-item"
@@ -396,7 +383,7 @@
                   <AgentAvatar v-else :name="agent.name" size="small" />
                   <span class="card-title" :title="agent.name">{{ agent.name }}</span>
                 </div>
-                <t-popup v-if="canManageAgent(agent) || authStore.hasRole('contributor') || authStore.hasRole('admin')"
+                <t-popup v-if="canManageAgent(agent) || canCreateOrCopyAgent"
                   :visible="openMoreAgentId === agent.id" trigger="hover" overlayClassName="card-more-popup"
                   destroy-on-close placement="bottom-right" @visible-change="onVisibleChange"
                   @update:visible="(v: boolean) => { if (!v) openMoreAgentId = null }">
@@ -410,7 +397,7 @@
                         <t-icon class="menu-icon" name="edit" />
                         <span>{{ $t('common.edit') }}</span>
                       </div>
-                      <div v-if="authStore.hasRole('contributor')" class="popup-menu-item" @click="handleCopy(agent)">
+                      <div v-if="canCreateOrCopyAgent" class="popup-menu-item" @click="handleCopy(agent)">
                         <t-icon class="menu-icon" name="file-copy" />
                         <span>{{ $t('common.copy') }}</span>
                       </div>
@@ -641,7 +628,7 @@
           <img class="empty-img" src="@/assets/img/upload.svg" alt="">
           <span class="empty-txt">{{ $t('agent.empty.title') }}</span>
           <span class="empty-desc">{{ $t('agent.empty.description') }}</span>
-          <t-button v-if="authStore.hasRole('contributor')" class="agent-create-btn empty-state-btn"
+          <t-button v-if="canCreateOrCopyAgent" class="agent-create-btn empty-state-btn"
             data-guide="agent-list-create" @click="handleCreateAgent">
             <template #icon>
               <span class="btn-icon-wrapper">
@@ -682,7 +669,7 @@
           <img class="empty-img" src="@/assets/img/upload.svg" alt="">
           <span class="empty-txt">{{ $t('agent.empty.title') }}</span>
           <span class="empty-desc">{{ $t('agent.empty.description') }}</span>
-          <t-button v-if="authStore.hasRole('contributor')" class="agent-create-btn empty-state-btn"
+          <t-button v-if="canCreateOrCopyAgent" class="agent-create-btn empty-state-btn"
             @click="handleCreateAgent">
             <template #icon>
               <span class="btn-icon-wrapper">
@@ -859,7 +846,7 @@ type DisplayAgent = (AgentWithUI & { isMine: true }) | (CustomAgent & { isMine: 
 // State synced to `?scope=` so links are shareable. The "mine" value is
 // retained for back-compat with existing links; its display label is
 // rebranded to the active tenant name inside ListSpaceSidebar.
-const defaultScope: 'all' | 'mine' = authStore.hasRole('contributor') ? 'mine' : 'all'
+const defaultScope: 'all' | 'mine' = (authStore.hasRole('admin') || authStore.isSystemAdmin) ? 'mine' : 'all'
 const { scope: spaceSelection, creator: creatorFilter } = useListUrlState({
   defaultScope,
   defaultCreator: 'all',
@@ -1075,7 +1062,7 @@ const openMoreAgentId = ref<string | null>(null)
 
 const showAgentListEmpty = computed(() => {
   if (loading.value) return false
-  if (!authStore.hasRole('contributor')) return false
+  if (!canCreateOrCopyAgent.value) return false
   if (spaceSelection.value === 'all' && filteredAgents.value.length === 0) return true
   if (spaceSelection.value === 'mine' && agents.value.length === 0) return true
   return false
@@ -1102,7 +1089,7 @@ const applyAgentListData = (res: { data: CustomAgent[]; disabled_own_agent_ids: 
 const fetchList = (force = false) => {
   loading.value = true
   return Promise.all([
-    chatResources.fetchAgentsForList({ creator: creatorFilter.value }, force).then(applyAgentListData),
+    chatResources.fetchAgentsForList({ purpose: 'manage', creator: creatorFilter.value }, force).then(applyAgentListData),
     orgStore.fetchOrganizations({ force }),
     orgStore.fetchSharedAgents({ force }),
   ]).finally(() => { loading.value = false }).then(() => {
@@ -1279,11 +1266,15 @@ const handleEdit = (agent: AgentWithUI) => {
 // mutation; this gate just hides buttons the user has no authority
 // to use.
 function canManageAgent(agent: AgentWithUI): boolean {
+  if (authStore.isSystemAdmin) return true
   const userId = authStore.user?.id || ''
   const creatorId = (agent as any).created_by || ''
-  if (creatorId && userId && creatorId === userId) return true
-  return authStore.hasRole('admin')
+  return !!(creatorId && userId && creatorId === userId)
 }
+
+const canCreateOrCopyAgent = computed(
+  () => authStore.hasRole('admin') || authStore.isSystemAdmin,
+)
 
 // isMyAgent 仅用于卡片来源徽章在「我创建」与「同空间其他成员创建」之间切换。
 // 跟 canManageAgent 区别：管理权限有 admin 兜底；徽章纯粹按 created_by 匹配。
@@ -1681,6 +1672,11 @@ defineExpose({
   font-size: 14px;
   font-weight: 400;
   line-height: 20px;
+}
+
+.header-create-btn {
+  flex-shrink: 0;
+  margin-left: 16px;
 }
 
 .header-action-btn {

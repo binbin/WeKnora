@@ -66,13 +66,13 @@ type TenantInvitationService interface {
 	// lightweight endpoint without paginating the full list.
 	CountPendingByInvitee(ctx context.Context, inviteeUserID string) (int64, error)
 
-	// CreateShareLink generates a multi-use share-link invitation for
+	// CreateShareLink generates a single-use share-link invitation for
 	// the tenant. The plaintext token is persisted on the row and also
 	// returned for the handler to compose the registration URL — the
-	// token stays available via list/get for as long as the row is
-	// pending so Owners can re-share without "copy now or lose it"
-	// pressure. Multiple share-link rows can coexist on the same
-	// tenant (different roles, or just multiple campaigns).
+	// token stays available via list/get while the row is pending.
+	// After one successful AcceptByToken the row becomes accepted and
+	// the link stops working. Multiple pending share-link rows can
+	// still coexist (different roles / campaigns).
 	CreateShareLink(
 		ctx context.Context,
 		tenantID uint64,
@@ -84,16 +84,11 @@ type TenantInvitationService interface {
 
 	// LookupByToken resolves a plaintext token to its active share-link
 	// row. Returns ErrInvitationTokenInvalid for unknown / expired /
-	// revoked tokens to avoid leaking which tokens used to exist. The
-	// row is NOT consumed; the same token can be looked up arbitrarily
-	// many times until it expires or the Owner revokes it.
+	// revoked / already-accepted tokens.
 	LookupByToken(ctx context.Context, plainToken string) (*types.TenantInvitation, error)
 
 	// AcceptByToken creates a tenant_members row binding newUserID to
-	// the share-link's tenant + role. Unlike Accept, this does NOT flip
-	// the invitation row into a terminal state — share-link rows stay
-	// pending so subsequent invitees can also register through the
-	// same link. Idempotent: if the user already has membership, the
-	// existing row is returned.
+	// the share-link's tenant + role, then consumes the link (status
+	// → accepted). A second registration with the same token fails.
 	AcceptByToken(ctx context.Context, plainToken string, newUserID string) (*types.TenantMember, error)
 }

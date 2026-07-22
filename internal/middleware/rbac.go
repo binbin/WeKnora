@@ -360,6 +360,63 @@ func EvaluateOwnershipOrRole(
 	return ErrOwnershipForbidden
 }
 
+// RequireOwnershipOrSystemAdmin allows the resource creator or a platform
+// system admin. Unlike RequireOwnershipOrRole, tenant Admin does NOT bypass
+// ownership — used for custom agents where admins may only maintain their own.
+func RequireOwnershipOrSystemAdmin(lookup CreatorLookup, cfg *config.Config) gin.HandlerFunc {
+	warnOnNilConfig(cfg)
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		if _, ok := types.TenantAPIKeyScopeFromContext(ctx); ok {
+			c.Next()
+			return
+		}
+		if types.IsSystemAdminActor(ctx) || IsCrossTenantSuperuser(ctx, cfg) {
+			c.Next()
+			return
+		}
+
+		uid, _ := types.UserIDFromContext(ctx)
+		if !rbacEnforcementEnabled(cfg) {
+			logger.Warnf(ctx,
+				"[rbac] ownership/system-admin would be checked (enforcement off, lookup skipped): "+
+					"user=%s path=%s",
+				uid, c.Request.URL.Path)
+			c.Next()
+			return
+		}
+
+		creator, err := lookup(c)
+		switch {
+		case errors.Is(err, ErrResourceNotFound):
+			c.Next()
+			return
+		case err != nil:
+			logger.Errorf(ctx,
+				"[rbac] creator lookup failed: user=%s path=%s err=%v",
+				uid, c.Request.URL.Path, err)
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "Service Unavailable: cannot verify resource ownership",
+			})
+			c.Abort()
+			return
+		}
+
+		if creator != "" && creator == uid {
+			c.Next()
+			return
+		}
+
+		logger.Warnf(ctx,
+			"[rbac] ownership/system-admin insufficient: user=%s creator=%q path=%s",
+			uid, creator, c.Request.URL.Path)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Forbidden: must own the resource or be a system admin",
+		})
+		c.Abort()
+	}
+}
+
 // isCrossTenantSuperuser was moved to access.go (renamed to
 // IsCrossTenantSuperuser, exported, and made flag-aware) so the same
 // helper backs the X-Tenant-ID gate in auth.go and the RequireRole /

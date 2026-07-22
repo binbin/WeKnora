@@ -312,11 +312,11 @@ func RegisterChunkRoutes(r *gin.RouterGroup, handler *handler.ChunkHandler, g *r
 		// 通过chunk_id获取单个chunk（不需要knowledge_id） — Viewer+ 且对父 KB 有 read 权限
 		chunkRead.GET("/by-id/:id", g.Viewer(), g.KBAccessReadFromChunkIDParam("id"), handler.GetChunkByIDOnly)
 		// 删除分块 — KB owner OR Admin+，且对父 KB 有 write 权限
-		chunks.DELETE("/:knowledge_id/:id", g.OwnedChunkKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.DeleteChunk)
+		chunks.DELETE("/:knowledge_id/:id", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.DeleteChunk)
 		// 删除知识下的所有分块 — KB owner OR Admin+，且对父 KB 有 write 权限
-		chunks.DELETE("/:knowledge_id", g.OwnedChunkKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.DeleteChunksByKnowledgeID)
+		chunks.DELETE("/:knowledge_id", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.DeleteChunksByKnowledgeID)
 		// 更新分块信息 — KB owner OR Admin+，且对父 KB 有 write 权限
-		chunks.PUT("/:knowledge_id/:id", g.OwnedChunkKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.UpdateChunk)
+		chunks.PUT("/:knowledge_id/:id", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("knowledge_id"), handler.UpdateChunk)
 		// 删除单个生成的问题（通过分块 id） — 与其它 chunk mutation 一致：
 		// KB owner OR Admin+。早期这里因为链路 (chunk_id -> knowledge_id ->
 		// kb -> creator_id) 还没接通，被临时降级成 Contributor，导致一个
@@ -342,9 +342,9 @@ func RegisterKnowledgeRoutes(r *gin.RouterGroup, handler *handler.KnowledgeHandl
 	kb := g.apiKeyGroup(r.Group("/knowledge-bases/:id/knowledge"), apiKeyIngest(apiKeyFullAccess()))
 	kbRead := kb.With(apiKeyRetrieve(apiKeyFullAccess()))
 	{
-		kb.POST("/file", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.CreateKnowledgeFromFile)
-		kb.POST("/url", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.CreateKnowledgeFromURL)
-		kb.POST("/manual", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.CreateManualKnowledge)
+		kb.POST("/file", g.Contributor(), g.KBAccessWrite("id"), handler.CreateKnowledgeFromFile)
+		kb.POST("/url", g.Contributor(), g.KBAccessWrite("id"), handler.CreateKnowledgeFromURL)
+		kb.POST("/manual", g.Contributor(), g.KBAccessWrite("id"), handler.CreateManualKnowledge)
 		kbRead.GET("", g.Viewer(), g.KBAccessRead("id"), handler.ListKnowledge)
 		// Clearing all contents under a KB is a destructive op; gate
 		// behind Admin instead of Contributor.
@@ -373,14 +373,14 @@ func RegisterKnowledgeRoutes(r *gin.RouterGroup, handler *handler.KnowledgeHandl
 		kRead.GET("/:id", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.GetKnowledge)
 		kRead.GET("/:id/stages", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.GetKnowledgeSpans)
 		kRead.GET("/:id/spans", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.GetKnowledgeSpans)
-		k.DELETE("/:id", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.DeleteKnowledge)
-		k.PUT("/:id", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateKnowledge)
-		k.PUT("/manual/:id", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateManualKnowledge)
-		k.POST("/:id/reparse", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.ReparseKnowledge)
-		k.POST("/:id/cancel-parse", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.CancelKnowledgeParse)
+		k.DELETE("/:id", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.DeleteKnowledge)
+		k.PUT("/:id", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateKnowledge)
+		k.PUT("/manual/:id", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateManualKnowledge)
+		k.POST("/:id/reparse", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.ReparseKnowledge)
+		k.POST("/:id/cancel-parse", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.CancelKnowledgeParse)
 		kRead.GET("/:id/download", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.DownloadKnowledgeFile)
 		kRead.GET("/:id/preview", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.PreviewKnowledgeFile)
-		k.PUT("/image/:id/:chunk_id", g.OwnedKnowledgeKBOrAdmin(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateImageInfo)
+		k.PUT("/image/:id/:chunk_id", g.Contributor(), g.KBAccessWriteFromKnowledgeIDParam("id"), handler.UpdateImageInfo)
 		kRead.GET("/search", g.Viewer(), handler.SearchKnowledge)
 		kRead.GET("/move/progress/:task_id", g.Viewer(), handler.GetKnowledgeMoveProgress)
 		// Batch / cross-KB content writes: JWT Contributor+, or an API key
@@ -417,19 +417,19 @@ func RegisterFAQRoutes(r *gin.RouterGroup, handler *handler.FAQHandler, g *rbacG
 		faqRead.GET("/entries", g.Viewer(), g.KBAccessRead("id"), handler.ListEntries)
 		faqRead.GET("/entries/export", g.Viewer(), g.KBAccessRead("id"), handler.ExportEntries)
 		faqRead.GET("/entries/:entry_id", g.Viewer(), g.KBAccessRead("id"), handler.GetEntry)
-		faq.POST("/entries", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.UpsertEntries)
-		faq.POST("/entry", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.CreateEntry)
-		faq.PUT("/entries/:entry_id", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.UpdateEntry)
-		faq.POST("/entries/:entry_id/similar-questions", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.AddSimilarQuestions)
+		faq.POST("/entries", g.Contributor(), g.KBAccessWrite("id"), handler.UpsertEntries)
+		faq.POST("/entry", g.Contributor(), g.KBAccessWrite("id"), handler.CreateEntry)
+		faq.PUT("/entries/:entry_id", g.Contributor(), g.KBAccessWrite("id"), handler.UpdateEntry)
+		faq.POST("/entries/:entry_id/similar-questions", g.Contributor(), g.KBAccessWrite("id"), handler.AddSimilarQuestions)
 		// Unified batch update API - supports is_enabled, is_recommended, tag_id
-		faq.PUT("/entries/fields", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.UpdateEntryFieldsBatch)
-		faq.PUT("/entries/tags", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.UpdateEntryTagBatch)
-		faq.DELETE("/entries", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.DeleteEntries)
+		faq.PUT("/entries/fields", g.Contributor(), g.KBAccessWrite("id"), handler.UpdateEntryFieldsBatch)
+		faq.PUT("/entries/tags", g.Contributor(), g.KBAccessWrite("id"), handler.UpdateEntryTagBatch)
+		faq.DELETE("/entries", g.Contributor(), g.KBAccessWrite("id"), handler.DeleteEntries)
 		// Search is a read route: scoped API keys may call it with retrieve
 		// even though POST is otherwise an unsafe method.
 		faqRead.POST("/search", g.Viewer(), g.KBAccessRead("id"), handler.SearchFAQ)
 		// FAQ import result display status
-		faq.PUT("/import/last-result/display", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.UpdateLastImportResultDisplayStatus)
+		faq.PUT("/import/last-result/display", g.Contributor(), g.KBAccessWrite("id"), handler.UpdateLastImportResultDisplayStatus)
 	}
 	// FAQ import progress route (outside of knowledge-base scope) — Viewer+.
 	// Scoped API keys that can ingest (they start the import) or retrieve may
@@ -460,22 +460,17 @@ func RegisterKnowledgeBaseRoutes(r *gin.RouterGroup, handler *handler.KnowledgeB
 	kb := g.apiKeyGroup(kbgrp, apiKeyRetrieve(apiKeyFullAccess()))
 	kbManagement := kb.With(apiKeyManageKnowledgeBases(apiKeyFullAccess()))
 	{
-		// 创建知识库 — JWT Contributor+；API key 需 manage_kbs 或 full-access。
-		kbManagement.POST("", g.Contributor(), handler.CreateKnowledgeBase)
+		// 创建知识库 — JWT Admin+（或系统超管）；API key 需 manage_kbs 或 full-access。
+		// 编辑（contributor）不可创建；内容写入走下方 ingest 路由。
+		kbManagement.POST("", g.AdminOrSystemAdmin(), handler.CreateKnowledgeBase)
 		// 获取知识库列表 — Viewer+ for JWT callers; retrieve-capable API keys pass via the gate.
 		kb.GET("", g.Viewer(), handler.ListKnowledgeBases)
 		// 获取知识库详情 — Viewer+ 且对 KB 有 read 权限
 		kb.GET("/:id", g.Viewer(), g.KBAccessRead("id"), handler.GetKnowledgeBase)
-		// 更新/删除知识库 — 两层正交鉴权，缺一不可：
-		//   OwnedKBOrAdmin  管「租户内」归属：非创建者的 Contributor 改不了
-		//                   同事的 KB（跨租户 KB 在此走 lookup=NotFound → 交给
-		//                   下游处理，不在此拦）。
-		//   KBAccessWrite   管「跨租户」访问级：自有 KB 或被组织共享(editor)。
-		// handler 内再按 permission/所有者租户做最终判定 —— 尤其 DeleteKnowledgeBase
-		// 以调用者「自身」租户(c.Keys，未被 KBAccess 改写)校验 kb.TenantID，
-		// 把删除锁死为「所有者租户 + Admin」，共享 editor 无法删除源 KB。
-		kbManagement.PUT("/:id", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.UpdateKnowledgeBase)
-		kbManagement.DELETE("/:id", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), handler.DeleteKnowledgeBase)
+		// 更新/删除知识库 — Admin+（或系统超管）+ KBAccessWrite。
+		// 编辑不可改配置；共享 editor 也不能删源 KB（handler 再校验所有者租户）。
+		kbManagement.PUT("/:id", g.AdminOrSystemAdmin(), g.KBAccessWrite("id"), handler.UpdateKnowledgeBase)
+		kbManagement.DELETE("/:id", g.AdminOrSystemAdmin(), g.KBAccessWrite("id"), handler.DeleteKnowledgeBase)
 		// 置顶/取消置顶知识库 — 创建者本人 OR Admin+ 且对 KB 有 write 权限
 		// Pin state is now per-(user, kb) (migration 000050). Anyone with
 		// at least Viewer-level read access to the KB — including users
@@ -488,15 +483,11 @@ func RegisterKnowledgeBaseRoutes(r *gin.RouterGroup, handler *handler.KnowledgeB
 		// POST is preferred; GET with JSON body is kept for backward compatibility (#1727).
 		kb.POST("/:id/hybrid-search", g.Viewer(), g.KBAccessRead("id"), handler.HybridSearch)
 		kb.GET("/:id/hybrid-search", g.Viewer(), g.KBAccessRead("id"), handler.HybridSearch)
-		// 拷贝知识库 — 产出新 KB，与 create 同档：JWT Contributor+，API key 需 manage_kbs 或 full-access。
-		// 源 KB 通过 body 里的 source_id 传入（非 :id 路径参数），无法套用基于路径参数
-		// 的 KBAccessRead，故源/目标 KB 的租户归属与 allow-list 校验在 handler 内完成
-		// （requireTenantAPIKeyKnowledgeBases 会把 source_id/target_id 兜进 allow-list）。
-		// 副本归调用者所有，不需要原 KB 的所有权。
-		kbManagement.POST("/copy", g.Contributor(), handler.CopyKnowledgeBase)
-		// 创建知识库副本 — 产出新 KB，与 create 同档：JWT Contributor+，API key 需 manage_kbs 或 full-access；
-		// 且对源 KB 有 read 权限（KBAccessRead 会对限定 key 兜住源 KB）。只创建新的 KB 设置记录，不复制内容/索引/分享。
-		kbManagement.POST("/:id/duplicate", g.Contributor(), g.KBAccessRead("id"), handler.DuplicateKnowledgeBase)
+		// 拷贝/副本 — 与 create 同档：JWT Admin+（或系统超管）。
+		kbManagement.POST("/copy", g.AdminOrSystemAdmin(), handler.CopyKnowledgeBase)
+		// 创建知识库副本 — 与 create 同档；且对源 KB 有 read 权限。
+		// 只创建新的 KB 设置记录，不复制内容/索引/分享。
+		kbManagement.POST("/:id/duplicate", g.AdminOrSystemAdmin(), g.KBAccessRead("id"), handler.DuplicateKnowledgeBase)
 		// 获取知识库复制进度 — Viewer+；只读。manage_kbs（发起 copy 的 key）或
 		// retrieve 均可轮询；任务按租户隔离（requireTaskProgressTenant），key 只能
 		// 查本租户任务。
@@ -527,9 +518,9 @@ func RegisterKnowledgeTagRoutes(r *gin.RouterGroup, tagHandler *handler.TagHandl
 		// for the duration of the handler — so the handler no longer
 		// needs its own effectiveCtxForKB helper.
 		kbTagsRead.GET("", g.Viewer(), g.KBAccessRead("id"), tagHandler.ListTags)
-		kbTags.POST("", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), tagHandler.CreateTag)
-		kbTags.PUT("/:tag_id", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), tagHandler.UpdateTag)
-		kbTags.DELETE("/:tag_id", g.OwnedKBOrAdmin(), g.KBAccessWrite("id"), tagHandler.DeleteTag)
+		kbTags.POST("", g.Contributor(), g.KBAccessWrite("id"), tagHandler.CreateTag)
+		kbTags.PUT("/:tag_id", g.Contributor(), g.KBAccessWrite("id"), tagHandler.UpdateTag)
+		kbTags.DELETE("/:tag_id", g.Contributor(), g.KBAccessWrite("id"), tagHandler.DeleteTag)
 	}
 }
 
@@ -640,9 +631,9 @@ func RegisterChatRoutes(r *gin.RouterGroup, handler *session.Handler, g *rbacGua
 //   - DELETE /:id         Owner+ (also normally a CanAccessAllTenants op)
 //   - GET/POST/DELETE /:id/api-keys   Owner+ (scoped API key management)
 //   - GET    /:id/members            Viewer+ (any member can see who else is in)
-//   - POST   /:id/members            Owner+ (only Owner can add new members)
-//   - PUT    /:id/members/:user_id   Owner+ (only Owner can change roles)
-//   - DELETE /:id/members/:user_id   Owner+ (only Owner can remove members)
+//   - POST   /:id/members            Admin+ (invite / add members)
+//   - PUT    /:id/members/:user_id   Admin+ (change roles)
+//   - DELETE /:id/members/:user_id   Admin+ (remove members)
 //   - POST   /:id/leave              Viewer+ (any member can quit on their own)
 //
 // All /tenants/:id endpoints share g.PathTenantMatch() at the group
@@ -700,7 +691,7 @@ func RegisterTenantRoutes(
 		// PathTenantMatch group. Tenant-level surface: full-access keys may
 		// call it, and scoped keys need manage_tenant_settings.
 		g.apiKeyRoute(tenantRoutes, http.MethodGet, "/kv/:key", apiKeyManageTenantSettings(apiKeyFullAccess()), g.Viewer(), handler.GetTenantKV)
-		g.apiKeyRoute(tenantRoutes, http.MethodPut, "/kv/:key", apiKeyManageTenantSettings(apiKeyFullAccess()), g.Admin(), handler.UpdateTenantKV)
+		g.apiKeyRoute(tenantRoutes, http.MethodPut, "/kv/:key", apiKeyManageTenantSettings(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.UpdateTenantKV)
 
 		// Per-tenant endpoints share PathTenantMatch at the group level.
 		// Most /tenants/:id/* endpoints stay undeclared for API keys by
@@ -716,45 +707,35 @@ func RegisterTenantRoutes(
 				apiKeyPlatform(types.APIKeyCapabilitySystemTenantsManage), g.Owner(), handler.UpdateTenant)
 			g.apiKeyRoute(tenantByID, http.MethodDelete, "",
 				apiKeyPlatform(types.APIKeyCapabilitySystemTenantsManage), g.Owner(), handler.DeleteTenant)
-			tenantByID.GET("/api-keys", g.Owner(), handler.ListAPIKeys)
-			tenantByID.POST("/api-keys", g.Owner(), handler.CreateAPIKey)
-			tenantByID.DELETE("/api-keys/:key_id", g.Owner(), handler.DeleteAPIKey)
-			tenantByID.GET("/api-principal-config", g.Owner(), handler.GetAPIPrincipalConfig)
-			tenantByID.PUT("/api-principal-config", g.Owner(), handler.UpdateAPIPrincipalConfig)
-			tenantByID.POST("/api-principal-test-token", g.Owner(), handler.CreateAPIPrincipalTestToken)
+			tenantByID.GET("/api-keys", g.OwnerOrSystemAdmin(), handler.ListAPIKeys)
+			tenantByID.POST("/api-keys", g.OwnerOrSystemAdmin(), handler.CreateAPIKey)
+			tenantByID.DELETE("/api-keys/:key_id", g.OwnerOrSystemAdmin(), handler.DeleteAPIKey)
+			tenantByID.GET("/api-principal-config", g.OwnerOrSystemAdmin(), handler.GetAPIPrincipalConfig)
+			tenantByID.PUT("/api-principal-config", g.OwnerOrSystemAdmin(), handler.UpdateAPIPrincipalConfig)
+			tenantByID.POST("/api-principal-test-token", g.OwnerOrSystemAdmin(), handler.CreateAPIPrincipalTestToken)
 
-			// Tenant member management (PR 3 of #1303). Listing is
-			// Viewer+ so any active member can see the roster; mutation
-			// is Owner+ because membership changes are the highest-impact
-			// tenant op. /:id/leave is Viewer+ — any member can quit on
-			// their own; the service still rejects when it would leave
-			// the tenant without an Owner.
+			// Tenant member management. Listing is Viewer+ so any active
+			// member can see the roster; mutation is Admin+ (settings →
+			// 成员管理 is Admin-only; 编辑/访客无设置入口).
 			if memberHandler != nil {
 				g.apiKeyRoute(tenantByID, http.MethodGet, "/members", apiKeyManageMembers(apiKeyFullAccess()), g.Viewer(), memberHandler.ListMembers)
-				g.apiKeyRoute(tenantByID, http.MethodPost, "/members", apiKeyManageMembers(apiKeyFullAccess()), g.Owner(), memberHandler.AddMember)
-				g.apiKeyRoute(tenantByID, http.MethodPut, "/members/:user_id", apiKeyManageMembers(apiKeyFullAccess()), g.Owner(), memberHandler.UpdateMemberRole)
-				g.apiKeyRoute(tenantByID, http.MethodDelete, "/members/:user_id", apiKeyManageMembers(apiKeyFullAccess()), g.Owner(), memberHandler.RemoveMember)
+				g.apiKeyRoute(tenantByID, http.MethodPost, "/members", apiKeyManageMembers(apiKeyFullAccess()), g.Admin(), memberHandler.AddMember)
+				g.apiKeyRoute(tenantByID, http.MethodPut, "/members/:user_id", apiKeyManageMembers(apiKeyFullAccess()), g.Admin(), memberHandler.UpdateMemberRole)
+				g.apiKeyRoute(tenantByID, http.MethodDelete, "/members/:user_id", apiKeyManageMembers(apiKeyFullAccess()), g.Admin(), memberHandler.RemoveMember)
 				tenantByID.POST("/leave", g.Viewer(), memberHandler.LeaveTenant)
 			}
 
-			// Tenant invitation flow. The UI-driven "Invite Member"
-			// button hits POST /invitations rather than POST /members,
-			// so the invitee gets to confirm via /me/invitations
-			// before any tenant_members row is written. List is
-			// Viewer+ so any member can see pending invites in the
-			// management view; create/revoke are Owner+ to match the
-			// existing /members mutation gates. nil-skip pattern
-			// mirrors memberHandler above for environments built
-			// without the invitation dependency wired.
+			// Tenant invitation flow. Create/revoke are Admin+ to match
+			// /members mutation gates.
 			if invitationHandler != nil {
 				g.apiKeyRoute(tenantByID, http.MethodGet, "/invitations", apiKeyManageMembers(apiKeyFullAccess()), g.Viewer(), invitationHandler.ListTenantInvitations)
-				g.apiKeyRoute(tenantByID, http.MethodPost, "/invitations", apiKeyManageMembers(apiKeyFullAccess()), g.Owner(), invitationHandler.CreateInvitation)
-				g.apiKeyRoute(tenantByID, http.MethodDelete, "/invitations/:inv_id", apiKeyManageMembers(apiKeyFullAccess()), g.Owner(), invitationHandler.RevokeInvitation)
+				g.apiKeyRoute(tenantByID, http.MethodPost, "/invitations", apiKeyManageMembers(apiKeyFullAccess()), g.Admin(), invitationHandler.CreateInvitation)
+				g.apiKeyRoute(tenantByID, http.MethodDelete, "/invitations/:inv_id", apiKeyManageMembers(apiKeyFullAccess()), g.Admin(), invitationHandler.RevokeInvitation)
 				// Share-link create lives under /invite-links so the URL
 				// reads as "create a link" rather than another flavour
 				// of /invitations; the underlying row still lives in the
 				// tenant_invitations table and shows up in the GET above.
-				g.apiKeyRoute(tenantByID, http.MethodPost, "/invite-links", apiKeyManageMembers(apiKeyFullAccess()), g.Owner(), invitationHandler.CreateInviteLink)
+				g.apiKeyRoute(tenantByID, http.MethodPost, "/invite-links", apiKeyManageMembers(apiKeyFullAccess()), g.Admin(), invitationHandler.CreateInviteLink)
 			}
 
 			// Audit log feed (PR 6 of #1303). Admin+ so denied-action
@@ -784,20 +765,20 @@ func RegisterModelRoutes(
 		// 获取模型厂商列表 — Viewer+
 		models.GET("/providers", g.Viewer(), handler.ListModelProviders)
 		// 创建模型 — Admin+
-		models.POST("", g.Admin(), handler.CreateModel)
+		models.POST("", g.OwnerOrSystemAdmin(), handler.CreateModel)
 		// 获取模型列表 — Viewer+
 		models.GET("", g.Viewer(), handler.ListModels)
 		// 调试已保存模型会发起真实上游调用并产生费用 — Admin+
-		models.POST("/:id/debug", g.Admin(), handler.DebugModel)
+		models.POST("/:id/debug", g.OwnerOrSystemAdmin(), handler.DebugModel)
 		// 获取单个模型 — Viewer+
 		models.GET("/:id", g.Viewer(), handler.GetModel)
 		// 更新模型 — Admin+；内置模型仍由服务层额外限定为 SystemAdmin。
-		models.PUT("/:id", g.AdminOrSystemAdmin(), handler.UpdateModel)
+		models.PUT("/:id", g.OwnerOrSystemAdmin(), handler.UpdateModel)
 		// 删除模型 — Admin+
-		models.DELETE("/:id", g.Admin(), handler.DeleteModel)
+		models.DELETE("/:id", g.OwnerOrSystemAdmin(), handler.DeleteModel)
 		// Per-field credential subresource (see internal/handler/model_credentials.go) — Admin+
-		models.PUT("/:id/credentials", g.AdminOrSystemAdmin(), credHandler.Put)
-		models.DELETE("/:id/credentials/:field", g.AdminOrSystemAdmin(), credHandler.DeleteField)
+		models.PUT("/:id/credentials", g.OwnerOrSystemAdmin(), credHandler.Put)
+		models.DELETE("/:id/credentials/:field", g.OwnerOrSystemAdmin(), credHandler.DeleteField)
 	}
 }
 
@@ -808,7 +789,7 @@ func RegisterModelRoutes(
 func RegisterEvaluationRoutes(r *gin.RouterGroup, handler *handler.EvaluationHandler, g *rbacGuards) {
 	evaluationRoutes := g.apiKeyGroup(r.Group("/evaluation"), apiKeyRunEvaluations(apiKeyFullAccess()))
 	{
-		evaluationRoutes.POST("", g.Admin(), handler.Evaluation)
+		evaluationRoutes.POST("", g.OwnerOrSystemAdmin(), handler.Evaluation)
 		evaluationRoutes.GET("", g.Viewer(), handler.GetEvaluationResult)
 	}
 }
@@ -877,30 +858,30 @@ func RegisterInitializationRoutes(r *gin.RouterGroup, handler *handler.Initializ
 	// 跟 PUT /knowledge-bases/:id 同等敏感，挂同款 OwnedKB 矩阵 + KBAccessWrite
 	//（API-key 主体短路 Owned* 守卫，KB allow-list 只能靠 KBAccess 兜底）。
 	g.apiKeyRoute(r, http.MethodPost, "/initialization/initialize/:kbId",
-		apiKeyManageKnowledgeBases(apiKeyFullAccess()), g.OwnedKBOrAdminFromKbIDParam(), g.KBAccessWrite("kbId"), handler.InitializeByKB)
+		apiKeyManageKnowledgeBases(apiKeyFullAccess()), g.AdminOrSystemAdmin(), g.KBAccessWrite("kbId"), handler.InitializeByKB)
 	g.apiKeyRoute(r, http.MethodPut, "/initialization/config/:kbId",
-		apiKeyManageKnowledgeBases(apiKeyFullAccess()), g.OwnedKBOrAdminFromKbIDParam(), g.KBAccessWrite("kbId"), handler.UpdateKBConfig)
+		apiKeyManageKnowledgeBases(apiKeyFullAccess()), g.AdminOrSystemAdmin(), g.KBAccessWrite("kbId"), handler.UpdateKBConfig)
 
 	// Ollama / 远程 API / 抽取等系统级检测/下载操作。这些不绑某个 KB，
 	// 会改空间级模型配置或拉远端模型；JWT 侧只读探测 Viewer+、变更 Admin+。
 	// 对 API key 均为空间级：full-access key 可用，scoped key 需要 manage_models。
 	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/status", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.CheckOllamaStatus)
 	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/models", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.ListOllamaModels)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/ollama/models/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckOllamaModels)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/ollama/models/download", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.DownloadOllamaModel)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/ollama/models/check", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.CheckOllamaModels)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/ollama/models/download", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.DownloadOllamaModel)
 	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/download/progress/:taskId", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.GetDownloadProgress)
 	g.apiKeyRoute(r, http.MethodGet, "/initialization/ollama/download/tasks", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.ListDownloadTasks)
 
 	// 远程API相关接口
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/remote/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckRemoteModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/embedding/test", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.TestEmbeddingModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/rerank/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckRerankModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/asr/check", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.CheckASRModel)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/multimodal/test", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.TestMultimodalFunction)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/remote/check", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.CheckRemoteModel)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/embedding/test", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.TestEmbeddingModel)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/rerank/check", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.CheckRerankModel)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/asr/check", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.CheckASRModel)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/multimodal/test", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.TestMultimodalFunction)
 
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/text-relation", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.ExtractTextRelations)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/fabri-tag", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.FabriTag)
-	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/fabri-text", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.FabriText)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/text-relation", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.ExtractTextRelations)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/fabri-tag", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.FabriTag)
+	g.apiKeyRoute(r, http.MethodPost, "/initialization/extract/fabri-text", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.FabriText)
 }
 
 // RegisterSystemRoutes registers system information routes
@@ -915,10 +896,10 @@ func RegisterSystemRoutes(r *gin.RouterGroup, handler *handler.SystemHandler, g 
 	{
 		systemRoutes.GET("/info", g.Viewer(), handler.GetSystemInfo)
 		systemRoutes.GET("/parser-engines", g.Viewer(), handler.ListParserEngines)
-		systemRoutes.POST("/parser-engines/check", g.Admin(), handler.CheckParserEngines)
-		systemRoutes.POST("/docreader/reconnect", g.Admin(), handler.ReconnectDocReader)
+		systemRoutes.POST("/parser-engines/check", g.OwnerOrSystemAdmin(), handler.CheckParserEngines)
+		systemRoutes.POST("/docreader/reconnect", g.OwnerOrSystemAdmin(), handler.ReconnectDocReader)
 		systemRoutes.GET("/storage-engine-status", g.Viewer(), handler.GetStorageEngineStatus)
-		systemRoutes.POST("/storage-engine-check", g.Admin(), handler.CheckStorageEngine)
+		systemRoutes.POST("/storage-engine-check", g.OwnerOrSystemAdmin(), handler.CheckStorageEngine)
 	}
 }
 
@@ -1029,28 +1010,28 @@ func RegisterMCPServiceRoutes(
 	mcpServices := g.apiKeyGroup(r.Group("/mcp-services"), apiKeyManageMCPServices(apiKeyFullAccess()))
 	{
 		// Create MCP service — Admin+
-		mcpServices.POST("", g.Admin(), handler.CreateMCPService)
+		mcpServices.POST("", g.OwnerOrSystemAdmin(), handler.CreateMCPService)
 		// List MCP services — Viewer+
 		mcpServices.GET("", g.Viewer(), handler.ListMCPServices)
 		// Get MCP service by ID — Viewer+
 		mcpServices.GET("/:id", g.Viewer(), handler.GetMCPService)
 		// Update MCP service — Admin+
-		mcpServices.PUT("/:id", g.Admin(), handler.UpdateMCPService)
+		mcpServices.PUT("/:id", g.OwnerOrSystemAdmin(), handler.UpdateMCPService)
 		// Delete MCP service — Admin+
-		mcpServices.DELETE("/:id", g.Admin(), handler.DeleteMCPService)
+		mcpServices.DELETE("/:id", g.OwnerOrSystemAdmin(), handler.DeleteMCPService)
 		// Test MCP service connection — Admin+ (probes external infra)
-		mcpServices.POST("/:id/test", g.Admin(), handler.TestMCPService)
+		mcpServices.POST("/:id/test", g.OwnerOrSystemAdmin(), handler.TestMCPService)
 		// Get MCP service tools — Viewer+
 		mcpServices.GET("/:id/tools", g.Viewer(), handler.GetMCPServiceTools)
 		// Get MCP service resources — Viewer+
 		mcpServices.GET("/:id/resources", g.Viewer(), handler.GetMCPServiceResources)
 		// Per-field credential subresource: secrets never travel via the main
 		// PUT body. See internal/handler/mcp_credentials.go for the contract. — Admin+
-		mcpServices.PUT("/:id/credentials", g.Admin(), credHandler.Put)
-		mcpServices.DELETE("/:id/credentials/:field", g.Admin(), credHandler.DeleteField)
+		mcpServices.PUT("/:id/credentials", g.OwnerOrSystemAdmin(), credHandler.Put)
+		mcpServices.DELETE("/:id/credentials/:field", g.OwnerOrSystemAdmin(), credHandler.DeleteField)
 		// MCP tool human approval (issue #1173) — Viewer+ to read, Admin+ to set policy
 		mcpServices.GET("/:id/tool-approvals", g.Viewer(), handler.ListMCPToolApprovals)
-		mcpServices.PUT("/:id/tool-approvals/:tool_name", g.Admin(), handler.SetMCPToolApproval)
+		mcpServices.PUT("/:id/tool-approvals/:tool_name", g.OwnerOrSystemAdmin(), handler.SetMCPToolApproval)
 		// Per-user OAuth authorization flow. Viewer+ may authorize/inspect/
 		// revoke their own token; the callback is the separate public route
 		// registered above.
@@ -1103,18 +1084,18 @@ func RegisterWebSearchProviderRoutes(
 		// List available provider types (metadata for UI forms) — Viewer+
 		providers.GET("/types", g.Viewer(), h.ListProviderTypes)
 		// Test with raw credentials (no persistence) — Admin+
-		providers.POST("/test", g.Admin(), h.TestProviderRaw)
+		providers.POST("/test", g.OwnerOrSystemAdmin(), h.TestProviderRaw)
 		// CRUD
-		providers.POST("", g.Admin(), h.CreateProvider)
+		providers.POST("", g.OwnerOrSystemAdmin(), h.CreateProvider)
 		providers.GET("", g.Viewer(), h.ListProviders)
 		providers.GET("/:id", g.Viewer(), h.GetProvider)
-		providers.PUT("/:id", g.Admin(), h.UpdateProvider)
-		providers.DELETE("/:id", g.Admin(), h.DeleteProvider)
+		providers.PUT("/:id", g.OwnerOrSystemAdmin(), h.UpdateProvider)
+		providers.DELETE("/:id", g.OwnerOrSystemAdmin(), h.DeleteProvider)
 		// Per-field credential subresource — Admin+
-		providers.PUT("/:id/credentials", g.Admin(), credHandler.Put)
-		providers.DELETE("/:id/credentials/:field", g.Admin(), credHandler.DeleteField)
+		providers.PUT("/:id/credentials", g.OwnerOrSystemAdmin(), credHandler.Put)
+		providers.DELETE("/:id/credentials/:field", g.OwnerOrSystemAdmin(), credHandler.DeleteField)
 		// Test existing saved provider — Admin+
-		providers.POST("/:id/test", g.Admin(), h.TestProviderByID)
+		providers.POST("/:id/test", g.OwnerOrSystemAdmin(), h.TestProviderByID)
 	}
 }
 
@@ -1129,15 +1110,15 @@ func RegisterVectorStoreRoutes(r *gin.RouterGroup, h *handler.VectorStoreHandler
 		// List available engine types (metadata for UI forms) — Viewer+
 		stores.GET("/types", g.Viewer(), h.ListStoreTypes)
 		// Test with raw credentials (no persistence) — Admin+
-		stores.POST("/test", g.Admin(), h.TestStoreRaw)
+		stores.POST("/test", g.OwnerOrSystemAdmin(), h.TestStoreRaw)
 		// CRUD
-		stores.POST("", g.Admin(), h.CreateStore)
+		stores.POST("", g.OwnerOrSystemAdmin(), h.CreateStore)
 		stores.GET("", g.Viewer(), h.ListStores)
 		stores.GET("/:id", g.Viewer(), h.GetStore)
-		stores.PUT("/:id", g.Admin(), h.UpdateStore)
-		stores.DELETE("/:id", g.Admin(), h.DeleteStore)
+		stores.PUT("/:id", g.OwnerOrSystemAdmin(), h.UpdateStore)
+		stores.DELETE("/:id", g.OwnerOrSystemAdmin(), h.DeleteStore)
 		// Test existing saved or env store — Admin+
-		stores.POST("/:id/test", g.Admin(), h.TestStoreByID)
+		stores.POST("/:id/test", g.OwnerOrSystemAdmin(), h.TestStoreByID)
 	}
 }
 
@@ -1146,23 +1127,23 @@ func RegisterStorageBackendRoutes(r *gin.RouterGroup, h *handler.StorageBackendH
 	backends := g.apiKeyGroup(r.Group("/storage-backends"), apiKeyManageStorageBackends(apiKeyFullAccess()))
 	{
 		backends.GET("/types", g.Viewer(), h.Types)
-		backends.POST("/test", g.Admin(), h.TestRaw)
-		backends.POST("", g.Admin(), h.Create)
+		backends.POST("/test", g.OwnerOrSystemAdmin(), h.TestRaw)
+		backends.POST("", g.OwnerOrSystemAdmin(), h.Create)
 		backends.GET("", g.Viewer(), h.List)
 		backends.GET("/:id", g.Viewer(), h.Get)
-		backends.PUT("/:id", g.Admin(), h.Update)
-		backends.DELETE("/:id", g.Admin(), h.Delete)
-		backends.POST("/:id/test", g.Admin(), h.TestByID)
-		backends.PUT("/:id/default", g.Admin(), h.SetDefault)
+		backends.PUT("/:id", g.OwnerOrSystemAdmin(), h.Update)
+		backends.DELETE("/:id", g.OwnerOrSystemAdmin(), h.Delete)
+		backends.POST("/:id/test", g.OwnerOrSystemAdmin(), h.TestByID)
+		backends.PUT("/:id/default", g.OwnerOrSystemAdmin(), h.SetDefault)
 	}
 }
 
 // RegisterCustomAgentRoutes registers custom agent routes.
 //
-// Mutating routes use OwnedAgentOrAdmin: the original creator can edit
-// their agent, otherwise Admin+ is required. Built-in agents
-// (IsBuiltin=true) have an empty creator and are always Admin+. Reads
-// are Viewer+, copy is Contributor+ (the copy is owned by the caller).
+// Create/copy require Admin or system admin. Update/delete require the
+// original creator or a system admin (tenant admins cannot edit peers).
+// Built-in agents are hidden from list APIs and disabled for mutation.
+// Reads are Viewer+ (chat list is filtered by org unit).
 func RegisterCustomAgentRoutes(r *gin.RouterGroup, agentHandler *handler.CustomAgentHandler, g *rbacGuards) {
 	agents := g.apiKeyGroup(r.Group("/agents"), apiKeyFullAccess())
 	// agentsRead are the agent read endpoints. They stay full-access only for
@@ -1177,18 +1158,18 @@ func RegisterCustomAgentRoutes(r *gin.RouterGroup, agentHandler *handler.CustomA
 		agentsRead.GET("/placeholders", g.Viewer(), agentHandler.GetPlaceholders)
 		// List smart-reasoning agent type presets (rag-qa / wiki-qa / hybrid / custom) — Viewer+
 		agentsRead.GET("/type-presets", g.Viewer(), agentHandler.GetAgentTypePresets)
-		// Create custom agent — Contributor+
-		agentsWrite.POST("", g.Contributor(), agentHandler.CreateAgent)
-		// List all agents (including built-in) — Viewer+
+		// Create custom agent — Admin or system admin
+		agentsWrite.POST("", g.AdminOrSystemAdmin(), agentHandler.CreateAgent)
+		// List agents (chat/manage purpose; built-ins excluded) — Viewer+
 		agentsRead.GET("", g.Viewer(), agentHandler.ListAgents)
 		// Get agent by ID — Viewer+
 		agentsRead.GET("/:id", g.Viewer(), agentHandler.GetAgent)
-		// Update agent — creator OR Admin+
-		agentsWrite.PUT("/:id", g.OwnedAgentOrAdmin(), agentHandler.UpdateAgent)
-		// Delete agent — creator OR Admin+
-		agentsWrite.DELETE("/:id", g.OwnedAgentOrAdmin(), agentHandler.DeleteAgent)
-		// Copy agent — Contributor+ (copy is owned by the caller)
-		agentsWrite.POST("/:id/copy", g.Contributor(), agentHandler.CopyAgent)
+		// Update agent — creator OR system admin
+		agentsWrite.PUT("/:id", g.OwnedAgentOrSystemAdmin(), agentHandler.UpdateAgent)
+		// Delete agent — creator OR system admin
+		agentsWrite.DELETE("/:id", g.OwnedAgentOrSystemAdmin(), agentHandler.DeleteAgent)
+		// Copy agent — Admin or system admin (copy is owned by the caller)
+		agentsWrite.POST("/:id/copy", g.AdminOrSystemAdmin(), agentHandler.CopyAgent)
 	}
 	// Registered outside the group to avoid Gin route conflict with /agents/:id/shares in organization routes
 	g.apiKeyRoute(r, http.MethodGet, "/agents/:id/suggested-questions",
@@ -1342,13 +1323,13 @@ func RegisterOrganizationRoutes(r *gin.RouterGroup, orgHandler *handler.Organiza
 	kbShares := g.apiKeyGroup(r.Group("/knowledge-bases/:id/shares"), apiKeyFullAccess())
 	{
 		// Share knowledge base
-		kbShares.POST("", g.OwnedKBOrAdmin(), orgHandler.ShareKnowledgeBase)
+		kbShares.POST("", g.AdminOrSystemAdmin(), orgHandler.ShareKnowledgeBase)
 		// List shares — Viewer+ 即可，纯读取
 		kbShares.GET("", g.Viewer(), orgHandler.ListKBShares)
 		// Update share permission
-		kbShares.PUT("/:share_id", g.OwnedKBOrAdmin(), orgHandler.UpdateSharePermission)
+		kbShares.PUT("/:share_id", g.AdminOrSystemAdmin(), orgHandler.UpdateSharePermission)
 		// Remove share
-		kbShares.DELETE("/:share_id", g.OwnedKBOrAdmin(), orgHandler.RemoveShare)
+		kbShares.DELETE("/:share_id", g.AdminOrSystemAdmin(), orgHandler.RemoveShare)
 	}
 
 	// Agent sharing routes — same rationale as KB shares: 分享/取消分享
@@ -1362,9 +1343,9 @@ func RegisterOrganizationRoutes(r *gin.RouterGroup, orgHandler *handler.Organiza
 	// （空间级全权）可管理 agent 分享，scoped key 保持 default-deny。
 	agentShares := g.apiKeyGroup(r.Group("/agents/:id/shares"), apiKeyFullAccess())
 	{
-		agentShares.POST("", g.OwnedAgentOrAdmin(), orgHandler.ShareAgent)
-		agentShares.GET("", g.OwnedAgentOrAdmin(), orgHandler.ListAgentShares)
-		agentShares.DELETE("/:share_id", g.OwnedAgentOrAdmin(), orgHandler.RemoveAgentShare)
+		agentShares.POST("", g.OwnedAgentOrSystemAdmin(), orgHandler.ShareAgent)
+		agentShares.GET("", g.OwnedAgentOrSystemAdmin(), orgHandler.ListAgentShares)
+		agentShares.DELETE("/:share_id", g.OwnedAgentOrSystemAdmin(), orgHandler.RemoveAgentShare)
 	}
 
 	// Shared knowledge bases route — Viewer+
@@ -1391,6 +1372,9 @@ func RegisterEmbedPublicRoutes(
 	if embedHandler == nil || embedService == nil {
 		return
 	}
+	// Short web link bootstrap (no publish token in URL).
+	r.POST("/api/v1/embed/web/:slug/bootstrap", embedHandler.BootstrapWebLink)
+
 	embed := r.Group("/api/v1/embed/:channel_id", middleware.EmbedAuth(embedService, tenantService, redisClient))
 	{
 		embed.POST("/exchange", embedHandler.ExchangeEmbedSession)
@@ -1425,16 +1409,16 @@ func RegisterEmbedChannelRoutes(r *gin.RouterGroup, embedHandler *handler.EmbedC
 	}
 	agentEmbed := g.apiKeyGroup(r.Group("/agents/:id/embed-channels"), apiKeyManageChannels(apiKeyFullAccess()))
 	{
-		agentEmbed.POST("", g.Admin(), embedHandler.CreateEmbedChannel)
+		agentEmbed.POST("", g.OwnerOrSystemAdmin(), embedHandler.CreateEmbedChannel)
 		agentEmbed.GET("", g.Viewer(), embedHandler.ListEmbedChannels)
 	}
 	channels := g.apiKeyGroup(r.Group("/embed-channels"), apiKeyManageChannels(apiKeyFullAccess()))
 	{
 		channels.GET("", g.Viewer(), embedHandler.ListAllEmbedChannels)
 		channels.GET("/:channel_id", g.Viewer(), embedHandler.GetEmbedChannel)
-		channels.PUT("/:channel_id", g.Admin(), embedHandler.UpdateEmbedChannel)
-		channels.DELETE("/:channel_id", g.Admin(), embedHandler.DeleteEmbedChannel)
-		channels.POST("/:channel_id/rotate-token", g.Admin(), embedHandler.RotateEmbedToken)
+		channels.PUT("/:channel_id", g.OwnerOrSystemAdmin(), embedHandler.UpdateEmbedChannel)
+		channels.DELETE("/:channel_id", g.OwnerOrSystemAdmin(), embedHandler.DeleteEmbedChannel)
+		channels.POST("/:channel_id/rotate-token", g.OwnerOrSystemAdmin(), embedHandler.RotateEmbedToken)
 		channels.POST("/:channel_id/preview-session", g.Viewer(), embedHandler.IssuePreviewSession)
 		channels.GET("/:channel_id/stats", g.Viewer(), embedHandler.GetEmbedChannelStats)
 	}
@@ -1459,7 +1443,7 @@ func RegisterIMChannelRoutes(r *gin.RouterGroup, imHandler *handler.IMHandler, g
 	// Channel CRUD under agents
 	agentChannels := g.apiKeyGroup(r.Group("/agents/:id/im-channels"), apiKeyManageChannels(apiKeyFullAccess()))
 	{
-		agentChannels.POST("", g.Admin(), imHandler.CreateIMChannel)
+		agentChannels.POST("", g.OwnerOrSystemAdmin(), imHandler.CreateIMChannel)
 		agentChannels.GET("", g.Viewer(), imHandler.ListIMChannels)
 	}
 
@@ -1467,17 +1451,17 @@ func RegisterIMChannelRoutes(r *gin.RouterGroup, imHandler *handler.IMHandler, g
 	channels := g.apiKeyGroup(r.Group("/im-channels"), apiKeyManageChannels(apiKeyFullAccess()))
 	{
 		channels.GET("", g.Viewer(), imHandler.ListAllIMChannels)
-		channels.PUT("/:id", g.Admin(), imHandler.UpdateIMChannel)
-		channels.DELETE("/:id", g.Admin(), imHandler.DeleteIMChannel)
-		channels.POST("/:id/toggle", g.Admin(), imHandler.ToggleIMChannel)
+		channels.PUT("/:id", g.OwnerOrSystemAdmin(), imHandler.UpdateIMChannel)
+		channels.DELETE("/:id", g.OwnerOrSystemAdmin(), imHandler.DeleteIMChannel)
+		channels.POST("/:id/toggle", g.OwnerOrSystemAdmin(), imHandler.ToggleIMChannel)
 	}
 
 	// WeChat QR code login (requires authentication) — Admin+: a successful
 	// scan binds a personal WeChat account to the tenant.
 	wechatGroup := g.apiKeyGroup(r.Group("/wechat"), apiKeyManageChannels(apiKeyFullAccess()))
 	{
-		wechatGroup.POST("/qrcode", g.Admin(), imHandler.WeChatGetQRCode)
-		wechatGroup.POST("/qrcode/status", g.Admin(), imHandler.WeChatPollQRCodeStatus)
+		wechatGroup.POST("/qrcode", g.OwnerOrSystemAdmin(), imHandler.WeChatGetQRCode)
+		wechatGroup.POST("/qrcode/status", g.OwnerOrSystemAdmin(), imHandler.WeChatPollQRCodeStatus)
 	}
 }
 
@@ -1523,13 +1507,36 @@ func embedChannelIDFromPath(path string) string {
 	return strings.TrimSpace(rest)
 }
 
+// embedWebSlugFromPath extracts the short slug from /w/:slug.
+func embedWebSlugFromPath(path string) string {
+	const prefix = "/w/"
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
+	rest := strings.TrimPrefix(path, prefix)
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		rest = rest[:i]
+	}
+	if i := strings.IndexByte(rest, '?'); i >= 0 {
+		rest = rest[:i]
+	}
+	return strings.TrimSpace(rest)
+}
+
 // embedFrameAncestorsMiddleware sets a per-channel `frame-ancestors` CSP on the
 // embed SPA page so it can only be framed by the channel's allowed origins.
+// Direct web links (/w/:slug) always set frame-ancestors 'none'.
 // When the channel declares no origins (or "*"), no restriction is applied,
 // matching the API allowlist semantics. Only GET/HEAD page loads are handled.
 func embedFrameAncestorsMiddleware(svc interfaces.EmbedChannelService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
+			c.Next()
+			return
+		}
+		if slug := embedWebSlugFromPath(c.Request.URL.Path); slug != "" {
+			c.Header("Content-Security-Policy", "frame-ancestors 'none'")
+			c.Header("X-Frame-Options", "DENY")
 			c.Next()
 			return
 		}
@@ -2351,7 +2358,7 @@ func RegisterDataSourceRoutes(
 // management endpoints. SaveCredentials persists external SaaS keys
 // for the tenant (Admin+), Status is a low-risk readiness probe (Viewer+).
 func RegisterWeKnoraCloudRoutes(r *gin.RouterGroup, handler *handler.WeKnoraCloudHandler, g *rbacGuards) {
-	g.apiKeyRoute(r, http.MethodPost, "/weknoracloud/credentials", apiKeyManageModels(apiKeyFullAccess()), g.Admin(), handler.SaveCredentials)
+	g.apiKeyRoute(r, http.MethodPost, "/weknoracloud/credentials", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.SaveCredentials)
 	g.apiKeyRoute(r, http.MethodGet, "/models/weknoracloud/status", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.Status)
 }
 
@@ -2370,17 +2377,17 @@ func RegisterWikiPageRoutes(r *gin.RouterGroup, wikiHandler *handler.WikiPageHan
 	{
 		// Page CRUD
 		wikiRead.GET("/pages", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListPages)
-		wiki.POST("/pages", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreatePage)
-		wiki.PUT("/move-page", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.MovePage)
+		wiki.POST("/pages", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.CreatePage)
+		wiki.PUT("/move-page", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.MovePage)
 		wikiRead.GET("/pages/*slug", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetPage)
-		wiki.PUT("/pages/*slug", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdatePage)
-		wiki.DELETE("/pages/*slug", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.DeletePage)
+		wiki.PUT("/pages/*slug", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.UpdatePage)
+		wiki.DELETE("/pages/*slug", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.DeletePage)
 
 		// Folder tree (directory nodes)
 		wikiRead.GET("/folders", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListFolders)
-		wiki.POST("/folders", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreateFolder)
-		wiki.PUT("/folders/:folder_id", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdateFolder)
-		wiki.DELETE("/folders/:folder_id", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.DeleteFolder)
+		wiki.POST("/folders", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.CreateFolder)
+		wiki.PUT("/folders/:folder_id", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.UpdateFolder)
+		wiki.DELETE("/folders/:folder_id", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.DeleteFolder)
 
 		// Special pages
 		wikiRead.GET("/index", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetIndex)
@@ -2392,12 +2399,12 @@ func RegisterWikiPageRoutes(r *gin.RouterGroup, wikiHandler *handler.WikiPageHan
 
 		// Search and maintenance
 		wikiRead.GET("/search", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.SearchPages)
-		wiki.POST("/rebuild-links", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.RebuildLinks)
+		wiki.POST("/rebuild-links", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.RebuildLinks)
 		wikiRead.GET("/lint", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.Lint)
-		wiki.POST("/auto-fix", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.AutoFix)
+		wiki.POST("/auto-fix", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.AutoFix)
 
 		// Issues
 		wikiRead.GET("/issues", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListIssues)
-		wiki.PUT("/issues/:issue_id/status", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdateIssueStatus)
+		wiki.PUT("/issues/:issue_id/status", g.Contributor(), g.KBAccessWrite("kb_id"), wikiHandler.UpdateIssueStatus)
 	}
 }

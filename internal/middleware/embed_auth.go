@@ -120,7 +120,9 @@ func EmbedAuth(
 		}
 
 		origin := requestOrigin(c)
-		if !originAllowed(origin, ch.AllowedOriginsList()) {
+		hostOrigin := HostOrigin(c)
+		sameHost := origin != "" && hostOrigin != "" && strings.EqualFold(origin, hostOrigin)
+		if !sameHost && !originAllowed(origin, ch.AllowedOriginsList()) {
 			logger.Warnf(c.Request.Context(), "[embed_auth] origin %q not allowed for channel %s", origin, channelID)
 			c.JSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
 			c.Abort()
@@ -219,11 +221,15 @@ func requestOrigin(c *gin.Context) string {
 	return u.Scheme + "://" + u.Host
 }
 
+// RequestOrigin returns the browser Origin (or Referer origin) for embed checks.
+func RequestOrigin(c *gin.Context) string {
+	return requestOrigin(c)
+}
+
 func originAllowed(origin string, allowed []string) bool {
-	// Empty allowlist rejects all origins. Management create/update requires at
-	// least one origin; legacy rows with [] must be fixed before going live.
+	// Empty allowlist means no origin restriction (optional for web publish).
 	if len(allowed) == 0 {
-		return false
+		return true
 	}
 	if origin == "" {
 		return false
@@ -244,6 +250,24 @@ func originAllowed(origin string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+// OriginAllowed reports whether origin matches the channel allowlist.
+func OriginAllowed(origin string, allowed []string) bool {
+	return originAllowed(origin, allowed)
+}
+
+// HostOrigin builds scheme://host from the incoming request.
+func HostOrigin(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	host := strings.TrimSpace(c.Request.Host)
+	if host == "" {
+		return ""
+	}
+	return scheme + "://" + host
 }
 
 // EmbedChannelFromContext returns the authenticated embed channel, if any.

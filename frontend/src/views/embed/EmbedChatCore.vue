@@ -153,7 +153,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'session-title', title: string): void
+  (e: 'session-title', title: string, provisional?: boolean): void
   (e: 'messages-state', hasMessages: boolean): void
 }>()
 
@@ -280,12 +280,19 @@ const {
   hostContext: hostContextRef,
   onMessagesChange: (has) => emit('messages-state', has),
   onSessionTitle: (title) => {
-    if (props.useSessionHeaderTitle) {
-      emit('session-title', title)
-    }
+    // Always bubble titles so the history sidebar can label chats.
+    // Header display still respects useSessionHeaderTitle in EmbedPage.
+    emit('session-title', title)
   },
   onTurnComplete: (message) => { void loadFollowUpSuggestions(message, true) },
-  onMessagesLoaded: loadPersistedFollowUps,
+  onMessagesLoaded: (messages) => {
+    loadPersistedFollowUps(messages)
+    const firstUser = messages.find((message) => message.role === 'user')
+    const content = String(firstUser?.content || '').trim().replace(/\s+/g, ' ')
+    if (content) {
+      emit('session-title', content.slice(0, 40), true)
+    }
+  },
 })
 
 const welcomeText = computed(() => props.welcomeMessage?.trim() || '')

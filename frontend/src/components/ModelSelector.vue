@@ -55,12 +55,15 @@ interface Props {
   status?: 'default' | 'success' | 'warning' | 'error'
   // 可选：外部传入的所有模型列表，如果提供则不调用API
   allModels?: ModelConfig[]
+  // 仅展示内置模型（创建智能体时强制选内置 KnowledgeQA）
+  onlyBuiltin?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   placeholder: '',
   status: 'default',
+  onlyBuiltin: false,
 })
 
 const emit = defineEmits<{
@@ -81,10 +84,18 @@ const modelDisplayName = (model: ModelConfig) => {
   return displayName || model.name
 }
 
+function filterModels(list: ModelConfig[]): ModelConfig[] {
+  return list.filter((model) => {
+    if (model.type !== props.modelType) return false
+    if (props.onlyBuiltin && !model.is_builtin) return false
+    return true
+  })
+}
+
 // 监听 allModels 变化，自动过滤当前类型的模型
-watch(() => props.allModels, (newModels) => {
-  if (newModels && Array.isArray(newModels)) {
-    models.value = newModels.filter(m => m.type === props.modelType)
+watch(() => [props.allModels, props.onlyBuiltin, props.modelType] as const, () => {
+  if (props.allModels && Array.isArray(props.allModels)) {
+    models.value = filterModels(props.allModels)
   }
 }, { immediate: true })
 
@@ -104,7 +115,7 @@ const loadModels = async () => {
     const result = await listModels()
     // 前端按类型筛选模型
     if (result && Array.isArray(result)) {
-      models.value = result.filter(m => m.type === props.modelType)
+      models.value = filterModels(result)
     } else {
       models.value = []
     }

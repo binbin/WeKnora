@@ -17,6 +17,12 @@ export interface TenantMember {
   status: TenantMemberStatus
   invited_by?: string | null
   joined_at: string
+  org_unit_id?: string
+  org_unit_name?: string
+  /** 当前调用方是否可改角色/移除该成员（组织范围）。 */
+  can_manage?: boolean
+  /** 当前调用方是否可将该成员提升为管理员。 */
+  can_promote_to_admin?: boolean
 }
 
 export interface ListMembersResponse {

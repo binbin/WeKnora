@@ -25,14 +25,13 @@
 import { h, type VNode } from 'vue'
 import { Tag as TTag, Icon as TIcon } from 'tdesign-vue-next'
 
-// Mirror TenantMembers.roleTagTheme() so the "owner is blue, admin is
-// orange, ..." identity stays consistent across surfaces. If that map
-// changes there, change it here too (or, longer term, lift both into
-// useRoleLabel).
+// Mirror TenantMembers.roleTagTheme() — owner is product-hidden and
+// shares admin's warning theme. If that map changes there, change it
+// here too (or, longer term, lift both into useRoleLabel).
 type TagTheme = 'primary' | 'warning' | 'success' | 'default'
 
 const ROLE_THEME: Record<string, TagTheme> = {
-  owner: 'primary',
+  owner: 'warning',
   admin: 'warning',
   contributor: 'success',
 }

@@ -96,6 +96,9 @@ export function createKnowledgeBase(data: {
     wiki_enabled: boolean;
     graph_enabled: boolean;
   };
+  // When true, descendant OrgUnits may read this KB (read-only).
+  // Default false; only meaningful when the tenant has org hierarchy.
+  share_with_descendants?: boolean;
 }) {
   return post(`/api/v1/knowledge-bases`, data);
 }
@@ -110,6 +113,7 @@ export function getKnowledgeBaseById(id: string, options?: { agent_id?: string }
 export function updateKnowledgeBase(id: string, data: {
   name: string;
   description?: string;
+  share_with_descendants?: boolean;
   config?: {
     chunking_config?: any;
     image_processing_config?: any;

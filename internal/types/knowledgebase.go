@@ -72,6 +72,10 @@ type KnowledgeBase struct {
 	// OrgUnitID binds this KB to a tenant-scoped OrgUnit (省/市/县).
 	// Empty string means unbound: legacy tenant-wide visibility.
 	OrgUnitID string `yaml:"org_unit_id"             json:"org_unit_id"             gorm:"type:varchar(36);default:'';index"`
+	// ShareWithDescendants, when true, lets descendant OrgUnits read this
+	// KB (reference / retrieve only). Default false — subordinates cannot
+	// see the KB until the owner opts in. Write stays self-only.
+	ShareWithDescendants bool `yaml:"share_with_descendants" json:"share_with_descendants" gorm:"default:false"`
 	// CreatorID records the user ID of whoever originally created the KB.
 	// Used by the workspace-level RBAC middleware to let Contributors edit
 	// their own KBs without granting them access to everyone else's.

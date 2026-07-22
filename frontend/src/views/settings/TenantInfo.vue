@@ -270,7 +270,7 @@ const error = ref('')
 
 // 仅 owner 可改空间名（与后端 router.go 中 g.Owner() 守卫一致；
 // 服务端始终是权限的最终裁判，这里只决定 UI 是否露出入口）。
-const canEditTenant = computed(() => authStore.hasRole('owner'))
+const canEditTenant = computed(() => authStore.hasRole('admin'))
 
 /** 与原 TenantMembers.vue 一致：最后一位 Owner 不展示退出，避免与服务端 last-owner 对齐失败。 */
 const activeTenantNumericId = computed(() => Number(authStore.currentTenantId ?? 0))

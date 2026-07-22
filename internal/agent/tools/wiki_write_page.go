@@ -24,7 +24,7 @@ func NewWikiWritePageTool(wikiPageService interfaces.WikiPageService, kbIDs []st
 	return &wikiWritePageTool{
 		BaseTool: NewBaseTool(
 			ToolWikiWritePage,
-			"Create a new Wiki page or completely overwrite an existing one. Automatically handles outbound links.",
+			"创建新的 Wiki 页面，或完全覆盖已有页面。自动处理出站链接。",
 			json.RawMessage(`{
 				"type": "object",
 				"properties": {

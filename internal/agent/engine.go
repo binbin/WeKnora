@@ -622,7 +622,7 @@ func (e *AgentEngine) runReActIteration(
 			// Retries exhausted — use fallback message rather than empty answer
 			logger.Warnf(ctx, "[Agent][Round-%d] Empty content after %d retries - using fallback",
 				round, maxEmptyResponseRetries)
-			state.FinalAnswer = "I'm sorry, I was unable to generate a response. Please try again."
+			state.FinalAnswer = "抱歉，我未能生成回复，请重试。"
 			state.IsComplete = true
 			state.RoundSteps = append(state.RoundSteps, verdict.step)
 			return iterOutcomeBreak, nil

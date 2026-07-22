@@ -19,9 +19,9 @@ import (
 
 var dataAnalysisTool = BaseTool{
 	name: ToolDataAnalysis,
-	description: "Use this tool when the knowledge is CSV or Excel files. It loads the data into memory and executes SQL for data analysis. " +
-		"For Excel files with multiple sheets, every sheet is loaded into the same table and the source sheet name is exposed as a '__sheet_name' column so you can filter/aggregate per sheet. " +
-		"If the user's question requires data statistics, convert the question into SQL and execute it.",
+	description: "当知识为 CSV 或 Excel 文件时使用本工具。它将数据加载到内存并用 SQL 做数据分析。" +
+		"对含多工作表的 Excel，每个工作表会加载到同一张表中，并以 '__sheet_name' 列暴露来源工作表名，便于按表过滤/聚合。" +
+		"若用户问题需要数据统计，请将问题转换为 SQL 并执行。",
 	schema: utils.GenerateSchema[DataAnalysisInput](),
 }
 

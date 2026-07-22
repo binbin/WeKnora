@@ -364,10 +364,20 @@
               </template>
               <template #role="{ row }">
                 <div class="role-cell">
-                  <t-select v-if="canManage && row.user_id !== currentUserId" :model-value="row.role"
-                    class="member-role-select" size="small" :popup-props="roleSelectPopupProps"
-                    @change="(val: string) => onRoleChange(row, val)">
-                    <t-option v-for="opt in roleOptions" :key="opt.value" :value="opt.value" :label="opt.label">
+                  <t-select
+                    v-if="canEditMemberRow(row)"
+                    :model-value="row.role"
+                    class="member-role-select"
+                    size="small"
+                    :popup-props="roleSelectPopupProps"
+                    @change="(val: string) => onRoleChange(row, val)"
+                  >
+                    <t-option
+                      v-for="opt in roleOptionsForRow(row)"
+                      :key="opt.value"
+                      :value="opt.value"
+                      :label="opt.label"
+                    >
                       <span class="role-option">
                         <t-icon :name="roleIcon(opt.value)" class="role-option-icon" />
                         <span>{{ opt.label }}</span>
@@ -382,7 +392,7 @@
               <template #joined_at="{ row }">{{ formatDate(row.joined_at) }}</template>
               <template #actions="{ row }">
                 <t-popconfirm
-                  v-if="canManage && row.user_id !== currentUserId"
+                  v-if="canEditMemberRow(row)"
                   :content="$t('tenantMember.remove.confirmBody', { name: row.username || row.email })"
                   :confirm-btn="{ content: $t('tenantMember.remove.confirm'), theme: 'danger' }"
                   :cancel-btn="{ content: $t('common.cancel') }"
@@ -741,7 +751,10 @@ const currentRole = computed<TenantRole | ''>(() => (authStore.currentTenantRole
 // who actually need them. Local Owners of their own tenant come in via
 // the role branch.
 const canManage = computed(
-  () => currentRole.value === 'owner' || authStore.canAccessAllTenants === true,
+  () =>
+    authStore.hasRole('admin') ||
+    authStore.canAccessAllTenants === true ||
+    authStore.isSystemAdmin === true,
 )
 // Admin+ (and cross-tenant superusers) can view the audit log. Mirrors
 // the server's g.Admin() guard on /tenants/:id/audit-log so we don't
@@ -760,17 +773,34 @@ const currentUserId = computed(() => authStore.user?.id ?? '')
 const activeTenantId = computed(() => Number(authStore.currentTenantId ?? 0))
 
 const roleOptions = computed(() => {
-  const options: { label: string; value: TenantRole }[] = [
-    { label: t('tenantMember.role.admin'), value: 'admin' },
-    { label: t('tenantMember.role.contributor'), value: 'contributor' },
-    { label: t('tenantMember.role.viewer'), value: 'viewer' },
+  // 「所有者」不再作为可分配角色；存量 owner 仍可在列表中展示，
+  // 但邀请 / 改角色只能选 admin / contributor / viewer。
+  return [
+    { label: t('tenantMember.role.admin'), value: 'admin' as TenantRole },
+    { label: t('tenantMember.role.contributor'), value: 'contributor' as TenantRole },
+    { label: t('tenantMember.role.viewer'), value: 'viewer' as TenantRole },
   ]
-  // 顶层所有者仅超级管理员可添加；自助注册会创建个人空间并成为该空间 Owner。
-  if (authStore.isSystemAdmin) {
-    options.unshift({ label: t('tenantMember.role.owner'), value: 'owner' })
-  }
-  return options
 })
+
+/** 组织范围内：仅 can_manage 的行可改角色/移除。 */
+function canEditMemberRow(row: TenantMember): boolean {
+  if (!canManage.value || row.user_id === currentUserId.value) {
+    return false
+  }
+  // 后端未返回标志时（旧接口）回退为可管理。
+  if (row.can_manage === undefined) {
+    return true
+  }
+  return row.can_manage
+}
+
+/** 同级非管理员不可提升为管理员。 */
+function roleOptionsForRow(row: TenantMember) {
+  if (row.can_promote_to_admin === false) {
+    return roleOptions.value.filter((opt) => opt.value !== 'admin')
+  }
+  return roleOptions.value
+}
 
 /** 下拉层须高于邀请浮层（3050）与组织设置全屏遮罩，否则会被压住 */
 const roleSelectPopupProps = {
@@ -784,8 +814,9 @@ const roleSelectPopupProps = {
 // PR 2 enforcement; if a permission moves between roles, update both
 // sides in the same PR.
 type RolePerm = { key: string; has: boolean }
-const roleMatrixOrder: TenantRole[] = ['owner', 'admin', 'contributor', 'viewer']
+const roleMatrixOrder: TenantRole[] = ['admin', 'contributor', 'viewer']
 const roleMatrix: Record<TenantRole, RolePerm[]> = {
+  // owner 行保留类型完整，但不在矩阵中展示（与可分配角色一致）。
   owner: [
     { key: 'manageMembers', has: true },
     { key: 'manageTenantConfig', has: true },
@@ -794,8 +825,8 @@ const roleMatrix: Record<TenantRole, RolePerm[]> = {
     { key: 'readAll', has: true },
   ],
   admin: [
-    { key: 'manageMembers', has: false },
-    { key: 'manageTenantConfig', has: false },
+    { key: 'manageMembers', has: true },
+    { key: 'manageTenantConfig', has: true },
     { key: 'manageInfra', has: true },
     { key: 'createOwnKB', has: true },
     { key: 'readAll', has: true },
@@ -804,7 +835,7 @@ const roleMatrix: Record<TenantRole, RolePerm[]> = {
     { key: 'manageMembers', has: false },
     { key: 'manageTenantConfig', has: false },
     { key: 'manageInfra', has: false },
-    { key: 'createOwnKB', has: true },
+    { key: 'createOwnKB', has: false },
     { key: 'readAll', has: true },
   ],
   viewer: [
@@ -819,7 +850,6 @@ const roleMatrix: Record<TenantRole, RolePerm[]> = {
 function roleMatrixIcon(role: TenantRole): string {
   switch (role) {
     case 'owner':
-      return 'user-vip-filled'
     case 'admin':
       return 'user-safety'
     case 'contributor':
@@ -858,12 +888,10 @@ const addFormRules = computed(() => ({
     : [],
 }))
 
-// Pretty role tag colour: Owner stands out, Admin is warning, the rest
-// stay neutral so the table doesn't become a confetti cannon.
+// Pretty role tag colour: owner 与 admin 同色（产品层已隐藏所有者）。
 function roleTagTheme(role: TenantRole): 'primary' | 'warning' | 'success' | 'default' {
   switch (role) {
     case 'owner':
-      return 'primary'
     case 'admin':
       return 'warning'
     case 'contributor':
@@ -1548,6 +1576,10 @@ async function onRoleChange(row: TenantMember, newRole: string) {
       MessagePlugin.error(t('tenantMember.errors.lastOwner'))
     } else if (status === 404) {
       MessagePlugin.error(t('tenantMember.errors.notFound'))
+    } else if (status === 403) {
+      MessagePlugin.error(
+        err?.message || t('tenantMember.errors.outsideManageScope'),
+      )
     } else {
       MessagePlugin.error(err?.message || t('tenantMember.errors.generic'))
     }
@@ -1574,6 +1606,10 @@ async function removeRow(row: TenantMember) {
       MessagePlugin.error(t('tenantMember.errors.lastOwner'))
     } else if (status === 404) {
       MessagePlugin.error(t('tenantMember.errors.notFound'))
+    } else if (status === 403) {
+      MessagePlugin.error(
+        err?.message || t('tenantMember.errors.outsideManageScope'),
+      )
     } else {
       MessagePlugin.error(err?.message || t('tenantMember.errors.generic'))
     }

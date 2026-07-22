@@ -1,9 +1,9 @@
-import { onMounted, onUnmounted, ref, type Ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
+  bootstrapWebLink,
   createEmbedSession,
-  embedChatSessionStorageKey,
   exchangeEmbedSession,
   getEmbedConfig,
   getEmbedMessageList,
@@ -15,60 +15,19 @@ import {
   parseEmbedTokenFromLocation,
   postEmbedBootstrapRequest,
   postEmbedReady,
+  readEmbedStoredSessionState,
+  upsertEmbedStoredSession,
+  writeEmbedStoredSessionState,
   type EmbedChannelPublicConfig,
+  type EmbedStoredSessionEntry,
+  type EmbedStoredSessionState,
 } from '@/api/embed'
 import { applyEmbedLocale, readEmbedLocaleFromUrl, syncEmbedLocaleFromUrl } from '@/i18n/embed'
 
-// Persist the chat session id per channel so a page refresh resumes the same
-// conversation (and its history) instead of silently starting a new session.
-interface StoredSession {
-  id: string
-  sig: string
-  /** Agent bound when the session was created; mismatch forces a new session. */
-  agentId?: string
-}
-
-function readStoredSession(channelId: string): StoredSession | null {
-  try {
-    const raw = window.localStorage.getItem(embedChatSessionStorageKey(channelId))
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed.id === 'string' && typeof parsed.sig === 'string' && parsed.id) {
-      const agentId = typeof parsed.agentId === 'string' ? parsed.agentId.trim() : ''
-      return {
-        id: parsed.id,
-        sig: parsed.sig,
-        ...(agentId ? { agentId } : {}),
-      }
-    }
-  } catch {
-    // Malformed / legacy (plain-string) entry: ignore so a fresh signed
-    // session is created below.
-  }
-  return null
-}
-
-function writeStoredSession(channelId: string, session: StoredSession | null) {
-  try {
-    if (session?.id) {
-      window.localStorage.setItem(embedChatSessionStorageKey(channelId), JSON.stringify(session))
-    } else {
-      window.localStorage.removeItem(embedChatSessionStorageKey(channelId))
-    }
-  } catch {
-    // localStorage may be unavailable (private mode / disabled cookies).
-    // Persistence is best-effort; the session still works for this load.
-  }
-}
-
-// A stored session may have been deleted/expired server-side, or its signed
-// handle invalidated by a channel token rotation. Probe it cheaply (limit=1)
-// with the stored signature before reusing — the backend rejects stale/foreign
-// ids and bad signatures with 4xx, which surfaces here as a thrown error.
 async function isStoredSessionValid(
   channelId: string,
   apiToken: string,
-  session: StoredSession,
+  session: EmbedStoredSessionEntry,
 ): Promise<boolean> {
   try {
     await getEmbedMessageList(channelId, apiToken, session.id, 1, undefined, session.sig)
@@ -78,9 +37,19 @@ async function isStoredSessionValid(
   }
 }
 
-export function useEmbedBridge(channelId: Ref<string>) {
+function sortSessions(
+  sessions: EmbedStoredSessionEntry[],
+): EmbedStoredSessionEntry[] {
+  return [...sessions].sort((left, right) => right.updatedAt - left.updatedAt)
+}
+
+export function useEmbedBridge(
+  channelId: Ref<string>,
+  opts?: { webSlug?: Ref<string> },
+) {
   const { locale: activeLocale, t } = useI18n()
   const route = useRoute()
+  const webSlug = opts?.webSlug
 
   const token = ref('')
   const config = ref<EmbedChannelPublicConfig | null>(null)
@@ -91,6 +60,7 @@ export function useEmbedBridge(channelId: Ref<string>) {
   const awaitingToken = ref(false)
   const bootstrapping = ref(false)
   const hostContext = ref<Record<string, unknown>>({})
+  const sessionHistory = ref<EmbedStoredSessionEntry[]>([])
 
   let removeHostListener: (() => void) | null = null
   let removeLocaleListener: (() => void) | null = null
@@ -101,6 +71,155 @@ export function useEmbedBridge(channelId: Ref<string>) {
     hostLocalePinned = Boolean(readEmbedLocaleFromUrl())
     if (hostLocalePinned) {
       syncEmbedLocaleFromUrl(activeLocale)
+    }
+  }
+
+  const syncHistoryFromStorage = (channel: string) => {
+    const state = readEmbedStoredSessionState(channel)
+    sessionHistory.value = state ? sortSessions(state.sessions) : []
+  }
+
+  const applyActiveSession = (
+    channel: string,
+    entry: EmbedStoredSessionEntry,
+    opts?: { touch?: boolean },
+  ) => {
+    const next: EmbedStoredSessionEntry = {
+      ...entry,
+      updatedAt: opts?.touch === false ? entry.updatedAt : Date.now(),
+    }
+    const state = upsertEmbedStoredSession(channel, next, { makeCurrent: true })
+    sessionId.value = next.id
+    sessionSig.value = next.sig
+    sessionHistory.value = sortSessions(state.sessions)
+  }
+
+  const persistState = (channel: string, state: EmbedStoredSessionState | null) => {
+    writeEmbedStoredSessionState(channel, state)
+    sessionHistory.value = state ? sortSessions(state.sessions) : []
+  }
+
+  const finishBootstrapWithSession = async (
+    id: string,
+    apiToken: string,
+    publicConfig: EmbedChannelPublicConfig,
+  ) => {
+    config.value = publicConfig
+    if (publicConfig.default_locale && !hostLocalePinned) {
+      applyEmbedLocale(publicConfig.default_locale, activeLocale)
+    }
+
+    const configAgentId = String(publicConfig.agent_id || '').trim()
+    const storedState = readEmbedStoredSessionState(id)
+    let resolved: EmbedStoredSessionEntry | null = null
+
+    if (storedState) {
+      const candidates = sortSessions(storedState.sessions).filter((entry) => {
+        if (!entry.agentId || !configAgentId) return true
+        return entry.agentId === configAgentId
+      })
+      const preferred = candidates.find((entry) => entry.id === storedState.currentId)
+        || candidates[0]
+      if (preferred && (await isStoredSessionValid(id, apiToken, preferred))) {
+        resolved = {
+          ...preferred,
+          agentId: configAgentId || preferred.agentId,
+        }
+        // Keep sibling chats locally; validate lazily when the user switches.
+        const siblings = candidates
+          .filter((entry) => entry.id !== preferred.id)
+          .map((entry) => ({
+            ...entry,
+            agentId: configAgentId || entry.agentId,
+          }))
+        persistState(id, {
+          currentId: resolved.id,
+          sessions: [resolved, ...siblings],
+        })
+      } else if (candidates.length > 0) {
+        // Preferred session is gone — drop only that entry and try next.
+        const rest = candidates.filter((entry) => entry.id !== preferred?.id)
+        for (const entry of rest) {
+          if (await isStoredSessionValid(id, apiToken, entry)) {
+            resolved = {
+              ...entry,
+              agentId: configAgentId || entry.agentId,
+            }
+            persistState(id, {
+              currentId: resolved.id,
+              sessions: [
+                resolved,
+                ...rest
+                  .filter((item) => item.id !== entry.id)
+                  .map((item) => ({
+                    ...item,
+                    agentId: configAgentId || item.agentId,
+                  })),
+              ],
+            })
+            break
+          }
+        }
+        if (!resolved) {
+          persistState(id, null)
+        }
+      }
+    }
+
+    if (!resolved) {
+      const sessionRes = await createEmbedSession(id, apiToken)
+      const newId = sessionRes?.data?.id || ''
+      if (newId) {
+        resolved = {
+          id: newId,
+          sig: sessionRes?.data?.sig || '',
+          agentId: configAgentId,
+          updatedAt: Date.now(),
+        }
+      }
+    }
+
+    if (!resolved) {
+      loadError.value = t('embedPublish.sessionFailed')
+      return
+    }
+
+    applyActiveSession(id, resolved, { touch: false })
+    token.value = apiToken
+    postEmbedReady(id)
+  }
+
+  const bootstrapFromWebSlug = async (slug: string) => {
+    if (!slug || bootstrapped) return
+    bootstrapped = true
+    awaitingToken.value = false
+    bootstrapping.value = true
+    try {
+      const res = await bootstrapWebLink(slug)
+      const payload = res?.data
+      if (!payload?.channel_id || !payload?.session_token || !payload?.config) {
+        loadError.value = t('embedPublish.invalidChannel')
+        return
+      }
+      channelId.value = payload.channel_id
+      visitorId.value = getOrCreateEmbedVisitorId(payload.channel_id)
+      await finishBootstrapWithSession(
+        payload.channel_id,
+        payload.session_token,
+        payload.config,
+      )
+    } catch (error: unknown) {
+      bootstrapped = false
+      const msg = String((error as { message?: string })?.message || '')
+      if (msg.includes('disabled')) {
+        loadError.value = t('embedPublish.channelDisabled')
+      } else if (msg.includes('not found')) {
+        loadError.value = t('embedPublish.invalidChannel')
+      } else {
+        loadError.value = msg || t('embedPublish.loadError')
+      }
+    } finally {
+      bootstrapping.value = false
     }
   }
 
@@ -115,22 +234,15 @@ export function useEmbedBridge(channelId: Ref<string>) {
 
     try {
       let apiToken = embedToken
-      // Secure mode: the host already handed us a short-lived session token
-      // (minted server-side from the publish token). Use it directly — the
-      // exchange endpoint only accepts publish tokens and would reject this.
       if (!isEmbedSessionToken(embedToken)) {
         try {
           const exchangeRes = await exchangeEmbedSession(id, embedToken)
           if (exchangeRes?.data?.session_token) {
             apiToken = exchangeRes.data.session_token
           } else if (!import.meta.env.DEV) {
-            // Fail closed in production: a missing session token must not silently
-            // fall back to the long-lived publish token.
             throw new Error('embed session exchange returned no token')
           }
         } catch (exchangeErr) {
-          // In production we refuse to downgrade to the publish token; only the
-          // dev build keeps the convenience fallback for local testing.
           if (!import.meta.env.DEV) {
             throw exchangeErr
           }
@@ -142,36 +254,7 @@ export function useEmbedBridge(channelId: Ref<string>) {
         loadError.value = t('embedPublish.invalidChannel')
         return
       }
-      config.value = res.data
-
-      if (res.data.default_locale && !hostLocalePinned) {
-        applyEmbedLocale(res.data.default_locale, activeLocale)
-      }
-
-      // Resume a persisted session when still valid and still bound to the same
-      // agent; otherwise create a fresh one (e.g. after rebinding the channel).
-      const configAgentId = String(res.data.agent_id || '').trim()
-      let resolved: StoredSession | null = null
-      const stored = readStoredSession(id)
-      const agentMatches = !stored?.agentId || !configAgentId || stored.agentId === configAgentId
-      if (stored && agentMatches && (await isStoredSessionValid(id, apiToken, stored))) {
-        resolved = { ...stored, agentId: configAgentId || stored.agentId }
-      } else {
-        const sessionRes = await createEmbedSession(id, apiToken)
-        const newId = sessionRes?.data?.id || ''
-        if (newId) {
-          resolved = { id: newId, sig: sessionRes?.data?.sig || '', agentId: configAgentId }
-        }
-      }
-      if (!resolved) {
-        loadError.value = t('embedPublish.sessionFailed')
-        return
-      }
-      sessionId.value = resolved.id
-      sessionSig.value = resolved.sig
-      writeStoredSession(id, resolved)
-      token.value = apiToken
-      postEmbedReady(id)
+      await finishBootstrapWithSession(id, apiToken, res.data)
     } catch (e: unknown) {
       bootstrapped = false
       const msg = String((e as { message?: string })?.message || '')
@@ -187,8 +270,6 @@ export function useEmbedBridge(channelId: Ref<string>) {
     }
   }
 
-  // Discard the current conversation and start a fresh signed session. Backing
-  // the "新建对话" affordance — also the privacy escape hatch on shared devices.
   const startNewSession = async () => {
     const id = channelId.value
     const apiToken = token.value
@@ -198,13 +279,68 @@ export function useEmbedBridge(channelId: Ref<string>) {
       const newId = sessionRes?.data?.id || ''
       if (!newId) return
       const agentId = String(config.value?.agent_id || '').trim()
-      const next: StoredSession = { id: newId, sig: sessionRes?.data?.sig || '', agentId }
-      sessionSig.value = next.sig
-      sessionId.value = next.id
-      writeStoredSession(id, next)
+      applyActiveSession(id, {
+        id: newId,
+        sig: sessionRes?.data?.sig || '',
+        agentId,
+        updatedAt: Date.now(),
+      })
     } catch {
       // Non-fatal: keep the current session if creating a new one fails.
     }
+  }
+
+  const updateSessionTitle = (
+    targetId: string,
+    title: string,
+    opts?: { onlyIfEmpty?: boolean },
+  ) => {
+    const id = channelId.value
+    const trimmed = title.trim()
+    if (!id || !targetId || !trimmed) return
+    const entry = sessionHistory.value.find((item) => item.id === targetId)
+    if (!entry) return
+    if (opts?.onlyIfEmpty && entry.title?.trim()) return
+    const next = upsertEmbedStoredSession(
+      id,
+      { ...entry, title: trimmed, updatedAt: Date.now() },
+      { makeCurrent: targetId === sessionId.value },
+    )
+    sessionHistory.value = sortSessions(next.sessions)
+  }
+
+  const removeSession = async (targetId: string) => {
+    const id = channelId.value
+    if (!id || !targetId) return
+    const remaining = sessionHistory.value.filter((item) => item.id !== targetId)
+    if (remaining.length === 0) {
+      persistState(id, null)
+      await startNewSession()
+      return
+    }
+    const nextCurrent = targetId === sessionId.value
+      ? remaining[0]
+      : remaining.find((item) => item.id === sessionId.value) || remaining[0]
+    persistState(id, {
+      currentId: nextCurrent.id,
+      sessions: remaining,
+    })
+    if (targetId === sessionId.value) {
+      applyActiveSession(id, nextCurrent, { touch: false })
+    }
+  }
+
+  const switchSession = async (targetId: string) => {
+    const id = channelId.value
+    const apiToken = token.value
+    if (!id || !apiToken || !targetId || targetId === sessionId.value) return
+    const entry = sessionHistory.value.find((item) => item.id === targetId)
+    if (!entry) return
+    if (!(await isStoredSessionValid(id, apiToken, entry))) {
+      await removeSession(targetId)
+      return
+    }
+    applyActiveSession(id, entry)
   }
 
   const start = async () => {
@@ -222,10 +358,18 @@ export function useEmbedBridge(channelId: Ref<string>) {
       bootstrap(providedToken)
     })
 
+    const slug = String(webSlug?.value || '').trim()
+    if (slug) {
+      await bootstrapFromWebSlug(slug)
+      return
+    }
+
     if (!channelId.value) {
       loadError.value = t('embedPublish.missingChannel')
       return
     }
+
+    syncHistoryFromStorage(channelId.value)
 
     const initialToken = String(route.query.token || '') || parseEmbedTokenFromLocation()
     if (initialToken) {
@@ -252,6 +396,15 @@ export function useEmbedBridge(channelId: Ref<string>) {
     removeTokenListener?.()
   })
 
+  const touchCurrentSession = () => {
+    const id = channelId.value
+    const entry = sessionHistory.value.find((item) => item.id === sessionId.value)
+    if (!id || !entry) return
+    applyActiveSession(id, entry)
+  }
+
+  const sessions = computed(() => sessionHistory.value)
+
   return {
     token,
     config,
@@ -262,6 +415,11 @@ export function useEmbedBridge(channelId: Ref<string>) {
     awaitingToken,
     bootstrapping,
     hostContext,
+    sessions,
     startNewSession,
+    switchSession,
+    updateSessionTitle,
+    removeSession,
+    touchCurrentSession,
   }
 }

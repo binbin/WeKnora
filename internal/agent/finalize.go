@@ -19,8 +19,8 @@ func finalAnswerImageRequirement(hasRetrievedImage bool) string {
 		return ""
 	}
 	return `
-5. Retrieved tool results contain Markdown images. Unless the user explicitly requested text-only output or every image is clearly unrelated, the final answer MUST include at least one relevant Markdown image copied verbatim from the tool results. Preserve its complete URL exactly. Use ASCII half-width parentheses exactly as ![alt](url) and never use full-width （ or ）. Place the image immediately after the paragraph it supports. When multiple images support different sections, distribute them across those sections instead of stopping after the first image.
-6. Before finishing, silently verify that the answer contains a Markdown image when requirement 5 applies.`
+5. 工具结果包含 Markdown 图片。除非用户明确要求纯文本输出，或所有图片都明显与答案无关，最终回答必须至少包含一张从工具结果原样复制的相关 Markdown 图片。完整保留其 URL，绝不要改动。必须使用 ASCII 半角括号，格式为 ![alt](url)，绝不要使用全角（或）。将图片紧挨放在其所支撑段落之后。当多张图片分别支撑不同段落时，应在对应段落中分别插入，不要只插第一张就结束。
+6. 结束前请静默检查：只要第 5 条适用，答案中就应包含 Markdown 图片。`
 }
 
 // streamFinalAnswerToEventBus streams the final answer generation through EventBus
@@ -172,7 +172,7 @@ func (e *AgentEngine) handleMaxIterations(
 		common.PipelineError(ctx, "Agent", "final_answer_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
-		state.FinalAnswer = "Sorry, I was unable to generate a complete answer."
+		state.FinalAnswer = "抱歉，我未能生成完整回答。"
 	}
 	state.IsComplete = true
 }

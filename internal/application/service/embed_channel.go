@@ -16,6 +16,7 @@ import (
 )
 
 const embedTokenBytes = 32
+const embedWebSlugBytes = 6 // ~8 chars base64url; short enough for /w/:slug links
 
 var (
 	ErrEmbedChannelNotFound = errors.New("embed channel not found")
@@ -23,6 +24,7 @@ var (
 	ErrEmbedChannelDisabled = errors.New("embed channel is disabled")
 	ErrEmbedChunkNotFound   = errors.New("embed chunk not found")
 	ErrEmbedChunkForbidden  = errors.New("embed chunk not accessible")
+	ErrEmbedWebSlugInvalid  = errors.New("embed web slug is invalid")
 )
 
 type embedChannelService struct {
@@ -54,6 +56,31 @@ func generateEmbedPublishToken() (string, error) {
 	return "em_" + base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
+func generateEmbedWebSlug() (string, error) {
+	buf := make([]byte, embedWebSlugBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func (s *embedChannelService) allocateWebSlug(ctx context.Context) (string, error) {
+	for attempt := 0; attempt < 8; attempt++ {
+		slug, err := generateEmbedWebSlug()
+		if err != nil {
+			return "", err
+		}
+		existing, err := s.repo.GetByWebSlug(ctx, slug)
+		if err != nil {
+			return "", err
+		}
+		if existing == nil {
+			return slug, nil
+		}
+	}
+	return "", fmt.Errorf("failed to allocate unique web slug")
+}
+
 func (s *embedChannelService) Create(
 	ctx context.Context, tenantID uint64, agentID string, req *types.EmbedChannel,
 ) (*types.EmbedChannel, string, error) {
@@ -62,6 +89,10 @@ func (s *embedChannelService) Create(
 		return nil, "", err
 	}
 	token, err := generateEmbedPublishToken()
+	if err != nil {
+		return nil, "", err
+	}
+	slug, err := s.allocateWebSlug(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -75,6 +106,7 @@ func (s *embedChannelService) Create(
 		Name:                   strings.TrimSpace(req.Name),
 		Enabled:                req.Enabled,
 		PublishToken:           token,
+		WebSlug:                slug,
 		AllowedOrigins:         originsJSON,
 		WelcomeMessage:         req.WelcomeMessage,
 		RateLimitPerMinute:     req.RateLimitPerMinute,
@@ -393,6 +425,13 @@ func (s *embedChannelService) getOwned(ctx context.Context, tenantID uint64, id 
 	}
 	if ch == nil || ch.TenantID != tenantID {
 		return nil, ErrEmbedChannelNotFound
+	}
+	if strings.TrimSpace(ch.WebSlug) == "" {
+		slug, allocErr := s.allocateWebSlug(ctx)
+		if allocErr == nil {
+			ch.WebSlug = slug
+			_ = s.repo.Update(ctx, ch)
+		}
 	}
 	return ch, nil
 }

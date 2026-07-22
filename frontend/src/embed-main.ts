@@ -18,6 +18,12 @@ const router = createRouter({
       name: 'embed',
       component: EmbedPage,
     },
+    {
+      path: '/w/:slug',
+      name: 'embed-web',
+      component: EmbedPage,
+      meta: { webLink: true },
+    },
   ],
 })
 

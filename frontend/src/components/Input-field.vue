@@ -149,14 +149,11 @@ const agentModeButtonRef = ref<HTMLElement>();
 const agentModeDropdownStyle = ref<Record<string, string>>({});
 
 const selectedAgentId = computed({
-  get: () => settingsStore.selectedAgentId || BUILTIN_QUICK_ANSWER_ID,
+  get: () => settingsStore.selectedAgentId || '',
   set: (val: string) => settingsStore.selectAgent(val)
 });
 const selectedAgent = computed(() => {
   // When a shared-agent source tenant is set, resolve from sharedAgents FIRST.
-  // Builtin agents (e.g. builtin-smart-reasoning) use the same constant ID across
-  // tenants, so falling back to agents.value first would incorrectly return the
-  // current tenant's own builtin instead of the shared one.
   const sourceTenantId = settingsStore.selectedAgentSourceTenantId;
   if (sourceTenantId && orgStore.sharedAgents?.length) {
     const shared = orgStore.sharedAgents.find(
@@ -164,31 +161,18 @@ const selectedAgent = computed(() => {
     );
     if (shared?.agent) return shared.agent as CustomAgent;
   }
-  const mine = agents.value.find(a => a.id === selectedAgentId.value);
-  if (mine) return mine;
-  return {
-    id: BUILTIN_QUICK_ANSWER_ID,
-    name: t('input.normalMode'),
-    is_builtin: true,
-    config: { agent_mode: 'quick-answer' as const }
-  } as CustomAgent;
+  return agents.value.find(a => a.id === selectedAgentId.value) || null;
 });
 
 // 判断是否为自定义智能体（非内置）
 const isCustomAgent = computed(() => {
   const agent = selectedAgent.value;
-  return agent && !agent.is_builtin;
+  return !!(agent && !agent.is_builtin);
 });
 
-// 判断是否有智能体配置（包括内置智能体）
+// 判断是否有智能体配置
 const hasAgentConfig = computed(() => {
   const agent = selectedAgent.value;
-  // 共享智能体的 config 来自源空间，直接使用 agent.config，避免被本空间同 ID 的 builtin 覆盖
-  const sourceTenantId = settingsStore.selectedAgentSourceTenantId;
-  if (agent?.is_builtin && !sourceTenantId) {
-    const builtinAgent = agents.value.find(a => a.id === agent.id);
-    return !!builtinAgent?.config;
-  }
   return !!agent?.config;
 });
 
@@ -832,35 +816,24 @@ const loadAgents = async (force = false) => {
   }
 };
 
-// 默认选中的 builtin（builtin-quick-answer）也可能被当前空间管理员停用。
-// 列表加载完后做一次纠偏：若当前选中的是本空间停用的 agent（仅限「我的/builtin」，
-// 共享智能体由源空间决定，本地停用列表不适用），按 智能推理 → 快速问答 →
-// 第一个可用 的顺序兜底切换。全部都被停用时保持原选择不动（极端场景，UI 仍会
-// 在 enabledAgents 过滤后显示空，由用户在智能体页恢复任意一个）。
+// 列表加载完后纠偏：若当前选中不可用（停用或不在本部门列表），切换到第一个可用自定义智能体。
 const ensureSelectedAgentNotDisabled = () => {
   if (settingsStore.selectedAgentSourceTenantId) return
-  const currentId = settingsStore.selectedAgentId || BUILTIN_QUICK_ANSWER_ID
-  if (!disabledOwnAgentIds.value.includes(currentId)) return
+  const available = agents.value.filter(
+    (agent) => !agent.is_builtin && !agent.id.startsWith('builtin-') && !disabledOwnAgentIds.value.includes(agent.id),
+  )
+  const currentId = settingsStore.selectedAgentId || ''
+  const currentOk = !!currentId && available.some((agent) => agent.id === currentId)
+  if (currentOk) return
 
-  const isEnabled = (id: string) =>
-    agents.value.some(a => a.id === id) && !disabledOwnAgentIds.value.includes(id)
-
-  let fallback: CustomAgent | undefined
-  if (isEnabled(BUILTIN_SMART_REASONING_ID)) {
-    fallback = agents.value.find(a => a.id === BUILTIN_SMART_REASONING_ID)
-  } else if (isEnabled(BUILTIN_QUICK_ANSWER_ID)) {
-    fallback = agents.value.find(a => a.id === BUILTIN_QUICK_ANSWER_ID)
-  } else {
-    fallback = agents.value.find(a => !disabledOwnAgentIds.value.includes(a.id))
+  const fallback = available[0]
+  if (!fallback) {
+    settingsStore.selectAgent('')
+    return
   }
-  if (!fallback) return
 
   settingsStore.selectAgent(fallback.id)
-  // selectAgent 内部仅对两个 builtin 常量自动切 isAgentEnabled；自定义 agent 兜底时
-  // 需要按其 agent_mode 显式同步一次，保证模式徽标与对话行为一致。
-  if (fallback.id !== BUILTIN_QUICK_ANSWER_ID && fallback.id !== BUILTIN_SMART_REASONING_ID) {
-    settingsStore.toggleAgent(fallback.config?.agent_mode === 'smart-reasoning')
-  }
+  settingsStore.toggleAgent(fallback.config?.agent_mode === 'smart-reasoning')
 }
 
 // 对话下拉中展示的「我的」智能体（排除当前空间已停用的）
@@ -1891,17 +1864,13 @@ const createSession = async (val: string) => {
     await loadChatModels()
   }
 
-  // 发送前校验当前选中的智能体（含默认快速问答）是否已配置完成
+  // 发送前校验：必须已选中本部门可用自定义智能体
   const agentToCheck = selectedAgent.value;
-  let actualAgent = agentToCheck;
-  if (agentToCheck.is_builtin && !settingsStore.selectedAgentSourceTenantId) {
-    let builtin = agents.value.find(a => a.id === selectedAgentId.value);
-    if (!builtin) {
-      await loadAgents();
-      builtin = agents.value.find(a => a.id === selectedAgentId.value);
-    }
-    actualAgent = builtin || agentToCheck;
+  if (!agentToCheck || agentToCheck.is_builtin || agentToCheck.id.startsWith('builtin-')) {
+    MessagePlugin.warning(t('agent.selectAgent'));
+    return;
   }
+  const actualAgent = agentToCheck;
   const isAgentMode = actualAgent.config?.agent_mode === 'smart-reasoning';
   const { keys: notReadyKeys, labels: notReadyReasons } = collectAgentNotReadyReasons(
     actualAgent,
@@ -2519,7 +2488,7 @@ defineExpose({
             'is-custom': isCustomAgent
           }" @click.stop="toggleAgentModeSelector">
             <span class="agent-mode-text">
-              {{ selectedAgent.name || (isAgentEnabled ? $t('input.agentMode') : $t('input.normalMode')) }}
+              {{ selectedAgent?.name || $t('agent.selectAgent') }}
             </span>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" class="dropdown-arrow"
               :class="{ 'rotate': showAgentModeSelector }">

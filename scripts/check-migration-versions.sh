@@ -53,8 +53,7 @@ check_dir() {
     while IFS= read -r version; do
       [[ -z "${version}" ]] && continue
       echo "  ${version}:"
-      find "${ROOT}/${dir}" -maxdepth 1 -type f -name "${version}_*.sql" -printf '    %f\n' \
-        2>/dev/null || find "${ROOT}/${dir}" -maxdepth 1 -type f -name "${version}_*.sql" \
+      find "${ROOT}/${dir}" -maxdepth 1 -type f -name "${version}_*.sql" \
         | while IFS= read -r hit; do echo "    $(basename "${hit}")"; done
     done <<< "${dupes}"
     FAILED=1

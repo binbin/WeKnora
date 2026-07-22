@@ -185,8 +185,8 @@ func TestAppendToolResults_AddsDynamicImageRequirementToCustomSystemPrompt(t *te
 	require.Len(t, out, 4)
 	assert.Contains(t, out[0].Content, "Custom agent prompt.")
 	assert.Contains(t, out[0].Content, agentRetrievedImageRequirementMarker)
-	assert.Contains(t, out[0].Content, "MUST include at least one relevant Markdown image")
-	assert.Contains(t, out[0].Content, "ASCII half-width parentheses")
+	assert.Contains(t, out[0].Content, "最终回答必须至少包含一张从工具结果原样复制的相关 Markdown 图片")
+	assert.Contains(t, out[0].Content, "ASCII 半角括号")
 	assert.Equal(t, "tool", out[3].Role)
 	assert.Contains(t, out[3].Content, "![流程图](resource://AbCdEfGhIjKlMnOpQrStUv)")
 

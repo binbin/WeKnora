@@ -19,12 +19,14 @@ export function useRoleLabel() {
   const { t } = useI18n()
   const formatRole = (role: string | null | undefined): string => {
     if (!role) return ''
-    const key = `tenantMember.role.${role}`
+    // 「所有者」已从产品角色中隐藏；存量 owner 对外统一显示为管理员。
+    const displayRole = role === 'owner' ? 'admin' : role
+    const key = `tenantMember.role.${displayRole}`
     const label = t(key)
-    return label === key ? role : label
+    return label === key ? displayRole : label
   }
   const ROLE_ICONS: Record<string, string> = {
-    owner: 'secured',
+    owner: 'user-circle',
     admin: 'user-circle',
     contributor: 'edit',
     viewer: 'browse',

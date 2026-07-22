@@ -93,6 +93,27 @@ func (s *embedChannelService) LookupEnabledChannel(ctx context.Context, channelI
 	return ch, nil
 }
 
+// LookupByWebSlug resolves a short web link slug to an enabled embed channel.
+func (s *embedChannelService) LookupByWebSlug(
+	ctx context.Context, slug string,
+) (*types.EmbedChannel, error) {
+	slug = strings.TrimSpace(slug)
+	if slug == "" || len(slug) > 16 {
+		return nil, ErrEmbedWebSlugInvalid
+	}
+	ch, err := s.repo.GetByWebSlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	if ch == nil {
+		return nil, ErrEmbedWebSlugInvalid
+	}
+	if !ch.Enabled {
+		return nil, ErrEmbedChannelDisabled
+	}
+	return ch, nil
+}
+
 // IsEmbedSessionToken reports whether token is a session token (ems_ prefix).
 func IsEmbedSessionToken(token string) bool {
 	return strings.HasPrefix(strings.TrimSpace(token), embedSessionTokenPrefix)

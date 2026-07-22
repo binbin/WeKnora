@@ -103,7 +103,7 @@ const defaultSettings: Settings = {
     rerankModelId: "",
     selectedChatModelId: "",  // 用户当前选择的对话模型ID
   },
-  selectedAgentId: BUILTIN_QUICK_ANSWER_ID,  // 默认选中快速问答模式
+  selectedAgentId: "",  // 无默认内置；加载部门可见智能体后由 Input-field 纠偏
   selectedAgentSourceTenantId: null as string | null,  // 共享智能体来源空间 ID
   autoCheckUpdate: true,
 };

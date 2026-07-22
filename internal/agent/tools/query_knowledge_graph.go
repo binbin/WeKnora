@@ -19,43 +19,43 @@ type graphConfigSummary struct {
 
 var queryKnowledgeGraphTool = BaseTool{
 	name: ToolQueryKnowledgeGraph,
-	description: `Query knowledge graph to explore entity relationships and knowledge networks.
+	description: `查询知识图谱，探索实体关系与知识网络。
 
-## Core Function
-Explores relationships between entities in knowledge bases that have graph extraction configured.
+## 核心功能
+在已配置图谱抽取的知识库中探索实体之间的关系。
 
-## When to Use
-✅ **Use for**:
-- Understanding relationships between entities (e.g., "relationship between Docker and Kubernetes")
-- Exploring knowledge networks and concept associations
-- Finding related information about specific entities
-- Understanding technical architecture and system relationships
+## 何时使用
+✅ **适用于**：
+- 理解实体间关系（如「Docker 与 Kubernetes 的关系」）
+- 探索知识网络与概念关联
+- 查找特定实体的相关信息
+- 理解技术架构与系统关系
 
-❌ **Don't use for**:
-- General text search → use knowledge_search
-- Knowledge base without graph extraction configured
-- Need exact document content → use knowledge_search
+❌ **不要用于**：
+- 一般文本搜索 → 使用 knowledge_search
+- 未配置图谱抽取的知识库
+- 需要精确文档内容 → 使用 knowledge_search
 
-## Parameters
-- **knowledge_base_ids** (required): Array of short bN knowledge base IDs (1-10). Only KBs with graph extraction configured will be effective.
-- **query** (required): Query content - can be entity name, relationship query, or concept search.
+## 参数
+- **knowledge_base_ids**（必需）：知识库短 ID bN 数组（1-10）。仅已配置图谱抽取的知识库会生效。
+- **query**（必需）：查询内容——可以是实体名、关系查询或概念搜索。
 
-## Graph Configuration
-Knowledge graph must be pre-configured in knowledge bases:
-- **Entity types** (Nodes): e.g., "Technology", "Tool", "Concept"
-- **Relationship types** (Relations): e.g., "depends_on", "uses", "contains"
+## 图谱配置
+知识图谱须在知识库中预先配置：
+- **实体类型**（Nodes）：如 "Technology"、"Tool"、"Concept"
+- **关系类型**（Relations）：如 "depends_on"、"uses"、"contains"
 
-If KB is not configured with graph, tool will return regular search results.
+若知识库未配置图谱，工具将返回常规搜索结果。
 
-## Workflow
-1. **Relationship exploration**: query_knowledge_graph → list_knowledge_chunks (for detailed content)
-2. **Network analysis**: query_knowledge_graph → knowledge_search (for comprehensive understanding)
-3. **Topic research**: knowledge_search → query_knowledge_graph (for deep entity relationships)
+## 工作流
+1. **关系探索**：query_knowledge_graph → list_knowledge_chunks（获取详细内容）
+2. **网络分析**：query_knowledge_graph → knowledge_search（获得全面理解）
+3. **主题研究**：knowledge_search → query_knowledge_graph（深入实体关系）
 
-## Notes
-- Results indicate graph configuration status
-- Cross-KB results are automatically deduplicated
-- Results are sorted by relevance`,
+## 注意
+- 结果会标明图谱配置状态
+- 跨知识库结果会自动去重
+- 结果按相关性排序`,
 	schema: utils.GenerateSchema[QueryKnowledgeGraphInput](),
 }
 

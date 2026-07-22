@@ -70,9 +70,10 @@ var (
 	ErrOrgUnitNotInviteable = errors.New("org unit is outside the inviter's peer or subordinate scope")
 
 	// ErrOnlySystemAdminCanAssignOwner is returned when a non-system-admin
-	// tries to invite or share-link with TenantRoleOwner. Top-level owners
-	// come from self-serve registration (personal workspace) or system
-	// admin assignment — not from peer tenant Owners inviting peers.
+	// tries to invite or share-link with TenantRoleOwner. Product UI no
+	// longer exposes owner; system admin may still assign for migration /
+	// bootstrap. Self-serve registration still creates a personal-space
+	// owner via EnsureOwner.
 	ErrOnlySystemAdminCanAssignOwner = errors.New(
 		"only system admin can assign the owner role",
 	)
@@ -564,13 +565,13 @@ func generateShareLinkToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-// CreateShareLink issues a multi-use share-link invitation. The token
+// CreateShareLink issues a single-use share-link invitation. The token
 // is generated server-side and persisted plaintext on the row so the
-// management UI can re-display it on demand. Per-user invitation
-// constraints (already-member, duplicate-pending) do NOT apply here:
-// share-link rows have no specific invitee, multiple can coexist on
-// the same tenant, and consumption is non-destructive (see
-// AcceptByToken).
+// management UI can re-display it while the row is still pending.
+// Per-user invitation constraints (already-member, duplicate-pending)
+// do NOT apply here: share-link rows have no specific invitee. Once
+// one member joins via AcceptByToken the row flips to accepted and
+// the token stops working.
 func (s *tenantInvitationService) CreateShareLink(
 	ctx context.Context,
 	tenantID uint64,
@@ -625,8 +626,7 @@ func (s *tenantInvitationService) CreateShareLink(
 // LookupByToken resolves a plaintext share-link token to its row.
 // Sweeps overdue rows first so an expired link is reflected as
 // expired rather than letting the registration page accept it for a
-// few extra seconds. Multi-use semantics: a successful lookup does
-// not consume or modify the row.
+// few extra seconds. Accepted / revoked / expired tokens reject.
 func (s *tenantInvitationService) LookupByToken(
 	ctx context.Context,
 	plainToken string,
@@ -649,11 +649,12 @@ func (s *tenantInvitationService) LookupByToken(
 	return inv, nil
 }
 
-// AcceptByToken adds newUserID to the share-link's tenant + role.
-// Unlike Accept, the invitation row itself is NOT mutated — share-link
-// rows stay pending across uses. Idempotent: an existing membership
-// is returned untouched (callers shouldn't see role downgrade just
-// because they clicked the same link twice from different devices).
+// AcceptByToken adds newUserID to the share-link's tenant + role, then
+// consumes the link (status → accepted) so it cannot be reused. The
+// claim is atomic via MarkStatusIfPending to avoid two concurrent
+// registrations sharing one link. If the user already has membership,
+// the existing row is returned and the link is still consumed when it
+// was still pending (single-use even for re-entry).
 func (s *tenantInvitationService) AcceptByToken(
 	ctx context.Context,
 	plainToken string,
@@ -666,12 +667,38 @@ func (s *tenantInvitationService) AcceptByToken(
 	if err != nil {
 		return nil, err
 	}
+
+	// Single-use: claim the pending row before creating membership so
+	// concurrent acceptors cannot both succeed on the same token.
+	now := s.now()
+	if err := s.repo.MarkStatusIfPending(
+		ctx, inv.ID, types.TenantInvitationStatusAccepted, now,
+	); err != nil {
+		return nil, ErrInvitationTokenInvalid
+	}
+
 	member, err := s.memberSvc.AddMember(ctx, newUserID, inv.TenantID, inv.Role, inv.InvitedBy)
 	if err != nil {
 		if errors.Is(err, ErrMembershipAlreadyExists) {
 			existing, getErr := s.memberSvc.GetMembership(ctx, newUserID, inv.TenantID)
 			if getErr == nil && existing != nil {
 				s.assignOrgUnitMembership(ctx, inv.TenantID, newUserID, inv.OrgUnitID)
+				if incErr := s.repo.IncrementAcceptedCount(ctx, inv.ID); incErr != nil {
+					logger.Warnf(ctx,
+						"share-link %d accepted_count bump failed: %v",
+						inv.ID, incErr)
+				}
+				s.emitAudit(ctx, &types.AuditLog{
+					TenantID:     inv.TenantID,
+					ActorUserID:  auditActor(ctx),
+					ActorRole:    auditActorRole(ctx),
+					Action:       types.AuditActionInvitationAccepted,
+					TargetType:   "tenant_invitation",
+					TargetID:     strconv.FormatUint(inv.ID, 10),
+					TargetUserID: newUserID,
+					Outcome:      types.AuditOutcomeSuccess,
+					Details:      detailsFor(inv.ID, inv.Role, inv.OrgUnitID),
+				})
 				return existing, nil
 			}
 		}
@@ -681,10 +708,6 @@ func (s *tenantInvitationService) AcceptByToken(
 		return nil, err
 	}
 	s.assignOrgUnitMembership(ctx, inv.TenantID, newUserID, inv.OrgUnitID)
-	// Bump usage counter so the management UI can show "N 人已加入".
-	// Best-effort: a failure here doesn't undo the membership the user
-	// just earned — log and move on. The counter is for display only;
-	// audit log + tenant_members rows are the authoritative trail.
 	if incErr := s.repo.IncrementAcceptedCount(ctx, inv.ID); incErr != nil {
 		logger.Warnf(ctx,
 			"share-link %d accepted_count bump failed (membership still created): %v",

@@ -25,8 +25,10 @@ func sessionUserIDFromContext(ctx context.Context) string {
 // loadSessionForRead loads a session honoring the caller's per-user scope, with
 // an Admin+ fallback that additionally permits reading tenant channel sessions
 // (API-key, IM, and embed) from the Web console. Non-admin callers must not
-// open channel-managed rows even when legacy empty user_id scope would match.
-// Write paths keep the strict scope and must not use this helper.
+// open channel-managed rows via legacy empty user_id matches. An explicit
+// owner-scoped hit (sessions.user_id == caller owner id) is allowed so embed
+// visitors can load their own history. Write paths keep the strict scope and
+// must not use this helper.
 func loadSessionForRead(
 	ctx context.Context,
 	repo interfaces.SessionRepository,
@@ -38,7 +40,8 @@ func loadSessionForRead(
 	session, err := repo.Get(ctx, tenantID, ownerID, sessionID)
 	if err == nil {
 		imPlatform, _ := repo.GetIMPlatform(ctx, tenantID, sessionID)
-		if types.SessionRequiresAdminConsoleRead(session, imPlatform) && !isAdmin {
+		if types.SessionRequiresAdminConsoleRead(session, imPlatform) && !isAdmin &&
+			!callerOwnsChannelSession(ownerID, session) {
 			return nil, apperrors.ErrSessionNotFound
 		}
 		if imPlatform != "" {
@@ -64,6 +67,18 @@ func loadSessionForRead(
 		s.IMPlatform = imPlatform
 	}
 	return s, nil
+}
+
+// callerOwnsChannelSession is true when the caller id exactly matches the
+// session's stored owner (embed_session:… / api_tenant_key:…). Legacy rows with
+// empty user_id must not count as ownership for channel traffic.
+func callerOwnsChannelSession(ownerID string, session *types.Session) bool {
+	if session == nil {
+		return false
+	}
+	ownerID = strings.TrimSpace(ownerID)
+	stored := strings.TrimSpace(session.UserID)
+	return ownerID != "" && stored != "" && ownerID == stored
 }
 
 // generateEventID generates a unique event ID with type suffix for better traceability
