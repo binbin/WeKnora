@@ -290,11 +290,8 @@ func (r *tenantInvitationRepository) SweepExpired(
 
 // IncrementAcceptedCount bumps accepted_count by 1 for the given row.
 // Implemented as a single UPDATE expression so concurrent accepts
-// don't race on a read-modify-write loop. We deliberately don't gate
-// on status='pending' here: AcceptByToken is the only caller, and
-// share-link rows stay pending across accepts — so the gate would
-// reject zero rows in steady state but introduce a subtle ordering
-// dependency on MarkStatusIfPending for per-user accepts.
+// don't race on a read-modify-write loop. Not gated on status=pending
+// because AcceptByToken claims the row (→ accepted) before bumping.
 func (r *tenantInvitationRepository) IncrementAcceptedCount(
 	ctx context.Context,
 	id uint64,

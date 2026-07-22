@@ -57,8 +57,8 @@ type createInviteLinkRequest struct {
 
 // CreateInviteLink godoc
 // @Summary      生成共享邀请链接
-// @Description  生成一条多次使用的共享邀请链接：谁拿到链接谁就能注册并加入当前空间。
-// @Description  链接持续有效，直到过期或被撤销。
+// @Description  生成一条一次性共享邀请链接：有人通过链接注册并加入后自动失效。
+// @Description  未使用前可持续复制；也可手动撤销或等待过期。
 // @Tags         空间邀请
 // @Accept       json
 // @Produce      json

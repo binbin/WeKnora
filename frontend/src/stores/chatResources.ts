@@ -107,20 +107,22 @@ export const useChatResourcesStore = defineStore('chatResources', () => {
    * 智能体列表（支持 creator 筛选）。creator=all 时写入缓存。
    */
   async function fetchAgentsForList(
-    params?: { creator?: ListCreatorFilter },
+    params?: { creator?: ListCreatorFilter; purpose?: 'chat' | 'manage' },
     force = false,
   ): Promise<{ data: CustomAgent[]; disabled_own_agent_ids: string[] }> {
     const creator = params?.creator ?? 'all'
+    const purpose = params?.purpose ?? (creator === 'all' ? 'chat' : 'manage')
     const orgStore = useOrganizationStore()
 
     // 带 creator 过滤的列表不进缓存，但仍需刷新共享智能体（与全量路径保持一致）。
-    if (creator !== 'all') {
+    if (creator !== 'all' || purpose === 'manage') {
       const [agentsRes] = await Promise.all([
-        listAgents({ creator }),
+        listAgents({ purpose, creator: creator === 'all' ? undefined : creator }),
         orgStore.fetchSharedAgents({ force }),
       ])
       const res = agentsRes as { data?: CustomAgent[]; disabled_own_agent_ids?: string[] }
-      return { data: res.data || [], disabled_own_agent_ids: res.disabled_own_agent_ids || [] }
+      const data = (res.data || []).filter((agent) => !agent.is_builtin && !agent.id?.startsWith('builtin-'))
+      return { data, disabled_own_agent_ids: res.disabled_own_agent_ids || [] }
     }
 
     if (!force && isFresh('agents')) {
@@ -132,11 +134,11 @@ export const useChatResourcesStore = defineStore('chatResources', () => {
     agentsAllInflight = (async () => {
       try {
         const [agentsRes] = await Promise.all([
-          listAgents(),
+          listAgents({ purpose: 'chat' }),
           orgStore.fetchSharedAgents({ force }),
         ])
         const res = agentsRes as { data?: CustomAgent[]; disabled_own_agent_ids?: string[] }
-        const data = res.data || []
+        const data = (res.data || []).filter((agent) => !agent.is_builtin && !agent.id?.startsWith('builtin-'))
         agents.value = data
         disabledOwnAgentIds.value = res.disabled_own_agent_ids || []
         loadedAt.value.agents = Date.now()

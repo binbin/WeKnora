@@ -17,10 +17,13 @@ import (
 
 // Custom agent related errors
 var (
-	ErrAgentNotFound       = errors.New("agent not found")
-	ErrCannotModifyBuiltin = errors.New("cannot modify built-in agent basic info")
-	ErrCannotDeleteBuiltin = errors.New("cannot delete built-in agent")
-	ErrAgentNameRequired   = errors.New("agent name is required")
+	ErrAgentNotFound         = errors.New("agent not found")
+	ErrCannotModifyBuiltin   = errors.New("cannot modify built-in agent basic info")
+	ErrCannotDeleteBuiltin   = errors.New("cannot delete built-in agent")
+	ErrAgentNameRequired     = errors.New("agent name is required")
+	ErrBuiltinModelRequired  = errors.New("a built-in KnowledgeQA model is required")
+	ErrBuiltinAgentDisabled  = errors.New("built-in agents are disabled")
+	ErrAgentNotVisibleInChat = errors.New("agent is not available in this department")
 )
 
 // customAgentService implements the CustomAgentService interface
@@ -32,6 +35,7 @@ type customAgentService struct {
 	wikiPageRepo   interfaces.WikiPageRepository
 	tagRepo        interfaces.KnowledgeTagRepository
 	knowledgeRepo  interfaces.KnowledgeRepository
+	modelService   interfaces.ModelService
 }
 
 // NewCustomAgentService creates a new custom agent service
@@ -43,6 +47,7 @@ func NewCustomAgentService(
 	wikiPageRepo interfaces.WikiPageRepository,
 	tagRepo interfaces.KnowledgeTagRepository,
 	knowledgeRepo interfaces.KnowledgeRepository,
+	modelService interfaces.ModelService,
 ) interfaces.CustomAgentService {
 	return &customAgentService{
 		repo:           repo,
@@ -52,6 +57,7 @@ func NewCustomAgentService(
 		wikiPageRepo:   wikiPageRepo,
 		tagRepo:        tagRepo,
 		knowledgeRepo:  knowledgeRepo,
+		modelService:   modelService,
 	}
 }
 
@@ -60,6 +66,9 @@ func (s *customAgentService) CreateAgent(ctx context.Context, agent *types.Custo
 	// Validate required fields
 	if strings.TrimSpace(agent.Name) == "" {
 		return nil, ErrAgentNameRequired
+	}
+	if err := s.validateBuiltinKnowledgeQAModel(ctx, agent.Config.ModelID); err != nil {
+		return nil, err
 	}
 
 	// Generate UUID and set creation timestamps
@@ -75,12 +84,15 @@ func (s *customAgentService) CreateAgent(ctx context.Context, agent *types.Custo
 	agent.TenantID = tenantID
 
 	// Record the creator. Mirrors KnowledgeBase.CreatorID — needed by
-	// RBAC's RequireOwnershipOrRole so Contributors can edit their own
-	// agents. Synthetic system-{tenantID} users (X-API-Key path) leave
-	// the field empty via IsSyntheticUserID, which makes the agent
-	// tenant-owned (Admin+ only).
+	// RBAC's RequireOwnershipOrRole so creators can edit their own agents.
+	// Synthetic system-{tenantID} users (X-API-Key path) leave the field
+	// empty via IsSyntheticUserID, which makes the agent tenant-owned.
 	if uid, ok := types.UserIDFromContext(ctx); ok && !types.IsSyntheticUserID(uid) {
 		agent.CreatedBy = uid
+	}
+
+	if orgUnitID, ok := types.OrgUnitIDFromContext(ctx); ok {
+		agent.OrgUnitID = orgUnitID
 	}
 
 	// Set timestamps
@@ -177,61 +189,84 @@ func (s *customAgentService) GetAgentByIDAndTenant(ctx context.Context, id strin
 	return agent, nil
 }
 
-// ListAgents lists all agents for the current tenant (including built-in agents)
-func (s *customAgentService) ListAgents(ctx context.Context) ([]*types.CustomAgent, error) {
+// ListAgents lists custom agents for chat or management. Built-ins are never
+// returned.
+func (s *customAgentService) ListAgents(
+	ctx context.Context, purpose string,
+) ([]*types.CustomAgent, error) {
 	tenantID, ok := types.TenantIDFromContext(ctx)
 	if !ok {
 		return nil, ErrInvalidTenantID
 	}
 
-	// Get all agents from database (including built-in agents with customized config)
-	allAgents, err := s.repo.ListAgentsByTenantID(ctx, tenantID)
+	purpose = strings.ToLower(strings.TrimSpace(purpose))
+	if purpose == "" {
+		purpose = "chat"
+	}
+
+	var (
+		agents []*types.CustomAgent
+		err    error
+	)
+	switch purpose {
+	case "manage":
+		if types.IsSystemAdminActor(ctx) {
+			allAgents, listErr := s.repo.ListAgentsByTenantID(ctx, tenantID)
+			if listErr != nil {
+				err = listErr
+				break
+			}
+			agents = make([]*types.CustomAgent, 0, len(allAgents))
+			for _, agent := range allAgents {
+				if agent.IsBuiltin || types.IsBuiltinAgentID(agent.ID) {
+					continue
+				}
+				agents = append(agents, agent)
+			}
+		} else {
+			userID, _ := types.UserIDFromContext(ctx)
+			agents, err = s.repo.ListCustomAgentsByCreator(ctx, tenantID, userID)
+		}
+	default: // chat
+		orgUnitID, _ := types.OrgUnitIDFromContext(ctx)
+		if orgUnitID == "" {
+			agents = []*types.CustomAgent{}
+			break
+		}
+		agents, err = s.repo.ListCustomAgentsByOrgUnit(ctx, tenantID, orgUnitID)
+	}
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, map[string]interface{}{
 			"tenant_id": tenantID,
+			"purpose":   purpose,
 		})
 		return nil, err
 	}
 
-	// Track which built-in agents exist in database
-	builtinInDB := make(map[string]bool)
-	for _, agent := range allAgents {
+	for _, agent := range agents {
 		agent.EnsureDefaults()
-		if types.IsBuiltinAgentID(agent.ID) {
-			builtinInDB[agent.ID] = true
-		}
 	}
+	return agents, nil
+}
 
-	// Build result: built-in agents first, then custom agents
-	builtinIDs := types.GetBuiltinAgentIDs()
-	result := make([]*types.CustomAgent, 0, len(allAgents)+len(builtinIDs))
-
-	// Add built-in agents in order
-	for _, builtinID := range builtinIDs {
-		if builtinInDB[builtinID] {
-			// Use customized config from database
-			for _, agent := range allAgents {
-				if agent.ID == builtinID {
-					result = append(result, agent)
-					break
-				}
-			}
-		} else {
-			// Use default built-in agent (i18n-aware)
-			if agent := types.GetBuiltinAgentWithContext(ctx, builtinID, tenantID); agent != nil {
-				result = append(result, agent)
-			}
-		}
+func (s *customAgentService) validateBuiltinKnowledgeQAModel(
+	ctx context.Context, modelID string,
+) error {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return ErrBuiltinModelRequired
 	}
-
-	// Add custom agents
-	for _, agent := range allAgents {
-		if !types.IsBuiltinAgentID(agent.ID) {
-			result = append(result, agent)
-		}
+	if s.modelService == nil {
+		return ErrBuiltinModelRequired
 	}
-
-	return result, nil
+	model, err := s.modelService.GetModelByID(ctx, modelID)
+	if err != nil || model == nil {
+		return ErrBuiltinModelRequired
+	}
+	if !model.IsBuiltin || model.Type != types.ModelTypeKnowledgeQA {
+		return ErrBuiltinModelRequired
+	}
+	return nil
 }
 
 // UpdateAgent updates an agent's information
@@ -249,7 +284,7 @@ func (s *customAgentService) UpdateAgent(ctx context.Context, agent *types.Custo
 
 	// Handle built-in agents specially using registry
 	if types.IsBuiltinAgentID(agent.ID) {
-		return s.updateBuiltinAgent(ctx, agent, tenantID)
+		return nil, ErrBuiltinAgentDisabled
 	}
 
 	// Get existing agent
@@ -269,6 +304,9 @@ func (s *customAgentService) UpdateAgent(ctx context.Context, agent *types.Custo
 	// Validate name
 	if strings.TrimSpace(agent.Name) == "" {
 		return nil, ErrAgentNameRequired
+	}
+	if err := s.validateBuiltinKnowledgeQAModel(ctx, agent.Config.ModelID); err != nil {
+		return nil, err
 	}
 
 	// Update fields
@@ -427,6 +465,12 @@ func (s *customAgentService) CopyAgent(ctx context.Context, id string) (*types.C
 	if err != nil {
 		return nil, err
 	}
+	if sourceAgent.IsBuiltin || types.IsBuiltinAgentID(sourceAgent.ID) {
+		return nil, ErrBuiltinAgentDisabled
+	}
+	if err := s.validateBuiltinKnowledgeQAModel(ctx, sourceAgent.Config.ModelID); err != nil {
+		return nil, err
+	}
 
 	// Create a new agent with copied data
 	newAgent := &types.CustomAgent{
@@ -445,6 +489,9 @@ func (s *customAgentService) CopyAgent(ctx context.Context, id string) (*types.C
 	// API-key users.
 	if uid, ok := types.UserIDFromContext(ctx); ok && !types.IsSyntheticUserID(uid) {
 		newAgent.CreatedBy = uid
+	}
+	if orgUnitID, ok := types.OrgUnitIDFromContext(ctx); ok {
+		newAgent.OrgUnitID = orgUnitID
 	}
 
 	// Ensure defaults

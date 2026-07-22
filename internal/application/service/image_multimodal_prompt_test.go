@@ -14,7 +14,7 @@ func TestBuildVLMCaptionPrompt(t *testing.T) {
 			DescriptionLanguage: "English",
 			CustomInstructions:  "Focus on alarm codes.",
 		})
-		if !strings.Contains(got, "in English") || !strings.Contains(got, "Focus on alarm codes.") {
+		if !strings.Contains(got, "请用English") || !strings.Contains(got, "Focus on alarm codes.") {
 			t.Fatalf("unexpected prompt: %s", got)
 		}
 	})
@@ -22,7 +22,7 @@ func TestBuildVLMCaptionPrompt(t *testing.T) {
 	t.Run("defaults to context language", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), types.LanguageContextKey, "ko-KR")
 		got := buildVLMCaptionPrompt(ctx, types.VLMConfig{})
-		if !strings.Contains(got, "in Korean") {
+		if !strings.Contains(got, "请用Korean") {
 			t.Fatalf("unexpected prompt: %s", got)
 		}
 	})

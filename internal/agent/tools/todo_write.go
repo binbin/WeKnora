@@ -11,127 +11,40 @@ import (
 
 var todoWriteTool = BaseTool{
 	name: ToolTodoWrite,
-	description: `Use this tool to create and manage a structured task list for retrieval and research tasks. This helps you track progress, organize complex retrieval operations, and demonstrate thoroughness to the user.
+	description: `使用本工具为检索与研究任务创建并管理结构化任务列表。有助于跟踪进度、组织复杂检索，并向用户展示工作的完整性。
 
-**CRITICAL - Focus on Retrieval Tasks Only**:
-- This tool is for tracking RETRIEVAL and RESEARCH tasks (e.g., searching knowledge bases, retrieving documents, gathering information)
-- DO NOT include summary or synthesis tasks in todo_write - those are handled by the thinking tool
-- Examples of appropriate tasks: "Search for X in knowledge base", "Retrieve information about Y", "Compare A and B"
-- Examples of tasks to EXCLUDE: "Summarize findings", "Generate final answer", "Synthesize results" - these are for thinking tool
+**关键——只关注检索任务**：
+- 本工具用于跟踪「检索」与「研究」任务（如搜索知识库、获取文档、收集信息）
+- 不要把摘要或综合任务放进 todo_write——那些由 thinking 工具处理
+- 合适任务示例：「在知识库中搜索 X」「检索关于 Y 的信息」「比较 A 与 B」
+- 应排除的任务示例：「总结发现」「生成最终答案」「综合结果」——这些交给 thinking 工具
 
-## When to Use This Tool
-Use this tool proactively in these scenarios:
+## 何时使用
+在以下场景主动使用：
+1. 复杂多步任务——需要 3 个或以上不同步骤
+2. 非平凡、复杂任务——需要仔细规划或多次操作
+3. 用户明确要求待办列表
+4. 用户提供多项任务（编号或逗号分隔）
+5. 收到新指令后——立即把需求记为待办
+6. 开始某任务时——开始前先标为 in_progress（理想情况下同时只有一个 in_progress）
+7. 完成某任务后——标为 completed，并加入实施中发现的后续任务
 
-1. Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
-2. Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
-3. User explicitly requests todo list - When the user directly asks you to use the todo list
-4. User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
-5. After receiving new instructions - Immediately capture user requirements as todos
-6. When you start working on a task - Mark it as in_progress BEFORE beginning work. Ideally you should only have one todo as in_progress at a time
-7. After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
+## 何时不要使用
+1. 只有一个简单直接的任务
+2. 任务过于琐碎，跟踪无组织收益
+3. 纯对话或纯信息问答
 
-## When NOT to Use This Tool
+若只有一个琐碎任务，直接做即可，不必使用本工具。
 
-Skip using this tool when:
-1. There is only a single, straightforward task
-2. The task is trivial and tracking it provides no organizational benefit
-3. The task is purely conversational or informational
+## 任务状态与管理
+1. **状态**：pending（未开始）/ in_progress（进行中，同时限一个）/ completed（已完成）
+2. **管理**：实时更新；完成后立即标记；同时仅一个 in_progress；完成当前再开新任务；删除不再相关的任务
+3. **完成标准**：仅在完全完成后才标 completed；遇阻保持 in_progress 并新建描述阻塞的任务
+4. **拆分**：创建具体、可执行的检索任务；复杂需求拆成小步；名称聚焦要检索/研究什么；**不要**包含摘要/综合任务
 
-NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
+**重要**：todo_write 中所有检索任务完成后，用 thinking 工具综合发现并生成最终答案。todo_write 跟踪「检索什么」，thinking 负责「如何综合与呈现」。
 
-## Examples of When to Use the Todo List
-
-<example>
-User: Compare WeKnora with other RAG frameworks like LangChain and LlamaIndex.
-Assistant: I'll help you compare WeKnora with other RAG frameworks. Let me create a retrieval plan to gather information about each framework.
-*Creates a todo list with retrieval tasks: 1) Search knowledge base for WeKnora features and architecture, 2) Use web_search to find LangChain documentation and features, 3) Use web_search to find LlamaIndex documentation and features, 4) Retrieve detailed comparison points for each framework*
-*Note: Summary and synthesis will be handled by thinking tool after all retrieval tasks are completed*
-Assistant: Let me start by searching the knowledge base for detailed WeKnora information.
-
-<reasoning>
-The assistant used todo_write tool correctly because:
-1. The task requires multiple retrieval operations (searching KB for WeKnora, web search for LangChain and LlamaIndex)
-2. Each retrieval task is specific and actionable
-3. The todo list focuses on WHAT to retrieve, not HOW to summarize
-4. Summary and synthesis will be handled separately by thinking tool after all retrieval is complete
-5. This separation ensures clear task boundaries and avoids duplication
-</reasoning>
-</example>
-
-<example>
-User: I need to research the latest developments in vector databases for RAG applications.
-Assistant: I'll help you research vector databases for RAG. Let me create a retrieval plan to gather comprehensive information.
-*Creates todo list with retrieval tasks: 1) Search knowledge base for vector database information, 2) Use web_search to find latest vector database technologies, 3) Retrieve information about performance comparisons, 4) Gather information about integration approaches*
-*Note: After completing all retrieval tasks, thinking tool will synthesize the findings into a comprehensive answer*
-Assistant: Let me start by searching the knowledge base for vector database information.
-
-<reasoning>
-The assistant used todo_write tool correctly because:
-1. The research task requires multiple retrieval operations (KB search, web search for latest info)
-2. Each task focuses on retrieving specific information
-3. The todo list tracks retrieval progress, not synthesis
-4. Summary and analysis will be handled by thinking tool after retrieval is complete
-5. This approach separates retrieval (todo_write) from synthesis (thinking tool)
-</reasoning>
-</example>
-
-## Examples of When NOT to Use the Todo List
-
-<example>
-User: How do I print 'Hello World' in Python?
-Assistant: In Python, you can print "Hello World" with this simple code:
-
-print("Hello World")
-
-This will output the text "Hello World" to the console when executed.</assistant>
-
-<reasoning>
-The assistant did not use the todo list because this is a single, trivial task that can be completed in one step. There's no need to track multiple tasks or steps for such a straightforward request.
-</reasoning>
-</example>
-
-<example>
-User: What does the git status command do?
-Assistant: The git status command shows the current state of your working directory and staging area. It displays which changes have been staged, which haven't, and which files aren't being tracked by Git. This is a fundamental command for understanding the current state of your repository before making commits.
-
-<reasoning>
-The assistant did not use the todo list because this is an informational request with no actual coding task to complete. The user is simply asking for an explanation, not for the assistant to perform multiple steps or tasks.
-</reasoning>
-</example>
-
-## Task States and Management
-
-1. **Task States**: Use these states to track progress:
-  - pending: Task not yet started
-  - in_progress: Currently working on (limit to ONE task at a time)
-  - completed: Task finished successfully
-
-2. **Task Management**:
-  - Update task status in real-time as you work
-  - Mark tasks complete IMMEDIATELY after finishing (don't batch completions)
-  - Only have ONE task in_progress at any time
-  - Complete current tasks before starting new ones
-  - Remove tasks that are no longer relevant from the list entirely
-
-3. **Task Completion Requirements**:
-  - ONLY mark a task as completed when you have FULLY accomplished it
-  - If you encounter errors, blockers, or cannot finish, keep the task as in_progress
-  - When blocked, create a new task describing what needs to be resolved
-  - Never mark a task as completed if:
-    - Tests are failing
-    - Implementation is partial
-    - You encountered unresolved errors
-    - You couldn't find necessary files or dependencies
-
-4. **Task Breakdown**:
-  - Create specific, actionable RETRIEVAL tasks
-  - Break complex retrieval needs into smaller, manageable steps
-  - Use clear, descriptive task names focused on what to retrieve or research
-  - **DO NOT include summary/synthesis tasks** - those are handled separately by the thinking tool
-
-**Important**: After completing all retrieval tasks in todo_write, use the thinking tool to synthesize findings and generate the final answer. The todo_write tool tracks WHAT to retrieve, while thinking tool handles HOW to synthesize and present the information.
-
-When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all retrieval requirements successfully.`,
+有疑问时优先使用本工具。主动做任务管理能体现关注度，并确保完成全部检索要求。`,
 	schema: utils.GenerateSchema[TodoWriteInput](),
 }
 

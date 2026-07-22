@@ -134,4 +134,14 @@ type TenantMemberResponse struct {
 	Status    TenantMemberStatus `json:"status"`
 	InvitedBy *string            `json:"invited_by,omitempty"`
 	JoinedAt  time.Time          `json:"joined_at"`
+	// OrgUnitID / OrgUnitName are the member's primary administrative unit
+	// when the tenant has an OrgUnit hierarchy.
+	OrgUnitID   string `json:"org_unit_id,omitempty"`
+	OrgUnitName string `json:"org_unit_name,omitempty"`
+	// CanManage is true when the caller may change role or remove this
+	// member under org-scoped admin rules.
+	CanManage bool `json:"can_manage"`
+	// CanPromoteToAdmin is true when the caller may set this member's
+	// role to admin (false for same-level non-admins).
+	CanPromoteToAdmin bool `json:"can_promote_to_admin"`
 }

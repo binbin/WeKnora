@@ -11,7 +11,7 @@ export const INTEGRATION_TABS: IntegrationTab[] = ['im', 'embed', 'api', 'chrome
 export type IntegrationTabRole = 'viewer' | 'contributor' | 'admin' | 'owner'
 
 export const INTEGRATION_TAB_MIN_ROLE: Partial<Record<IntegrationTab, IntegrationTabRole>> = {
-  api: 'owner',
+  api: 'admin',
 }
 
 export type IntegrationPreviewIcon =

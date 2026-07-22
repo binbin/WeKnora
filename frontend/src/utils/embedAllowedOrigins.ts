@@ -1,5 +1,4 @@
 export type AllowedOriginsValidationError =
-  | { code: 'required' }
   | { code: 'wildcard_prod' }
   | { code: 'invalid'; origin: string }
 
@@ -16,9 +15,6 @@ export function validateAllowedOrigins(
   prod = import.meta.env.PROD,
 ): { ok: true; origins: string[] } | { ok: false; error: AllowedOriginsValidationError } {
   const cleaned = parseAllowedOrigins(origins.join('\n'))
-  if (cleaned.length === 0) {
-    return { ok: false, error: { code: 'required' } }
-  }
   for (const origin of cleaned) {
     if (origin === '*') {
       if (prod) {

@@ -11,75 +11,52 @@ import (
 
 var sequentialThinkingTool = BaseTool{
 	name: ToolThinking,
-	description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
+	description: `通过逐步思考进行动态、反思式问题解决的详细工具。
 
-This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
+本工具帮助以灵活、可演进的思考过程分析问题。每个想法可建立在先前洞见之上，也可质疑或修正先前洞见。
 
-Each thought can build on, question, or revise previous insights as understanding deepens.
+## 何时使用
+- 将复杂问题拆成步骤
+- 需要预留修正空间的规划与设计
+- 可能需要中途纠偏的分析
+- 一开始范围不完全清晰的问题
+- 需要多步求解的问题
+- 需在多步间保持上下文的任务
+- 需要过滤无关信息的情形
 
-## When to Use This Tool
+## 关键特性
+- 可随进展调高或调低 total_thoughts
+- 可质疑或修正先前想法
+- 看似结束后仍可继续添加想法
+- 可表达不确定性并探索替代路径
+- 不必线性推进——可分支或回溯
+- 生成解决方案假设，并基于思维链步骤验证
+- 重复直到满意
+- 思考完成后，以纯文本回复给出答案并停止（不再调用工具）。绝不要把最终答案直接写进 thought。
 
-- Breaking down complex problems into steps
-- Planning and design with room for revision
-- Analysis that might need course correction
-- Problems where the full scope might not be clear initially
-- Problems that require a multi-step solution
-- Tasks that need to maintain context over multiple steps
-- Situations where irrelevant information needs to be filtered out
+## 参数说明
+- **thought**：当前思考步骤（分析、修正、提问、改换思路、假设与验证等）
+  **关键——对用户友好的思考**：用自然、易懂的语言写思考。思考过程中绝不要提及工具名（如 "grep_chunks"、"knowledge_search"、"web_search"）。改用普通描述：
+  - ❌ 差："我会用 grep_chunks 搜关键词，再用 knowledge_search 做语义理解"
+  - ✅ 好："我会先在知识库中搜索关键词，再探索相关概念"
+  像向用户解释推理那样写思考，聚焦要找什么、为什么，而不是用哪个工具。
+- **next_thought_needed**：是否还需要继续思考
+- **thought_number** / **total_thoughts**：当前序号与预估总数（可调整）
+- **is_revision** / **revises_thought**：是否修正先前想法及对应序号
+- **branch_from_thought** / **branch_id**：分支点与分支标识
+- **needs_more_thoughts**：到达终点时是否仍需更多思考
 
-## Key Features
-
-- You can adjust total_thoughts up or down as you progress
-- You can question or revise previous thoughts
-- You can add more thoughts even after reaching what seemed like the end
-- You can express uncertainty and explore alternative approaches
-- Not every thought needs to build linearly - you can branch or backtrack
-- Generates a solution hypothesis
-- Verifies the hypothesis based on the Chain of Thought steps
-- Repeats the process until satisfied
-- When your thinking is complete, deliver your answer by writing it as your plain reply and stopping (no further tool calls). NEVER include the final answer directly in a thought.
-
-## Parameters Explained
-
-- **thought**: Your current thinking step, which can include:
-  * Regular analytical steps
-  * Revisions of previous thoughts
-  * Questions about previous decisions
-  * Realizations about needing more analysis
-  * Changes in approach
-  * Hypothesis generation
-  * Hypothesis verification
-  
-  **CRITICAL - User-Friendly Thinking**: Write your thoughts in natural, user-friendly language. NEVER mention tool names (like "grep_chunks", "knowledge_search", "web_search", etc.) in your thinking process. Instead, describe your actions in plain language:
-  - ❌ BAD: "I'll use grep_chunks to search for keywords, then knowledge_search for semantic understanding"
-  - ✅ GOOD: "I'll start by searching for key terms in the knowledge base, then explore related concepts"
-  - ❌ BAD: "After grep_chunks returns results, I'll use knowledge_search"
-  - ✅ GOOD: "After finding relevant documents, I'll search for semantically related content"
-  
-  Write thinking as if explaining your reasoning to a user, not documenting technical steps. Focus on WHAT you're trying to find and WHY, not HOW (which tools you'll use).
-
-- **next_thought_needed**: True if you need more thinking, even if at what seemed like the end
-- **thought_number**: Current number in sequence (can go beyond initial total if needed)
-- **total_thoughts**: Current estimate of thoughts needed (can be adjusted up/down)
-- **is_revision**: A boolean indicating if this thought revises previous thinking
-- **revises_thought**: If is_revision is true, which thought number is being reconsidered
-- **branch_from_thought**: If branching, which thought number is the branching point
-- **branch_id**: Identifier for the current branch (if any)
-- **needs_more_thoughts**: If reaching end but realizing more thoughts needed
-
-## Best Practices
-
-1. Start with an initial estimate of needed thoughts, but be ready to adjust
-2. Feel free to question or revise previous thoughts
-3. Don't hesitate to add more thoughts if needed, even at the "end"
-4. Express uncertainty when present
-5. Mark thoughts that revise previous thinking or branch into new paths
-6. Ignore information that is irrelevant to the current step
-7. Generate a solution hypothesis when appropriate
-8. Verify the hypothesis based on the Chain of Thought steps
-9. Repeat the process until satisfied with the solution
-10. Only set next_thought_needed to false when truly done and a satisfactory answer is reached
-11. NEVER include the final answer in the thought content. When thinking is complete, deliver the final answer by writing it as your plain reply and stopping (no further tool calls)`,
+## 最佳实践
+1. 先估计所需想法数，并随时调整
+2. 勇于质疑或修正先前想法
+3. 需要时即使「结束」也可继续加想法
+4. 有不确定就明确表达
+5. 标记修正或分支的想法
+6. 忽略与当前步骤无关的信息
+7. 适时生成解决方案假设并验证
+8. 重复直到满意
+9. 仅在真正完成且答案满意时将 next_thought_needed 设为 false
+10. 绝不要把最终答案写进 thought；完成后用纯文本回复并停止`,
 	schema: json.RawMessage(`{
   "type": "object",
   "properties": {

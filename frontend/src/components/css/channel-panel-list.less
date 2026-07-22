@@ -41,8 +41,8 @@
   gap: 12px;
   height: 100%;
   box-sizing: border-box;
-  // Match two-line body (title + agent name) so the add card aligns with existing channels.
-  min-height: calc(20px + 14px * 1.4 + 4px + 12px * 1.4);
+  // Title + agent + short path row + action buttons.
+  min-height: calc(20px + 14px * 1.4 + 4px + 12px * 1.4 + 52px);
   padding: 10px 12px;
   border: 1px solid var(--td-component-stroke);
   border-radius: 10px;
@@ -171,6 +171,38 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__web-link {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 8px;
+    min-width: 0;
+  }
+
+  &__web-url {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--td-bg-color-secondarycontainer);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--td-text-color-primary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__web-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: wrap;
   }
 
   &__actions {

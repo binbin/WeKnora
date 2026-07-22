@@ -15,7 +15,7 @@
     :agent-image-upload-enabled="agentImageUploadEnabled"
     :use-session-header-title="useSessionHeaderTitle"
     :host-context="hostContext"
-    @session-title="(title: string) => emit('session-title', title)"
+    @session-title="(title: string, provisional?: boolean) => emit('session-title', title, provisional)"
     @messages-state="(has: boolean) => emit('messages-state', has)"
   />
 </template>
@@ -44,7 +44,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'session-title', title: string): void
+  (e: 'session-title', title: string, provisional?: boolean): void
   (e: 'messages-state', hasMessages: boolean): void
 }>()
 </script>

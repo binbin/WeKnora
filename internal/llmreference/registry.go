@@ -20,21 +20,21 @@ import (
 
 const sourceAliasProtocolPrompt = `
 
-## Source handling protocol (system-owned)
-Retrieved content uses request-local source handles: cN identifies a knowledge chunk, wN a web page, dN a document, and bN a knowledge base.
-- Use dN and bN only as tool arguments when a tool requests a document or knowledge base.
-- Never reveal raw chunk IDs, knowledge IDs, knowledge-base IDs, or private source handles in user-visible output. This does not change separate instructions to preserve retrieved Markdown image URLs.`
+## 来源处理协议（系统内置）
+检索内容使用请求内本地来源句柄：cN 表示知识块，wN 表示网页，dN 表示文档，bN 表示知识库。
+- 仅在工具要求传入文档或知识库时，将 dN、bN 用作工具参数。
+- 在对用户可见的输出中，绝不要暴露原始 chunk ID、知识 ID、知识库 ID 或私有来源句柄。这不改变须原样保留检索到的 Markdown 图片 URL 的其他指令。`
 
 const citationEnabledProtocolPrompt = `
-- Source citations are enabled for this answer. Cite a knowledge chunk with exactly <ref id="cN"/> and a web page with exactly <ref id="wN"/>.
-- Copy only cN/wN handles that appeared in supplied context or tool results. Never cite dN/bN.
-- Never output <kb> or <web> tags yourself; the system expands valid <ref/> tags after generation.
-- Keep each <ref/> inline on the same line as the claim it supports. Do not group citations at the end.
-- These rules supersede earlier, saved, or custom prompt instructions about citation syntax.`
+- 本回答已启用来源引用。引用知识块时使用精确格式 <ref id="cN"/>，引用网页时使用精确格式 <ref id="wN"/>。
+- 只复制所给上下文或工具结果中出现过的 cN/wN 句柄。绝不要引用 dN/bN。
+- 不要自行输出 <kb> 或 <web> 标签；系统会在生成后展开有效的 <ref/> 标签。
+- 将每个 <ref/> 与其所支撑的论断写在同一行内联位置，不要把引用集中到文末。
+- 以上规则优先于更早、已保存或自定义提示词中关于引用语法的说明。`
 
 const citationDisabledProtocolPrompt = `
-- Source citations are disabled for this answer. Do not output <ref>, <kb>, <web>, raw source URLs, or source-handle citations.
-- These rules supersede earlier, saved, or custom prompt instructions that require source citations.`
+- 本回答已禁用来源引用。不要输出 <ref>、<kb>、<web>、原始来源 URL 或来源句柄引用。
+- 以上规则优先于要求进行来源引用的更早、已保存或自定义提示词。`
 
 // ProtocolPrompt returns the internal, non-user-editable source protocol for a
 // model call. Citation formatting stays out of custom and template prompts.

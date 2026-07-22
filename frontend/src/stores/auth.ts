@@ -178,6 +178,24 @@ export const useAuthStore = defineStore('auth', () => {
     return (ROLE_LEVEL[currentTenantRole.value] ?? 0) >= ROLE_LEVEL[min]
   }
 
+  // Settings entry: Admin+ / owner / system admin / cross-tenant superuser.
+  // Contributors and viewers must not see Settings at all.
+  const canAccessSettings = computed(
+    () => isSystemAdmin.value || canAccessAllTenants.value || hasRole('admin'),
+  )
+
+  // Full workspace settings (models / MCP / …): Admin+ or system admin.
+  // 「所有者」不再单独露出；存量 owner 因 hasRole('admin') 仍具备同等能力。
+  const canManageWorkspaceSettings = computed(
+    () => isSystemAdmin.value || canAccessAllTenants.value || hasRole('admin'),
+  )
+
+  // Create / configure knowledge bases (non-content). Content edits stay
+  // at contributor via separate gates.
+  const canManageKnowledgeBase = computed(
+    () => isSystemAdmin.value || canAccessAllTenants.value || hasRole('admin'),
+  )
+
   const effectiveTenantId = computed(() => {
     // 如果选择了其他空间，使用选择的空间ID，否则使用用户默认空间ID
     return selectedTenantId.value || (tenant.value?.id ? Number(tenant.value.id) : null)
@@ -535,6 +553,9 @@ export const useAuthStore = defineStore('auth', () => {
     isSystemAdmin,
     currentTenantRole,
     hasRole,
+    canAccessSettings,
+    canManageWorkspaceSettings,
+    canManageKnowledgeBase,
     effectiveTenantId,
     isLiteMode,
 

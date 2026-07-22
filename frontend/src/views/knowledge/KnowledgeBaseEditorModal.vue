@@ -175,6 +175,15 @@
                         />
                       </div>
 
+                      <div v-if="hasOrgHierarchy" class="form-item">
+                        <t-checkbox v-model="formData.shareWithDescendants">
+                          {{ $t('knowledgeEditor.basic.shareWithDescendantsLabel') }}
+                        </t-checkbox>
+                        <p class="form-tip">
+                          {{ $t('knowledgeEditor.basic.shareWithDescendantsTip') }}
+                        </p>
+                      </div>
+
                       <!-- Wiki 合成模型移至模型配置页 -->
                     </div>
                   </div>
@@ -451,6 +460,7 @@ import KbCreateContextualGuide from '@/components/KbCreateContextualGuide.vue'
 import { KB_EDITOR_FOCUS_SECTION_EVENT, markContextualGuideDone } from '@/config/contextualGuides'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { createKnowledgeBase, getKnowledgeBaseById, listKnowledgeFiles, updateKnowledgeBase, rebuildKBIndex } from '@/api/knowledge-base'
+import { listOrgUnits } from '@/api/org-unit'
 import { updateKBConfig, type KBModelConfigRequest } from '@/api/initialization'
 import { type ModelConfig } from '@/api/model'
 import { useChatResourcesStore } from '@/stores/chatResources'
@@ -543,16 +553,10 @@ const dsCount = ref(0)
 // only tenant Admin+ can mutate their share settings.
 const kbCreatorId = ref<string>('')
 
-// Backend gate for /knowledge-bases/:id/shares (POST/PUT/DELETE) is
-// g.OwnedKBOrAdmin(): only the KB creator or tenant Admin+ may mutate
-// shares. Org-admins on a shared KB do NOT pass this guard, so they
-// would only see 403s if we let them try. Mirror the matrix here so
-// the buttons disappear instead of failing.
+// Backend gate for /knowledge-bases/:id/shares is Admin+ (KB config).
 const canShareKB = computed(() => {
   if (!props.kbId) return false
-  const userId = authStore.user?.id || ''
-  if (kbCreatorId.value && userId && kbCreatorId.value === userId) return true
-  return authStore.hasRole('admin')
+  return authStore.canManageKnowledgeBase
 })
 // 用户是否在分块设置中手动改过任何值。一旦为 true，就不再根据索引策略自动调整默认分块参数。
 const chunkingDirty = ref(false)
@@ -641,6 +645,7 @@ const advancedSettingsRef = ref<InstanceType<typeof KBAdvancedSettings>>()
 
 // 表单数据
 const formData = ref<any>(null)
+const hasOrgHierarchy = ref(false)
 const isFAQ = computed(() => formData.value?.type === 'faq')
 
 const kbCreateNeedsEmbedding = computed(() => {
@@ -688,6 +693,8 @@ const initFormData = (type: 'document' | 'faq' = 'document') => {
     type,
     name: '',
     description: '',
+    // Default off: descendants cannot read this KB unless opted in.
+    shareWithDescendants: false,
     faqConfig: {
       indexMode: 'question_only',
       questionIndexMode: 'separate'
@@ -784,6 +791,15 @@ const loadAllModels = async (force = false) => {
   }
 }
 
+const loadOrgHierarchyFlag = async () => {
+  try {
+    const units = await listOrgUnits(false)
+    hasOrgHierarchy.value = units.length > 0
+  } catch {
+    hasOrgHierarchy.value = false
+  }
+}
+
 // 加载知识库数据（编辑模式）
 const loadKBData = async () => {
   if (props.mode !== 'edit' || !props.kbId) return
@@ -809,6 +825,7 @@ const loadKBData = async () => {
       type: kbType,
       name: kb.name || '',
       description: kb.description || '',
+      shareWithDescendants: !!kb.share_with_descendants,
       faqConfig: {
         indexMode: kb.faq_config?.index_mode || 'question_only',
         questionIndexMode: kb.faq_config?.question_index_mode || 'separate'
@@ -1137,6 +1154,7 @@ const buildSubmitData = () => {
     name: formData.value.name,
     description: formData.value.description,
     type: formData.value.type,
+    share_with_descendants: !!formData.value.shareWithDescendants,
     chunking_config: {
       chunk_size: formData.value.chunkingConfig.chunkSize,
       chunk_overlap: formData.value.chunkingConfig.chunkOverlap,
@@ -1347,6 +1365,7 @@ const doSubmit = async () => {
       await updateKnowledgeBase(props.kbId, {
         name: data.name,
         description: data.description,
+        share_with_descendants: !!formData.value.shareWithDescendants,
         config: updateConfig
       })
 
@@ -1490,8 +1509,12 @@ watch(() => props.visible, async (newVal) => {
       currentSection.value = uiStore.kbEditorInitialSection
     }
     
-    // 加载模型列表与空间默认存储引擎（创建 KB 时即使用，不依赖是否打开「存储引擎」Tab）
-    await Promise.all([loadAllModels(), loadTenantDefaultStorageProvider()])
+    // 加载模型列表、组织层级与空间默认存储引擎
+    await Promise.all([
+      loadAllModels(),
+      loadTenantDefaultStorageProvider(),
+      loadOrgHierarchyFlag(),
+    ])
     
     // 根据模式加载数据
     if (props.mode === 'edit' && props.kbId) {

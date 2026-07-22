@@ -104,7 +104,7 @@
           <span>{{ $t('integrations.tabs.api') }}</span>
         </div>
         <div class="menu-divider"></div>
-        <div class="menu-item" @click="handleSettings">
+        <div v-if="authStore.canAccessSettings" class="menu-item" @click="handleSettings">
           <t-icon name="setting" class="menu-icon" />
           <span>{{ $t('general.allSettings') }}</span>
         </div>
@@ -249,16 +249,17 @@ const showTenantIdentityLine = computed(() => {
 
 // 与 Settings.vue 的 SECTION_MIN_ROLE 同步；这里只挂 quickNav 直接跳转的
 // 那 4 项。改这张表前请同步 Settings.vue 的对照注释。
+// QuickNav 与 Settings.vue 对齐：Admin+ 可见空间设置快捷入口。
 const QUICKNAV_MIN_ROLE: Record<string, 'viewer' | 'contributor' | 'admin' | 'owner'> = {
-  members: 'viewer',
-  models: 'viewer',
+  members: 'admin',
+  models: 'admin',
   websearch: 'admin',
   mcp: 'admin',
-  'integration-api': 'owner',
+  'integration-api': 'admin',
 }
 const canSeeQuickNav = (key: string): boolean => {
-  if (authStore.canAccessAllTenants) return true
-  return authStore.hasRole(QUICKNAV_MIN_ROLE[key] ?? 'viewer')
+  if (authStore.isSystemAdmin || authStore.canAccessAllTenants) return true
+  return authStore.hasRole(QUICKNAV_MIN_ROLE[key] ?? 'admin')
 }
 
 const menuRef = ref<HTMLElement>()

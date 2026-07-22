@@ -577,7 +577,7 @@
                       </div>
                       <div class="setting-control">
                         <ModelSelector model-type="KnowledgeQA" :selected-model-id="formData.config.model_id"
-                          :all-models="allModels"
+                          :all-models="allModels" :only-builtin="true"
                           @update:selected-model-id="(val: string) => formData.config.model_id = val"
                           @add-model="handleAddModel('llm')" :placeholder="$t('agent.editor.modelPlaceholder')" />
                       </div>
@@ -1603,6 +1603,21 @@
                   </div>
                 </div>
 
+                <!-- 发布到网页（仅编辑模式且非内置智能体） -->
+                <div v-if="editorMode === 'edit' && editorAgent?.id && !editorAgent?.is_builtin"
+                  v-show="currentSection === 'publish'" class="section">
+                  <div class="section-header">
+                    <div class="section-header-title">
+                      <h2>{{ $t('integrations.tabs.embed') }}</h2>
+                    </div>
+                    <p class="section-description">{{ $t('integrations.agentEditor.desc') }}</p>
+                  </div>
+                  <AgentEmbedChannelPanel
+                    :locked-agent-id="editorAgent.id"
+                    v-model:filter-agent-id="publishFilterAgentId"
+                  />
+                </div>
+
                 <!-- 共享管理（仅编辑模式且非内置智能体） -->
                 <div v-if="editorMode === 'edit' && editorAgent?.id && !editorAgent?.is_builtin"
                   v-show="currentSection === 'share'" class="section">
@@ -1666,6 +1681,7 @@ import PromptTemplateSelector from '@/components/PromptTemplateSelector.vue';
 import ModelSelector from '@/components/ModelSelector.vue';
 import KBParserSettings, { type ParserEngineRule } from '@/views/knowledge/settings/KBParserSettings.vue';
 import AgentShareSettings from '@/components/AgentShareSettings.vue';
+import AgentEmbedChannelPanel from '@/components/AgentEmbedChannelPanel.vue';
 import { listEmbedChannels } from '@/api/embed';
 import { getRootZoom, rectToCssPx } from '@/utils/zoom';
 import {
@@ -1820,6 +1836,7 @@ onBeforeUnmount(() => {
 })
 
 const saving = ref(false);
+const publishFilterAgentId = ref('');
 const allModels = ref<ModelConfig[]>([]);
 const kbOptions = ref<{ label: string; value: string; type?: 'document' | 'faq'; count?: number; shared?: boolean; orgName?: string; ragEnabled?: boolean; wikiEnabled?: boolean; capabilities?: KBCapabilities }[]>([]);
 
@@ -2235,6 +2252,7 @@ const navItems = computed(() => {
   }
   // 发布（仅编辑模式）
   if (editorMode.value === 'edit' && editorAgent.value?.id && !editorAgent.value?.is_builtin && !authStore.isLiteMode) {
+    items.push({ key: 'publish', icon: 'link', label: t('integrations.tabs.embed') });
     items.push({ key: 'share', icon: 'share', label: t('knowledgeEditor.sidebar.share') });
   }
   return items;
@@ -2264,7 +2282,7 @@ const navGroups = computed(() => {
     {
       key: 'integration',
       label: t('agentEditor.navGroups.integration'),
-      items: pickItems(['share']),
+      items: pickItems(['publish', 'share']),
     },
   ].filter((group) => group.items.length > 0);
 });
@@ -2405,8 +2423,8 @@ const removeStarterSuggestion = (index: number) => {
 const applyDefaultChatModelIfEmpty = () => {
   if (props.mode !== 'create' || !formData.value) return
   const chat =
-    allModels.value.find((m) => m.type === 'KnowledgeQA' && m.is_default)
-    || allModels.value.find((m) => m.type === 'KnowledgeQA')
+    allModels.value.find((m) => m.type === 'KnowledgeQA' && m.is_builtin && m.is_default)
+    || allModels.value.find((m) => m.type === 'KnowledgeQA' && m.is_builtin)
   if (!formData.value.config.model_id && chat?.id) {
     formData.value.config.model_id = chat.id
   }
@@ -2525,6 +2543,11 @@ async function loadAgentIntegrationCounts(agentId: string) {
 }
 
 function gotoIntegrations(tab: 'im' | 'embed') {
+  // Stay in the editor: publish tab owns embed channels; IM stays in settings.
+  if (tab === 'embed') {
+    currentSection.value = 'publish';
+    return;
+  }
   const agentId = editorAgent.value?.id;
   if (!agentId) return;
   handleClose();

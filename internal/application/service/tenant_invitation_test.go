@@ -499,14 +499,17 @@ func TestInvitationService_AcceptByToken_HappyPath(t *testing.T) {
 	if got, _ := memberSvc.GetMembership(ctx, "u-alice", 1); got == nil {
 		t.Fatalf("membership row missing")
 	}
-	// Multi-use: row stays pending.
+	// Single-use: row flips to accepted after the first join.
 	rows, _ := repo.ListByTenant(ctx, 1, true)
-	if len(rows) == 0 || rows[0].Status != types.TenantInvitationStatusPending {
-		t.Fatalf("share-link row must remain pending after accept, got %+v", rows)
+	if len(rows) == 0 || rows[0].Status != types.TenantInvitationStatusAccepted {
+		t.Fatalf("share-link row must be accepted after join, got %+v", rows)
+	}
+	if _, err := svc.AcceptByToken(ctx, plain, "u-bob"); !errors.Is(err, ErrInvitationTokenInvalid) {
+		t.Fatalf("consumed token must reject second join, got %v", err)
 	}
 }
 
-func TestInvitationService_AcceptByToken_AllowsMultipleUsers(t *testing.T) {
+func TestInvitationService_AcceptByToken_RejectsSecondUser(t *testing.T) {
 	svc, _, memberSvc := newInvitationSvc()
 	ctx := context.Background()
 	_, plain, err := svc.CreateShareLink(ctx, 1, types.TenantRoleViewer, nil, "", "")
@@ -516,13 +519,13 @@ func TestInvitationService_AcceptByToken_AllowsMultipleUsers(t *testing.T) {
 	if _, err := svc.AcceptByToken(ctx, plain, "u-alice"); err != nil {
 		t.Fatalf("accept alice: %v", err)
 	}
-	if _, err := svc.AcceptByToken(ctx, plain, "u-bob"); err != nil {
-		t.Fatalf("accept bob: %v", err)
+	if _, err := svc.AcceptByToken(ctx, plain, "u-bob"); !errors.Is(err, ErrInvitationTokenInvalid) {
+		t.Fatalf("second user must be rejected, got %v", err)
 	}
 	a, _ := memberSvc.GetMembership(ctx, "u-alice", 1)
 	b, _ := memberSvc.GetMembership(ctx, "u-bob", 1)
-	if a == nil || b == nil {
-		t.Fatalf("both users should have membership: alice=%v bob=%v", a, b)
+	if a == nil || b != nil {
+		t.Fatalf("only alice should have membership: alice=%v bob=%v", a, b)
 	}
 }
 

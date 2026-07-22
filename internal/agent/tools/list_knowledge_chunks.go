@@ -13,20 +13,20 @@ import (
 
 var listKnowledgeChunksTool = BaseTool{
 	name: ToolListKnowledgeChunks,
-	description: `Retrieve full chunk content for a document or a single FAQ entry.
+	description: `获取文档或单条 FAQ 的完整分块内容。
 
-## Use After grep_chunks or knowledge_search:
-- **FAQ hit** (type faq): list_knowledge_chunks(faq_id="cN") — reads that one FAQ chunk with answers from metadata.
-- **Document hit**: list_knowledge_chunks(knowledge_id="dN") — pages through all chunks.
+## 在 grep_chunks 或 knowledge_search 之后使用：
+- **FAQ 命中**（类型 faq）：list_knowledge_chunks(faq_id="cN") — 读取该 FAQ 分块及元数据中的答案。
+- **文档命中**：list_knowledge_chunks(knowledge_id="dN") — 分页遍历全部分块。
 
-## Parameters (provide exactly one id target):
-- faq_id (optional): Short cN ID for an FAQ chunk from grep_chunks / knowledge_search.
-- chunk_id (optional): Short cN ID for a single non-FAQ chunk.
-- knowledge_id (optional): Short dN document ID to page through all chunks.
-- limit / offset: Only for knowledge_id paging (default limit 20, max 100).
+## 参数（恰好提供一个 ID 目标）：
+- faq_id（可选）：来自 grep_chunks / knowledge_search 的 FAQ 分块短 ID cN。
+- chunk_id（可选）：单个非 FAQ 分块的短 ID cN。
+- knowledge_id（可选）：用于分页遍历全部分块的文档短 ID dN。
+- limit / offset：仅用于 knowledge_id 分页（默认 limit 20，最大 100）。
 
-## Output:
-Full chunk content. FAQ entries include <faq> with <answer> from metadata.`,
+## 输出：
+完整分块内容。FAQ 条目包含带 <answer> 的 <faq>（来自元数据）。`,
 	schema: json.RawMessage(`{
   "type": "object",
   "properties": {

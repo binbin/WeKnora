@@ -59,6 +59,9 @@ func (f *flowEmbedSvc) LookupForEmbed(_ context.Context, channelID, token string
 func (f *flowEmbedSvc) LookupEnabledChannel(context.Context, string) (*types.EmbedChannel, error) {
 	return nil, nil
 }
+func (f *flowEmbedSvc) LookupByWebSlug(context.Context, string) (*types.EmbedChannel, error) {
+	return nil, service.ErrEmbedChannelNotFound
+}
 func (f *flowEmbedSvc) IssueSessionToken(context.Context, string) (string, int, error) {
 	if f.issueErr != nil {
 		return "", 0, f.issueErr

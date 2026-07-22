@@ -518,6 +518,7 @@ CREATE TABLE IF NOT EXISTS custom_agents (
     is_builtin BOOLEAN NOT NULL DEFAULT 0,
     tenant_id INTEGER NOT NULL,
     created_by VARCHAR(36),
+    org_unit_id TEXT NOT NULL DEFAULT '',
     runnable_by_viewer BOOLEAN NOT NULL DEFAULT 1,
     config TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -529,6 +530,7 @@ CREATE TABLE IF NOT EXISTS custom_agents (
 CREATE INDEX IF NOT EXISTS idx_custom_agents_tenant_id ON custom_agents(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_custom_agents_is_builtin ON custom_agents(is_builtin);
 CREATE INDEX IF NOT EXISTS idx_custom_agents_deleted_at ON custom_agents(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_custom_agents_tenant_org_unit ON custom_agents(tenant_id, org_unit_id);
 
 CREATE TABLE IF NOT EXISTS organizations (
     id VARCHAR(36) PRIMARY KEY,
@@ -698,6 +700,7 @@ CREATE TABLE IF NOT EXISTS embed_channels (
     name VARCHAR(255) NOT NULL DEFAULT '',
     enabled INTEGER NOT NULL DEFAULT 1,
     publish_token VARCHAR(64) NOT NULL DEFAULT '',
+    web_slug TEXT NOT NULL DEFAULT '',
     allowed_origins TEXT NOT NULL DEFAULT '[]',
     welcome_message TEXT NOT NULL DEFAULT '',
     rate_limit_per_minute INTEGER NOT NULL DEFAULT 30,
@@ -722,6 +725,9 @@ CREATE INDEX IF NOT EXISTS idx_embed_channels_agent ON embed_channels (agent_id)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_embed_channels_publish_token
     ON embed_channels (publish_token)
     WHERE publish_token != '' AND deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_embed_channels_web_slug
+    ON embed_channels (web_slug)
+    WHERE web_slug != '' AND deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS data_sources (
     id VARCHAR(36) NOT NULL PRIMARY KEY,

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -32,8 +33,9 @@ import (
 // is guaranteed to either match the active tenant or carry a
 // cross-tenant superuser bypass.
 type TenantMemberHandler struct {
-	memberService interfaces.TenantMemberService
-	userService   interfaces.UserService
+	memberService  interfaces.TenantMemberService
+	userService    interfaces.UserService
+	orgUnitService interfaces.OrgUnitService // optional; nil ⇒ no org hydrate/gates
 }
 
 // NewTenantMemberHandler wires the dependencies. PR 1 already provides
@@ -44,10 +46,12 @@ type TenantMemberHandler struct {
 func NewTenantMemberHandler(
 	memberService interfaces.TenantMemberService,
 	userService interfaces.UserService,
+	orgUnitService interfaces.OrgUnitService,
 ) *TenantMemberHandler {
 	return &TenantMemberHandler{
-		memberService: memberService,
-		userService:   userService,
+		memberService:  memberService,
+		userService:    userService,
+		orgUnitService: orgUnitService,
 	}
 }
 
@@ -134,6 +138,7 @@ func (h *TenantMemberHandler) ListMembers(c *gin.Context) {
 	}
 
 	resp := make([]types.TenantMemberResponse, 0, len(members))
+	callerID, _ := types.UserIDFromContext(ctx)
 	for _, m := range members {
 		row := types.TenantMemberResponse{
 			UserID:    m.UserID,
@@ -147,6 +152,7 @@ func (h *TenantMemberHandler) ListMembers(c *gin.Context) {
 			row.Username = u.Username
 			row.Avatar = u.Avatar
 		}
+		h.enrichMemberOrgAndManageFlags(ctx, tenantID, callerID, m, &row)
 		resp = append(resp, row)
 	}
 
@@ -159,6 +165,65 @@ func (h *TenantMemberHandler) ListMembers(c *gin.Context) {
 			"page_size": pageSize,
 		},
 	})
+}
+
+// enrichMemberOrgAndManageFlags fills primary OrgUnit fields and the
+// can_manage / can_promote_to_admin flags used by the members UI.
+func (h *TenantMemberHandler) enrichMemberOrgAndManageFlags(
+	ctx context.Context,
+	tenantID uint64,
+	callerID string,
+	member *types.TenantMember,
+	row *types.TenantMemberResponse,
+) {
+	if member == nil || row == nil {
+		return
+	}
+	if h.orgUnitService == nil {
+		// No hierarchy service: any Admin+ route caller may manage.
+		row.CanManage = callerID != "" && callerID != member.UserID
+		row.CanPromoteToAdmin = row.CanManage
+		return
+	}
+	if memberships, err := h.orgUnitService.ListUserMemberships(
+		ctx, tenantID, member.UserID,
+	); err == nil {
+		orgUnitID := ""
+		for _, membership := range memberships {
+			if membership != nil && membership.IsPrimary &&
+				membership.OrgUnitID != "" {
+				orgUnitID = membership.OrgUnitID
+				break
+			}
+		}
+		if orgUnitID == "" {
+			for _, membership := range memberships {
+				if membership != nil && membership.OrgUnitID != "" {
+					orgUnitID = membership.OrgUnitID
+					break
+				}
+			}
+		}
+		if orgUnitID != "" {
+			row.OrgUnitID = orgUnitID
+			if unit, getErr := h.orgUnitService.Get(ctx, tenantID, orgUnitID); getErr == nil && unit != nil {
+				row.OrgUnitName = unit.Name
+			}
+		}
+	}
+	if callerID == "" || callerID == member.UserID {
+		return
+	}
+	if err := h.orgUnitService.AssertCanManageTenantMember(
+		ctx, tenantID, member.UserID, member.Role, "",
+	); err == nil {
+		row.CanManage = true
+	}
+	if err := h.orgUnitService.AssertCanManageTenantMember(
+		ctx, tenantID, member.UserID, member.Role, types.TenantRoleAdmin,
+	); err == nil {
+		row.CanPromoteToAdmin = true
+	}
 }
 
 // AddMember godoc
@@ -320,6 +385,11 @@ func (h *TenantMemberHandler) UpdateMemberRole(c *gin.Context) {
 			c.Error(apperrors.NewValidationError(err.Error()))
 		case errors.Is(err, service.ErrOnlySystemAdminCanAssignOwner):
 			c.Error(apperrors.NewForbiddenError(err.Error()))
+		case errors.Is(err, service.ErrCannotManagePeerAdmin),
+			errors.Is(err, service.ErrCannotPromotePeerToAdmin),
+			errors.Is(err, service.ErrMemberOutsideManageScope),
+			errors.Is(err, service.ErrActorOrgUnitRequired):
+			c.Error(apperrors.NewForbiddenError(err.Error()))
 		default:
 			logger.Errorf(ctx, "UpdateRole failed: user=%s tenant=%d err=%v",
 				userID, tenantID, err)
@@ -359,6 +429,11 @@ func (h *TenantMemberHandler) RemoveMember(c *gin.Context) {
 			c.Error(apperrors.NewNotFoundError("membership not found"))
 		case errors.Is(err, service.ErrLastOwner):
 			c.Error(apperrors.NewConflictError(err.Error()))
+		case errors.Is(err, service.ErrCannotManagePeerAdmin),
+			errors.Is(err, service.ErrCannotPromotePeerToAdmin),
+			errors.Is(err, service.ErrMemberOutsideManageScope),
+			errors.Is(err, service.ErrActorOrgUnitRequired):
+			c.Error(apperrors.NewForbiddenError(err.Error()))
 		default:
 			logger.Errorf(ctx, "RemoveMember failed: user=%s tenant=%d err=%v",
 				userID, tenantID, err)

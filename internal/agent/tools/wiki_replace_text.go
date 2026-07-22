@@ -22,7 +22,7 @@ func NewWikiReplaceTextTool(wikiPageService interfaces.WikiPageService, kbIDs []
 	return &wikiReplaceTextTool{
 		BaseTool: NewBaseTool(
 			ToolWikiReplaceText,
-			"Replace specific exact text in a Wiki page. Ideal for minor corrections.",
+			"替换 Wiki 页面中的特定精确文本。适合小幅修正。",
 			json.RawMessage(`{
 				"type": "object",
 				"properties": {

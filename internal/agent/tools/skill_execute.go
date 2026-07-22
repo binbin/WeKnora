@@ -16,26 +16,26 @@ import (
 
 var executeSkillScriptTool = BaseTool{
 	name: ToolExecuteSkillScript,
-	description: `Execute a script from a skill in a sandboxed environment.
+	description: `在沙箱环境中执行技能自带的脚本。
 
-## Usage
-- Use this tool to run utility scripts bundled with a skill
-- Scripts are executed in an isolated sandbox for security
-- Only scripts from loaded skills can be executed
+## 用法
+- 用于运行技能捆绑的工具脚本
+- 脚本在隔离沙箱中执行以保证安全
+- 仅可执行已加载技能中的脚本
 
-## When to Use
-- When a skill's instructions reference a utility script (e.g., "Run scripts/analyze_form.py")
-- When automation or data processing is needed as part of skill workflow
-- For deterministic operations where script execution is more reliable than generating code
+## 何时使用
+- 技能指令引用了工具脚本时（如 "Run scripts/analyze_form.py"）
+- 技能流程需要自动化或数据处理时
+- 确定性操作中脚本执行比生成代码更可靠时
 
-## Security
-- Scripts run in a sandboxed environment with limited permissions
-- Network access is disabled by default
-- File access is restricted to the skill directory
+## 安全
+- 脚本在权限受限的沙箱中运行
+- 默认禁用网络访问
+- 文件访问限制在技能目录内
 
-## Returns
-- Script stdout and stderr output
-- Exit code indicating success (0) or failure (non-zero)`,
+## 返回
+- 脚本的 stdout 与 stderr 输出
+- 表示成功（0）或失败（非 0）的退出码`,
 	schema: utils.GenerateSchema[ExecuteSkillScriptInput](),
 }
 

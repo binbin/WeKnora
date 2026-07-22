@@ -89,7 +89,7 @@ func TestPrepareFallbackMessagesMigratesHistoricalCitations(t *testing.T) {
 	}}
 
 	messages, refs := prepareFallbackMessages(cm, "legacy fallback prompt")
-	require.Contains(t, messages[0].Content, "Source handling protocol")
+	require.Contains(t, messages[0].Content, "来源处理协议")
 	require.Equal(t, `Previous <ref id="c1"/>`, messages[2].Content)
 	require.Equal(t,
 		`<kb doc="Legacy" chunk_id="legacy-chunk" kb_id="legacy-kb" />`,
@@ -107,7 +107,7 @@ func TestPrepareFallbackMessagesSuppressesCitationsWhenDisabled(t *testing.T) {
 	}}
 
 	messages, refs := prepareFallbackMessages(cm, "legacy fallback prompt")
-	require.Contains(t, messages[0].Content, "Source citations are disabled")
+	require.Contains(t, messages[0].Content, "本回答已禁用来源引用")
 	require.Equal(t, `Previous <ref id="c1"/>`, messages[2].Content)
 	require.Equal(t, "answer ", refs.ExpandText(`answer <ref id="c1"/>`))
 }

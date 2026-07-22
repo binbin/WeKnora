@@ -39,7 +39,11 @@ function embedHtmlDevFallback(): Plugin {
         const qIdx = raw.indexOf('?')
         const path = qIdx >= 0 ? raw.slice(0, qIdx) : raw
         const qs = qIdx >= 0 ? raw.slice(qIdx) : ''
-        if (path.startsWith('/embed/') && path !== '/embed.html' && !path.includes('.')) {
+        if (
+          (path.startsWith('/embed/') || path.startsWith('/w/')) &&
+          path !== '/embed.html' &&
+          !path.includes('.')
+        ) {
           req.url = `/embed.html${qs}`
         }
         next()

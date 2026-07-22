@@ -173,18 +173,27 @@ export const BUILTIN_AGENT_NORMAL_ID = BUILTIN_QUICK_ANSWER_ID;
 // Deprecated: Use BUILTIN_SMART_REASONING_ID instead
 export const BUILTIN_AGENT_AGENT_ID = BUILTIN_SMART_REASONING_ID;
 
-// 获取智能体列表（包括内置智能体）
+// 获取智能体列表（不含内置；按 purpose 过滤可见范围）
 // disabled_own_agent_ids: 当前空间在对话下拉中停用的「我的」智能体 ID，仅影响本空间
 export function listAgents(params?: {
   /**
-   * Optional creator filter; mirrors listKnowledgeBases. Built-in agents
-   * (is_builtin=true) are always returned regardless of this filter so
-   * the conversation dropdown never silently loses quick-answer /
-   * smart-reasoning when a user picks "Created by me".
+   * chat (default): agents stamped with the caller's active org unit.
+   * manage: admin sees own creations; system admin sees all custom agents.
+   */
+  purpose?: 'chat' | 'manage';
+  /**
+   * Optional creator filter for manage lists (system admin viewing all).
    */
   creator?: 'all' | 'mine' | 'others';
 }) {
-  const qs = params?.creator && params.creator !== 'all' ? `?creator=${params.creator}` : '';
+  const query = new URLSearchParams()
+  if (params?.purpose) {
+    query.set('purpose', params.purpose)
+  }
+  if (params?.creator && params.creator !== 'all') {
+    query.set('creator', params.creator)
+  }
+  const qs = query.toString() ? `?${query.toString()}` : ''
   return get<{ data: CustomAgent[]; disabled_own_agent_ids?: string[] }>(`/api/v1/agents${qs}`);
 }
 

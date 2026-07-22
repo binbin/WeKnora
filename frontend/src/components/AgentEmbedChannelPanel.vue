@@ -3,7 +3,11 @@
     <div class="channels-section">
       <div class="channels-header">
         <span class="channels-title">{{ $t('embedPublish.channelsTitle') }}</span>
-        <IntegrationsAgentFilter v-model="filterAgentId" :agents="agents" />
+        <IntegrationsAgentFilter
+          v-if="!lockedAgentId"
+          v-model="filterAgentId"
+          :agents="agents"
+        />
         <span class="channels-count">{{ channels.length }}</span>
       </div>
 
@@ -16,7 +20,7 @@
           <button v-for="ch in channels" :key="ch.id" type="button" class="channel-card channel-card--clickable"
             @click="openDrawer(ch)">
             <div class="channel-card__badge">
-              <t-icon name="code" size="22px" />
+              <t-icon name="link" size="22px" />
             </div>
             <div class="channel-card__body">
               <div class="channel-card__header">
@@ -28,6 +32,19 @@
               <span v-if="agentDisplayName(ch)" class="channel-card__agent-name">
                 {{ agentDisplayName(ch) }}
               </span>
+              <div v-if="webLinkPathFor(ch)" class="channel-card__web-link" @click.stop>
+                <code class="channel-card__web-url" :title="webLinkFor(ch)">{{ webLinkPathFor(ch) }}</code>
+                <div class="channel-card__web-actions">
+                  <t-button size="small" variant="text" @click.stop="copyChannelWebLink(ch)">
+                    <template #icon><t-icon name="file-copy" /></template>
+                    {{ $t('embedPublish.copyLink') }}
+                  </t-button>
+                  <t-button size="small" variant="text" theme="primary" @click.stop="openChannelWebLink(ch)">
+                    <template #icon><t-icon name="jump" /></template>
+                    {{ $t('embedPublish.openLink') }}
+                  </t-button>
+                </div>
+              </div>
             </div>
             <div v-if="authStore.hasRole('admin')" class="channel-card__actions" @click.stop>
               <t-dropdown trigger="click" placement="bottom-right" attach="body" :options="channelMenuOptions(ch)"
@@ -286,6 +303,23 @@
           <h4 class="setting-drawer__section-title">{{ $t('embedPublish.sectionDeploy') }}</h4>
           <p class="form-desc form-desc--block">{{ $t('embedPublish.deployIntro') }}</p>
 
+          <div class="deploy-block deploy-block--web">
+            <h5 class="deploy-block__title">{{ $t('embedPublish.deployStepWeb') }}</h5>
+            <p class="deploy-block__desc">{{ $t('embedPublish.deployStepWebDesc') }}</p>
+            <div v-if="webChannelURL" class="channel-key-control">
+              <t-input :model-value="webChannelURL" readonly class="mono-text-input channel-key-input" />
+              <t-button size="small" variant="outline" @click="copyWebChannelURL">
+                <template #icon><t-icon name="file-copy" /></template>
+                {{ $t('embedPublish.copyLink') }}
+              </t-button>
+              <t-button size="small" theme="primary" @click="openWebChannelURL">
+                <template #icon><t-icon name="jump" /></template>
+                {{ $t('embedPublish.openLink') }}
+              </t-button>
+            </div>
+            <p v-else class="form-desc">{{ $t('embedPublish.webLinkUnavailable') }}</p>
+          </div>
+
           <div class="deploy-block">
             <h5 class="deploy-block__title">{{ $t('embedPublish.deployStepEmbed') }}</h5>
             <p class="deploy-block__desc">{{ $t('embedPublish.deployStepEmbedDesc') }}</p>
@@ -408,12 +442,13 @@ import {
   deleteEmbedChannel,
   rotateEmbedToken,
   issueEmbedPreviewSession,
+  getEmbedChannelStats,
   buildEmbedSnippet,
   buildWidgetSnippet,
   buildSecureWidgetSnippet,
   buildSecureServerNodeExample,
   buildSecureServerGoExample,
-  getEmbedChannelStats,
+  buildWebChannelURL,
   clearEmbedStoredChatSession,
   clearEmbedStoredChatSessionIfAgentMismatch,
   type EmbedChannel,
@@ -431,9 +466,24 @@ import IntegrationsAgentFilter from '@/components/IntegrationsAgentFilter.vue'
 
 const filterAgentId = defineModel<string>('filterAgentId', { default: '' })
 
+const props = withDefaults(defineProps<{
+  /** When set, hide agent filter and lock create/list to this agent. */
+  lockedAgentId?: string
+}>(), {
+  lockedAgentId: '',
+})
+
 const { t } = useI18n()
 const authStore = useAuthStore()
-const isAdmin = computed(() => authStore.hasRole('admin'))
+const isAdmin = computed(() => authStore.hasRole('admin') || authStore.isSystemAdmin)
+
+watch(
+  () => props.lockedAgentId,
+  (id) => {
+    if (id) filterAgentId.value = id
+  },
+  { immediate: true },
+)
 
 const loading = ref(false)
 const saving = ref(false)
@@ -729,6 +779,59 @@ watch(createAgentId, (agentId, prev) => {
 
 const tokenFor = (ch: EmbedChannel) => ch.publish_token || ''
 
+const webChannelURL = computed(() => {
+  const slug = drawerChannel.value?.web_slug?.trim()
+  if (!slug) return ''
+  return buildWebChannelURL(slug)
+})
+
+function webLinkFor(ch: EmbedChannel): string {
+  const slug = ch.web_slug?.trim()
+  return slug ? buildWebChannelURL(slug) : ''
+}
+
+/** Short path shown on cards — full absolute URL truncates to "h" in narrow grids. */
+function webLinkPathFor(ch: EmbedChannel): string {
+  const slug = ch.web_slug?.trim()
+  return slug ? `/w/${slug}` : ''
+}
+
+const copyChannelWebLink = async (ch: EmbedChannel) => {
+  const url = webLinkFor(ch)
+  if (!url) {
+    MessagePlugin.warning(t('embedPublish.webLinkUnavailable'))
+    return
+  }
+  await navigator.clipboard.writeText(url)
+  MessagePlugin.success(t('embedPublish.linkCopied'))
+}
+
+const openChannelWebLink = (ch: EmbedChannel) => {
+  const url = webLinkFor(ch)
+  if (!url) {
+    MessagePlugin.warning(t('embedPublish.webLinkUnavailable'))
+    return
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+const copyWebChannelURL = async () => {
+  if (!webChannelURL.value) {
+    MessagePlugin.warning(t('embedPublish.webLinkUnavailable'))
+    return
+  }
+  await navigator.clipboard.writeText(webChannelURL.value)
+  MessagePlugin.success(t('embedPublish.linkCopied'))
+}
+
+const openWebChannelURL = () => {
+  if (!webChannelURL.value) {
+    MessagePlugin.warning(t('embedPublish.webLinkUnavailable'))
+    return
+  }
+  window.open(webChannelURL.value, '_blank', 'noopener,noreferrer')
+}
+
 const displayChannelKey = (channelId: string) => {
   const ch = channels.value.find((c) => c.id === channelId)
   const token = ch ? tokenFor(ch) : ''
@@ -843,6 +946,7 @@ const openCreate = () => {
   createAgentId.value = filterAgentId.value || ''
   form.value = defaultForm()
   applyDefaultChannelNameIfNeeded()
+  // Allowlist is optional; leave empty for unrestricted web / embed access.
   originsText.value = ''
   originsError.value = ''
   drawerSnippetTab.value = 'iframe'
@@ -873,15 +977,11 @@ const closeDrawer = () => {
 const parseOrigins = () => parseAllowedOrigins(originsText.value)
 
 const originsValidationMessage = (error: AllowedOriginsValidationError) => {
-  if (error.code === 'required') return t('embedPublish.originsRequired')
   if (error.code === 'wildcard_prod') return t('embedPublish.originsWildcardProd')
   return t('embedPublish.originsInvalid', { origin: error.origin })
 }
 
 const mapOriginsApiError = (message: string): string | null => {
-  if (message === 'at least one allowed origin is required') {
-    return t('embedPublish.originsRequired')
-  }
   if (message === "wildcard origin '*' is not allowed in production") {
     return t('embedPublish.originsWildcardProd')
   }

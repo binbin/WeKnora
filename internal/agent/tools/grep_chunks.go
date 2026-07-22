@@ -18,20 +18,20 @@ import (
 
 var grepChunksTool = BaseTool{
 	name: ToolGrepChunks,
-	description: `Search knowledge base chunk content with a single POSIX regular expression, applied directly in the database (PostgreSQL ~* / MySQL/SQLite REGEXP, case-insensitive). Behaves like ` + "`grep -E -i`" + `.
-Pack multiple concepts into ONE regex using ` + "`|`" + ` alternation — do not call this tool repeatedly for synonyms.
-Returns matching chunks with a short cN chunk source ID, a parent dN document ID, and a <match> snippet around the first match.
-Examples:
-- Alternation (RECOMMENDED): "stardust|skyvault|psionic" (matches any of the words)
-- Multiple terms in order: "psionic.*engine" (matches both words in order)
-- Word boundary / anchor: "\\brag\\b" or "^chapter\\s+\\d+"
-- Plain text: "engine" (matches literal substring anywhere in chunk content)
-IMPORTANT — JSON escaping: every backslash in a regex MUST be written as \\ inside the JSON tool arguments (e.g. to search for literal "C++" write "C\\+\\+", NOT "C\+\+"; for "\d+" write "\\d+"). Plain "\+" / "\d" etc. are invalid JSON escapes and will fail to parse.
-Use this to locate candidate chunks by exact identifiers, error codes, product names, or recurring terms.
+	description: `使用单条 POSIX 正则表达式搜索知识库分块内容，直接在数据库中执行（PostgreSQL ~* / MySQL/SQLite REGEXP，不区分大小写）。行为类似 ` + "`grep -E -i`" + `。
+请用 ` + "`|`" + ` 交替把多个概念打包进**一条**正则——不要为同义词反复调用本工具。
+返回匹配分块，含短 ID cN、父文档短 ID dN，以及首个匹配附近的 <match> 片段。
+示例：
+- 交替（推荐）："stardust|skyvault|psionic"（匹配任一词）
+- 按序多词："psionic.*engine"（按顺序匹配两个词）
+- 词边界/锚点："\\brag\\b" 或 "^chapter\\s+\\d+"
+- 纯文本："engine"（匹配分块内容中任意子串）
+重要——JSON 转义：正则中的每个反斜杠在 JSON 工具参数中必须写成 \\（例如搜字面量 "C++" 应写 "C\\+\\+"，不能写 "C\+\+"；搜 "\d+" 应写 "\\d+"）。单独的 "\+" / "\d" 等是非法 JSON 转义，会导致解析失败。
+用于按精确标识符、错误码、产品名或反复出现的术语定位候选分块。
 
-## Deep read after grep:
-- **FAQ hit** (chunk type faq): call list_knowledge_chunks with **faq_id=cN** from the grep result (NOT the parent dN document ID).
-- **Document hit**: call list_knowledge_chunks with **knowledge_id=dN**, or get_document_info with **knowledge_ids=[dN]**.`,
+## grep 之后的精读：
+- **FAQ 命中**（分块类型 faq）：用 grep 结果中的 **faq_id=cN** 调用 list_knowledge_chunks（不要用父文档 dN）。
+- **文档命中**：用 **knowledge_id=dN** 调用 list_knowledge_chunks，或用 **knowledge_ids=[dN]** 调用 get_document_info。`,
 	schema: json.RawMessage(`{
   "type": "object",
   "properties": {

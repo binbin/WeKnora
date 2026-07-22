@@ -8,7 +8,7 @@
         <div class="header-title" style="--wails-draggable: drag">
           <div class="title-row" style="--wails-draggable: drag">
             <h2 style="--wails-draggable: drag">{{ $t('knowledgeBase.title') }}</h2>
-            <t-tooltip v-if="authStore.hasRole('contributor')" :content="$t('knowledgeList.create')" placement="bottom">
+            <t-tooltip v-if="authStore.canManageKnowledgeBase" :content="$t('knowledgeList.create')" placement="bottom">
               <t-button variant="text" theme="default" size="small" class="header-action-btn"
                 data-guide="kb-list-create" style="--wails-draggable: no-drag" @click="handleCreateKnowledgeBase">
                 <template #icon><t-icon name="folder-add" size="16px" /></template>
@@ -635,7 +635,7 @@
           <img class="empty-img" src="@/assets/img/upload.svg" alt="">
           <span class="empty-txt">{{ $t('knowledgeList.empty.title') }}</span>
           <span class="empty-desc">{{ $t('knowledgeList.empty.description') }}</span>
-          <t-button v-if="authStore.hasRole('contributor')" class="kb-create-btn empty-state-btn"
+          <t-button v-if="authStore.canManageKnowledgeBase" class="kb-create-btn empty-state-btn"
             data-guide="kb-list-create" @click="handleCreateKnowledgeBase">
             <template #icon><t-icon name="folder-add" /></template>
             {{ $t('knowledgeList.create') }}
@@ -663,7 +663,7 @@
           <img class="empty-img" src="@/assets/img/upload.svg" alt="">
           <span class="empty-txt">{{ $t('knowledgeList.empty.title') }}</span>
           <span class="empty-desc">{{ $t('knowledgeList.empty.description') }}</span>
-          <t-button v-if="authStore.hasRole('contributor')" class="kb-create-btn empty-state-btn"
+          <t-button v-if="authStore.canManageKnowledgeBase" class="kb-create-btn empty-state-btn"
             data-guide="kb-list-create" @click="handleCreateKnowledgeBase">
             <template #icon><t-icon name="folder-add" /></template>
             {{ $t('knowledgeList.create') }}
@@ -1351,14 +1351,14 @@ const handleSettings = (kb: KB) => {
 // Legacy KBs created before PR 5 have an empty creator_id; treat
 // those as tenant-owned (Admin+ may manage) so existing KBs aren't
 // suddenly unmanageable for everyone.
-function canManageKBCard(kb: KB): boolean {
-  const userId = authStore.user?.id || ''
-  if (kb.creator_id && userId && kb.creator_id === userId) return true
-  return authStore.hasRole('admin')
+function canManageKBCard(_kb: KB): boolean {
+  // KB settings / delete: Admin+ or system admin only (not creator-as-contributor).
+  return authStore.canManageKnowledgeBase
 }
 
-function canDuplicateKBCard(kb: any): boolean {
-  return authStore.hasRole('contributor') && kb.isMine !== false
+function canDuplicateKBCard(_kb: any): boolean {
+  // Duplicate creates a new KB — same gate as create.
+  return authStore.canManageKnowledgeBase
 }
 
 // isMyKb 仅用于卡片右下角徽章在「我创建」与「同空间其他成员创建」之间切换。

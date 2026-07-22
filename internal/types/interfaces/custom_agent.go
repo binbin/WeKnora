@@ -31,13 +31,11 @@ type CustomAgentService interface {
 	// GetAgentByIDAndTenant retrieves agent by ID and tenant (for shared agents; skips built-in resolution)
 	GetAgentByIDAndTenant(ctx context.Context, id string, tenantID uint64) (*types.CustomAgent, error)
 
-	// ListAgents lists all agents under the current tenant (including built-in agents)
-	// Parameters:
-	//   - ctx: Context information, containing tenant information
-	// Returns:
-	//   - List of agent objects (built-in agents first, then custom agents sorted by creation time)
-	//   - Possible errors such as insufficient permissions, etc.
-	ListAgents(ctx context.Context) ([]*types.CustomAgent, error)
+	// ListAgents lists agents for the current tenant.
+	// purpose: "chat" (default) = same org_unit custom agents;
+	// "manage" = admin sees own creations, system admin sees all custom agents.
+	// Built-in agents are never included.
+	ListAgents(ctx context.Context, purpose string) ([]*types.CustomAgent, error)
 
 	// UpdateAgent updates agent information
 	// Parameters:
@@ -115,6 +113,16 @@ type CustomAgentRepository interface {
 	//   - List of agent objects
 	//   - Possible errors such as database errors, etc.
 	ListAgentsByTenantID(ctx context.Context, tenantID uint64) ([]*types.CustomAgent, error)
+
+	// ListCustomAgentsByOrgUnit lists non-builtin agents stamped with orgUnitID.
+	ListCustomAgentsByOrgUnit(
+		ctx context.Context, tenantID uint64, orgUnitID string,
+	) ([]*types.CustomAgent, error)
+
+	// ListCustomAgentsByCreator lists non-builtin agents created by userID.
+	ListCustomAgentsByCreator(
+		ctx context.Context, tenantID uint64, userID string,
+	) ([]*types.CustomAgent, error)
 
 	// UpdateAgent updates an agent record
 	// Parameters:

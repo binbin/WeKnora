@@ -91,6 +91,12 @@ func (f *fakeEmbedChannelService) LookupEnabledChannel(
 	return ch, nil
 }
 
+func (f *fakeEmbedChannelService) LookupByWebSlug(
+	ctx context.Context, slug string,
+) (*types.EmbedChannel, error) {
+	return nil, service.ErrEmbedChannelNotFound
+}
+
 func (f *fakeEmbedChannelService) IssueSessionToken(
 	ctx context.Context, channelID string,
 ) (string, int, error) {
@@ -218,7 +224,8 @@ func TestOriginAllowed(t *testing.T) {
 		allowed []string
 		want    bool
 	}{
-		{name: "empty allow list", origin: "https://evil.com", allowed: nil, want: false},
+		{name: "empty allow list", origin: "https://evil.com", allowed: nil, want: true},
+		{name: "empty allow list empty origin", origin: "", allowed: nil, want: true},
 		{name: "exact match", origin: "https://app.example.com", allowed: []string{"https://app.example.com"}, want: true},
 		{name: "wildcard star", origin: "https://any.example.com", allowed: []string{"*"}, want: true},
 		{name: "subdomain suffix", origin: "https://app.example.com", allowed: []string{"*.example.com"}, want: true},

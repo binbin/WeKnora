@@ -451,6 +451,10 @@ func (h *Handler) resolveAgent(ctx context.Context, c *gin.Context, agentID stri
 	if agentID == "" {
 		return nil, 0
 	}
+	if types.IsBuiltinAgentID(agentID) {
+		logger.Warnf(ctx, "Built-in agent %s is disabled for chat", secutils.SanitizeForLog(agentID))
+		return nil, 0
+	}
 
 	logger.Infof(ctx, "Resolving agent, agent ID: %s", secutils.SanitizeForLog(agentID))
 
@@ -484,6 +488,29 @@ func (h *Handler) resolveAgent(ctx context.Context, c *gin.Context, agentID stri
 	} else {
 		logger.Infof(ctx, "Using custom agent: ID=%s, Name=%s, IsBuiltin=%v, AgentMode=%s, effectiveTenantID=%d",
 			customAgent.ID, customAgent.Name, customAgent.IsBuiltin, customAgent.Config.AgentMode, effectiveTenantID)
+	}
+
+	if customAgent != nil {
+		if customAgent.IsBuiltin || types.IsBuiltinAgentID(customAgent.ID) {
+			return nil, 0
+		}
+		// Chat visibility: agent must belong to the caller's active org unit
+		// (unless system admin). Shared agents skip this org-unit stamp check.
+		// Embed visitors have no org-unit context; the channel's bound agent_id
+		// is the authorization boundary.
+		if effectiveTenantID == 0 && !types.IsSystemAdminActor(ctx) &&
+			!types.IsEmbedPrincipal(ctx) {
+			orgUnitID, _ := types.OrgUnitIDFromContext(ctx)
+			if orgUnitID == "" || customAgent.OrgUnitID != orgUnitID {
+				logger.Warnf(ctx,
+					"Agent %s not visible in org unit %s (agent org=%s)",
+					secutils.SanitizeForLog(agentID),
+					secutils.SanitizeForLog(orgUnitID),
+					secutils.SanitizeForLog(customAgent.OrgUnitID),
+				)
+				return nil, 0
+			}
+		}
 	}
 
 	return customAgent, effectiveTenantID

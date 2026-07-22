@@ -73,6 +73,20 @@ func TestSessionOwnerIDFromContextUsesEmbedSessionPrincipal(t *testing.T) {
 	}
 }
 
+func TestIsEmbedPrincipal(t *testing.T) {
+	if IsEmbedPrincipal(context.Background()) {
+		t.Fatal("empty context should not be embed")
+	}
+	web := WithPrincipal(context.Background(), Principal{Type: PrincipalWebUser, ID: "u1"})
+	if IsEmbedPrincipal(web) {
+		t.Fatal("web user should not be embed")
+	}
+	sess := WithPrincipal(context.Background(), EmbedSessionPrincipal(1, "ch", "s"))
+	if !IsEmbedPrincipal(sess) {
+		t.Fatal("embed session should be embed")
+	}
+}
+
 func TestMCPOAuthPrincipalMapsEmbedSessionToVisitor(t *testing.T) {
 	sess := EmbedSessionPrincipal(10000, "ch1", "sess1")
 	ctx := WithEmbedVisitorID(context.Background(), "visitor-abc")

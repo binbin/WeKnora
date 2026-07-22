@@ -33,9 +33,16 @@ type OrgUnitService interface {
 	ResolveVisibility(ctx context.Context, tenantID uint64, orgUnitID string) (*types.OrgUnitVisibility, error)
 
 	// CanReadKB reports whether the active OrgUnit may read a KB bound
-	// to kbOrgUnitID (empty kbOrgUnitID = unbound = always readable
-	// within the tenant when hierarchy is inactive or as shared root).
-	CanReadKB(ctx context.Context, tenantID uint64, activeOrgUnitID string, kbOrgUnitID string) (bool, error)
+	// to kbOrgUnitID. Unbound KBs (empty kbOrgUnitID) stay tenant-wide
+	// readable. Ancestor KBs are readable only when shareWithDescendants
+	// is true (下级引用上级需显式勾选「共享给下级机构」).
+	CanReadKB(
+		ctx context.Context,
+		tenantID uint64,
+		activeOrgUnitID string,
+		kbOrgUnitID string,
+		shareWithDescendants bool,
+	) (bool, error)
 
 	// CanWriteKB reports whether the active OrgUnit may mutate a KB.
 	CanWriteKB(ctx context.Context, tenantID uint64, activeOrgUnitID string, kbOrgUnitID string) (bool, error)
@@ -47,8 +54,9 @@ type OrgUnitService interface {
 	HasHierarchy(ctx context.Context, tenantID uint64) (bool, error)
 
 	// ListInviteableOrgUnits returns units the actor may assign when
-	// inviting a member: own unit + siblings (平级) + descendants (下级).
-	// When role is Owner, only descendants are returned.
+	// inviting a member. Contributor/viewer: own unit + siblings (平级)
+	// + descendants (下级). Admin/Owner: descendants only — 同级不可
+	// 再任命管理员（或历史所有者）。
 	ListInviteableOrgUnits(
 		ctx context.Context,
 		tenantID uint64,
@@ -65,6 +73,19 @@ type OrgUnitService interface {
 		targetOrgUnitID string,
 		role types.TenantRole,
 	) (bool, error)
+
+	// AssertCanManageTenantMember enforces org-scoped admin limits:
+	// manage peer non-admins or subordinates; never peer admins/owners;
+	// never promote a peer to admin/owner. Unscoped actors (system admin,
+	// cross-tenant superuser, tenant owner) and tenants without hierarchy
+	// bypass. newRole may be empty when the operation is remove-only.
+	AssertCanManageTenantMember(
+		ctx context.Context,
+		tenantID uint64,
+		targetUserID string,
+		targetRole types.TenantRole,
+		newRole types.TenantRole,
+	) error
 }
 
 // OrgUnitRepository persists OrgUnits and memberships.

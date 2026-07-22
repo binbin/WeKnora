@@ -22,10 +22,10 @@ func NewWikiReadSourceDocTool(knowledgeService interfaces.KnowledgeService, chun
 	return &wikiReadSourceDocTool{
 		BaseTool: NewBaseTool(
 			ToolWikiReadSourceDoc,
-			`Read or search within a specific source document to drill down for details omitted from the wiki.
-Provide the knowledge_id from the <sources> block.
-You can EITHER search using a regex query OR fetch a specific contiguous range of chunks using start_chunk_index and end_chunk_index (useful for expanding context around a known chunk).
-If neither query nor range is provided, it returns the beginning of the document.`,
+			`读取或搜索特定源文档，以深入查找 wiki 中省略的细节。
+提供 <sources> 块中的 knowledge_id。
+你可以用正则 query 搜索，或用 start_chunk_index 与 end_chunk_index 拉取连续分块范围（便于围绕已知分块扩展上下文）。
+若既未提供 query 也未提供范围，则返回文档开头部分。`,
 			json.RawMessage(`{
   "type": "object",
   "properties": {

@@ -282,9 +282,9 @@ func NewWikiReadPageTool(
 	return &wikiReadPageTool{
 		BaseTool: NewBaseTool(
 			ToolWikiReadPage,
-			`Read one or more wiki pages by their slugs. Returns the full markdown content, metadata, and links.
-Use this to read specific wiki pages when you know their slug (e.g. "entity/acme-corp", "concept/rag").
-When the same slug exists in multiple knowledge bases, all matching pages are returned (each tagged with its short bN knowledge_base_id). Pass that bN value in "knowledge_base_id" to limit to a specific KB.`,
+			`按 slug 读取一个或多个 wiki 页面。返回完整 Markdown 内容、元数据与链接。
+当你已知页面 slug（如 "entity/acme-corp"、"concept/rag"）时，用本工具读取指定 wiki 页面。
+若同一 slug 存在于多个知识库，会返回全部匹配页面（各自带短 ID bN 的 knowledge_base_id）。传入该 bN 到 "knowledge_base_id" 可限定到特定知识库。`,
 			json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -574,16 +574,16 @@ func NewWikiSearchTool(
 	return &wikiSearchTool{
 		BaseTool: NewBaseTool(
 			ToolWikiSearch,
-			`Search wiki pages using PostgreSQL POSIX regular expressions (~* operator, case-insensitive).
-STRONGLY PREFER using regex to search for multiple concepts at once rather than simple plain text queries.
-Returns matching pages with titles, slugs, and summaries (each tagged with its short bN knowledge_base_id).
-Examples:
-- Alternation (RECOMMENDED): "stardust|skyvault" (matches either word)
-- Multiple terms (RECOMMENDED): "psionic.*engine" (matches both words in order)
-- Prefix matching: "^entity/.*" (finds all entities)
-- Plain text: "engine" (matches anywhere in title/content/slug/summary)
-IMPORTANT — JSON escaping: every backslash in a regex MUST be written as \\ inside the JSON tool arguments (e.g. to search for literal "C++" write "C\\+\\+", NOT "C\+\+"; for "\d+" write "\\d+"). Plain "\+" / "\d" etc. are invalid JSON escapes and will fail to parse.
-Use this to find relevant wiki pages when you don't know the exact slug.`,
+			`使用 PostgreSQL POSIX 正则（~* 运算符，不区分大小写）搜索 wiki 页面。
+强烈建议用正则一次性搜索多个概念，而不是简单纯文本查询。
+返回匹配页面的标题、slug 与摘要（各自带短 ID bN 的 knowledge_base_id）。
+示例：
+- 交替（推荐）："stardust|skyvault"（匹配任一词）
+- 多词（推荐）："psionic.*engine"（按顺序匹配两个词）
+- 前缀匹配："^entity/.*"（查找全部实体）
+- 纯文本："engine"（在标题/内容/slug/摘要中任意匹配）
+重要——JSON 转义：正则中的每个反斜杠在 JSON 工具参数中必须写成 \\（例如搜字面量 "C++" 应写 "C\\+\\+"，不能写 "C\+\+"；搜 "\d+" 应写 "\\d+"）。单独的 "\+" / "\d" 等是非法 JSON 转义，会导致解析失败。
+在不知道精确 slug 时，用本工具查找相关 wiki 页面。`,
 			json.RawMessage(`{
   "type": "object",
   "properties": {

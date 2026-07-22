@@ -21,7 +21,7 @@ func NewWikiRenamePageTool(wikiPageService interfaces.WikiPageService, kbIDs []s
 	return &wikiRenamePageTool{
 		BaseTool: NewBaseTool(
 			ToolWikiRenamePage,
-			"Rename a Wiki page's slug. Automatically cascades the new slug to all pages that linked to the old one.",
+			"重命名 Wiki 页面的 slug。自动将新 slug 级联更新到所有链接到旧 slug 的页面。",
 			json.RawMessage(`{
 				"type": "object",
 				"properties": {

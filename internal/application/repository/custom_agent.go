@@ -51,6 +51,40 @@ func (r *customAgentRepository) ListAgentsByTenantID(ctx context.Context, tenant
 	return agents, nil
 }
 
+// ListCustomAgentsByOrgUnit lists non-builtin agents for an exact org unit.
+func (r *customAgentRepository) ListCustomAgentsByOrgUnit(
+	ctx context.Context, tenantID uint64, orgUnitID string,
+) ([]*types.CustomAgent, error) {
+	var agents []*types.CustomAgent
+	if err := r.db.WithContext(ctx).
+		Where(
+			"tenant_id = ? AND is_builtin = ? AND org_unit_id = ?",
+			tenantID, false, orgUnitID,
+		).
+		Order("created_at DESC").
+		Find(&agents).Error; err != nil {
+		return nil, err
+	}
+	return agents, nil
+}
+
+// ListCustomAgentsByCreator lists non-builtin agents created by userID.
+func (r *customAgentRepository) ListCustomAgentsByCreator(
+	ctx context.Context, tenantID uint64, userID string,
+) ([]*types.CustomAgent, error) {
+	var agents []*types.CustomAgent
+	if err := r.db.WithContext(ctx).
+		Where(
+			"tenant_id = ? AND is_builtin = ? AND created_by = ?",
+			tenantID, false, userID,
+		).
+		Order("created_at DESC").
+		Find(&agents).Error; err != nil {
+		return nil, err
+	}
+	return agents, nil
+}
+
 // UpdateAgent updates an agent
 func (r *customAgentRepository) UpdateAgent(ctx context.Context, agent *types.CustomAgent) error {
 	return r.db.WithContext(ctx).Save(agent).Error

@@ -995,24 +995,8 @@ const uiStore = useUIStore()
 const authStore = useAuthStore()
 const orgStore = useOrganizationStore()
 
-// Permission control: check if current user owns this KB or has edit/manage permission.
-//
-// isOwner used to compare kbInfo.tenant_id against the user's effective tenant id,
-// which silently treated "any KB visible to me in my current tenant" as "I created
-// it" — Viewer / Contributor in their home tenant ended up showing every FAQ
-// CRUD entry on every KB and 403'ing when they clicked. Mirror the rule we settled
-// on in KnowledgeBase.vue: explicit creator_id match, with role / org-share fallbacks
-// inside canEdit / canManage. Legacy KBs with empty creator_id stay tenant-owned
-// (Admin+ may manage).
-const isOwner = computed(() => {
-  if (!kbInfo.value) return false
-  const creatorId = (kbInfo.value as any).creator_id || ''
-  const userId = authStore.user?.id || ''
-  if (!creatorId) return false
-  return creatorId === userId
-})
-
-// Current KB's shared record (when accessed via organization share)
+// Content edit: Contributor+ in home tenant, or share editor when via share.
+// Configuration (settings): Admin+ / system admin only.
 const currentSharedKb = computed(() =>
   orgStore.sharedKnowledgeBases.find((s) => s.knowledge_base?.id === props.kbId) ?? null,
 )
@@ -1024,27 +1008,17 @@ const currentSharedKb = computed(() =>
 // tenants); share-list presence is the authoritative signal.
 const isViaShare = computed(() => !!currentSharedKb.value)
 
-// Can edit: when accessed via an organization share, ONLY the share grant
-// counts — even if the current user happens to be the original creator of
-// the KB. The backend's RBAC middleware authorizes based on the active
-// tenant, not on creator_id, so a creator viewing their own KB from a
-// different tenant context will be 403'd on write. Otherwise: KB creator
-// (any role) or tenant Admin+ in the home tenant.
+// Content edit: Contributor+ in home tenant, or share editor when via share.
 const canEdit = computed(() => {
   if (isViaShare.value) return orgStore.canEditKB(props.kbId, false)
-  if (isOwner.value) return true
-  if (authStore.hasRole('admin')) return true
+  if (authStore.hasRole('contributor')) return true
   return orgStore.canEditKB(props.kbId, false)
 })
 
-// Can manage (delete, settings, share): same isViaShare-first rule. For
-// shared KBs only an 'admin' share grant qualifies — editor/viewer (and
-// even being the creator viewed via share) never grant delete/settings.
+// KB settings / delete / share: Admin+ only (not creator-as-contributor).
 const canManage = computed(() => {
   if (isViaShare.value) return orgStore.canManageKB(props.kbId, false)
-  if (isOwner.value) return true
-  if (authStore.hasRole('admin')) return true
-  return orgStore.canManageKB(props.kbId, false)
+  return authStore.canManageKnowledgeBase
 })
 
 // FAQ 操作：新建组（新建条目 + 导入）

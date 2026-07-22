@@ -59,8 +59,18 @@ func (r *stubOrgUnitRepo) RemoveMember(context.Context, string, string) error   
 func (r *stubOrgUnitRepo) ListMembers(context.Context, string) ([]*types.OrgUnitMember, error) {
 	return nil, nil
 }
-func (r *stubOrgUnitRepo) ListUserMemberships(context.Context, uint64, string) ([]*types.OrgUnitMember, error) {
-	return r.members, nil
+func (r *stubOrgUnitRepo) ListUserMemberships(
+	_ context.Context,
+	_ uint64,
+	userID string,
+) ([]*types.OrgUnitMember, error) {
+	out := make([]*types.OrgUnitMember, 0)
+	for _, membership := range r.members {
+		if membership != nil && membership.UserID == userID {
+			out = append(out, membership)
+		}
+	}
+	return out, nil
 }
 func (r *stubOrgUnitRepo) GetMember(context.Context, string, string) (*types.OrgUnitMember, error) {
 	return nil, apprepo.ErrOrgUnitMemberNotFound
@@ -71,6 +81,11 @@ func (r *stubOrgUnitRepo) SetPrimary(context.Context, uint64, string, string) er
 }
 
 func newTestOrgUnitService() interfaces.OrgUnitService {
+	svc, _ := newTestOrgUnitServiceWithRepo()
+	return svc
+}
+
+func newTestOrgUnitServiceWithRepo() (interfaces.OrgUnitService, *stubOrgUnitRepo) {
 	repo := &stubOrgUnitRepo{
 		units: map[string]*types.OrgUnit{
 			"prov": {
@@ -91,7 +106,7 @@ func newTestOrgUnitService() interfaces.OrgUnitService {
 			},
 		},
 	}
-	return NewOrgUnitService(repo)
+	return NewOrgUnitService(repo), repo
 }
 
 func TestOrgUnitAncestorReadSelfWrite(t *testing.T) {
@@ -108,23 +123,27 @@ func TestOrgUnitAncestorReadSelfWrite(t *testing.T) {
 	}
 
 	cases := []struct {
-		name     string
-		active   string
-		kbUnit   string
-		wantRead bool
-		wantWrite bool
+		name                 string
+		active               string
+		kbUnit               string
+		shareWithDescendants bool
+		wantRead             bool
+		wantWrite            bool
 	}{
-		{"county reads self", "county", "county", true, true},
-		{"county reads city", "county", "city", true, false},
-		{"county reads province", "county", "prov", true, false},
-		{"county cannot read sibling path", "county", "other", false, false},
-		{"city cannot read county", "city", "county", false, false},
-		{"province cannot read city", "prov", "city", false, false},
-		{"unbound always readable", "county", "", true, true},
+		{"county reads self", "county", "county", false, true, true},
+		{"county cannot read city without share", "county", "city", false, false, false},
+		{"county reads city when shared", "county", "city", true, true, false},
+		{"county reads province when shared", "county", "prov", true, true, false},
+		{"county cannot read sibling path", "county", "other", true, false, false},
+		{"city cannot read county even if shared", "city", "county", true, false, false},
+		{"province cannot read city even if shared", "prov", "city", true, false, false},
+		{"unbound always readable", "county", "", false, true, true},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			gotRead, err := svc.CanReadKB(ctx, tenantID, testCase.active, testCase.kbUnit)
+			gotRead, err := svc.CanReadKB(
+				ctx, tenantID, testCase.active, testCase.kbUnit, testCase.shareWithDescendants,
+			)
 			if err != nil {
 				t.Fatalf("CanReadKB: %v", err)
 			}
@@ -176,6 +195,17 @@ func TestOrgUnitInviteableScope(t *testing.T) {
 		t.Fatalf("owner should only get county, got %#v", ownerUnits)
 	}
 
+	// Admin role from city: also descendants only (同级不可任命管理员)
+	adminUnits, err := svc.ListInviteableOrgUnits(
+		ctx, tenantID, "city", types.TenantRoleAdmin,
+	)
+	if err != nil {
+		t.Fatalf("admin list: %v", err)
+	}
+	if len(adminUnits) != 1 || adminUnits[0].ID != "county" {
+		t.Fatalf("admin should only get county, got %#v", adminUnits)
+	}
+
 	ok, err := svc.CanInviteToOrgUnit(
 		ctx, tenantID, "city", "county", types.TenantRoleOwner,
 	)
@@ -187,6 +217,12 @@ func TestOrgUnitInviteableScope(t *testing.T) {
 	)
 	if err != nil || ok {
 		t.Fatalf("owner must not invite self: ok=%v err=%v", ok, err)
+	}
+	ok, err = svc.CanInviteToOrgUnit(
+		ctx, tenantID, "city", "city2", types.TenantRoleAdmin,
+	)
+	if err != nil || ok {
+		t.Fatalf("admin must not invite peer as admin: ok=%v err=%v", ok, err)
 	}
 }
 
@@ -266,5 +302,95 @@ func TestOrgUnitCreateRootRequiresSystemAdmin(t *testing.T) {
 	}
 	if unit == nil || unit.ParentID != "" {
 		t.Fatalf("unexpected unit: %#v", unit)
+	}
+}
+
+func TestAssertCanManageTenantMember(t *testing.T) {
+	svc, repo := newTestOrgUnitServiceWithRepo()
+	repo.members = []*types.OrgUnitMember{
+		{UserID: "peer-contrib", OrgUnitID: "city2", IsPrimary: true},
+		{UserID: "peer-admin", OrgUnitID: "city2", IsPrimary: true},
+		{UserID: "self-contrib", OrgUnitID: "city", IsPrimary: true},
+		{UserID: "child-admin", OrgUnitID: "county", IsPrimary: true},
+		{UserID: "ancestor", OrgUnitID: "prov", IsPrimary: true},
+	}
+	ctx := types.WithOrgUnitID(context.Background(), "city")
+	tenantID := uint64(1)
+
+	cases := []struct {
+		name       string
+		target     string
+		targetRole types.TenantRole
+		newRole    types.TenantRole
+		wantErr    error
+	}{
+		{
+			name: "peer contributor removable",
+			target: "peer-contrib", targetRole: types.TenantRoleContributor,
+			wantErr: nil,
+		},
+		{
+			name: "peer contributor cannot promote to admin",
+			target: "peer-contrib", targetRole: types.TenantRoleContributor,
+			newRole: types.TenantRoleAdmin, wantErr: ErrCannotPromotePeerToAdmin,
+		},
+		{
+			name: "peer admin not manageable",
+			target: "peer-admin", targetRole: types.TenantRoleAdmin,
+			wantErr: ErrCannotManagePeerAdmin,
+		},
+		{
+			name: "same-unit contributor ok",
+			target: "self-contrib", targetRole: types.TenantRoleContributor,
+			wantErr: nil,
+		},
+		{
+			name: "same-unit cannot promote to admin",
+			target: "self-contrib", targetRole: types.TenantRoleContributor,
+			newRole: types.TenantRoleAdmin, wantErr: ErrCannotPromotePeerToAdmin,
+		},
+		{
+			name: "subordinate admin manageable",
+			target: "child-admin", targetRole: types.TenantRoleAdmin,
+			wantErr: nil,
+		},
+		{
+			name: "subordinate can promote to admin",
+			target: "child-admin", targetRole: types.TenantRoleContributor,
+			newRole: types.TenantRoleAdmin, wantErr: nil,
+		},
+		{
+			name: "ancestor outside scope",
+			target: "ancestor", targetRole: types.TenantRoleContributor,
+			wantErr: ErrMemberOutsideManageScope,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := svc.AssertCanManageTenantMember(
+				ctx, tenantID, testCase.target, testCase.targetRole, testCase.newRole,
+			)
+			if testCase.wantErr == nil {
+				if err != nil {
+					t.Fatalf("unexpected err: %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != testCase.wantErr.Error() {
+				t.Fatalf("got %v want %v", err, testCase.wantErr)
+			}
+		})
+	}
+
+	// Unscoped owner bypasses hierarchy limits.
+	ownerCtx := context.WithValue(
+		types.WithOrgUnitID(context.Background(), "city"),
+		types.TenantRoleContextKey,
+		types.TenantRoleOwner,
+	)
+	if err := svc.AssertCanManageTenantMember(
+		ownerCtx, tenantID, "peer-admin", types.TenantRoleAdmin, "",
+	); err != nil {
+		t.Fatalf("owner should manage peer admin: %v", err)
 	}
 }

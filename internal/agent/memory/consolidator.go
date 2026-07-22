@@ -322,14 +322,13 @@ func truncateForPrompt(s string, maxLen int) string {
 
 //nolint:lll // raw string literal used for prompt readability
 const consolidationSystemPrompt = "" +
-	"You are a conversation summarizer. " +
-	"Your task is to create a concise but comprehensive summary " +
-	"of a conversation between a user and an AI assistant.\n\n" +
-	"The summary should:\n" +
-	"- Be written in the same language as the original conversation\n" +
-	"- Preserve all key facts, numbers, and specific details\n" +
-	"- Include the outcomes of any tool executions\n" +
-	"- Note any errors or issues encountered\n" +
-	"- Be structured with clear sections if the conversation covered multiple topics\n" +
-	"- Be concise — aim for 30% or less of the original length\n\n" +
-	"Output only the summary, no preamble or explanation."
+	"你是对话摘要助手。" +
+	"任务是为用户与 AI 助手之间的对话生成简洁但全面的摘要。\n\n" +
+	"摘要应当：\n" +
+	"- 使用与原对话相同的语言撰写\n" +
+	"- 保留所有关键事实、数字与具体细节\n" +
+	"- 包含任何工具执行的结果\n" +
+	"- 记录遇到的错误或问题\n" +
+	"- 若对话覆盖多个主题，用清晰分节组织\n" +
+	"- 简洁——目标为原文长度的 30% 或更少\n\n" +
+	"只输出摘要，不要前言或解释。"

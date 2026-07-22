@@ -8,18 +8,18 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
-const agentRetrievedImageRequirementMarker = "## Retrieved Image Output Requirement"
+const agentRetrievedImageRequirementMarker = "## 检索图片输出要求"
 
 const agentRetrievedImageSystemRequirement = `
 
-## Retrieved Image Output Requirement
-Retrieved tool results for this turn contain Markdown images. Treat images attached to retrieved passages as relevant by default.
-- Unless the user explicitly requests text-only output, or every retrieved image is clearly unrelated, the final answer MUST include at least one relevant Markdown image copied verbatim from the tool results.
-- Preserve the complete Markdown image syntax and URL exactly; never invent, shorten, normalize, or replace the URL.
-- Use ASCII half-width parentheses exactly as ![alt](url); never use full-width （ or ）.
-- Place each image immediately after the paragraph it supports.
-- When multiple retrieved images support different sections, distribute them across those sections instead of stopping after the first image.
-- Before finishing, silently verify that the answer contains a Markdown image whenever this requirement applies.`
+## 检索图片输出要求
+本轮工具结果包含 Markdown 图片。默认将检索段落附带的图片视为相关。
+- 除非用户明确要求纯文本输出，或所有检索图片都明显与答案无关，最终回答必须至少包含一张从工具结果原样复制的相关 Markdown 图片。
+- 完整保留 Markdown 图片语法及其 URL，绝不要编造、缩短、规范化或替换 URL。
+- 必须使用 ASCII 半角括号，格式为 ![alt](url)；绝不要使用全角（或）。
+- 将每张图片紧挨放在其所支撑段落之后。
+- 当多张检索图片分别支撑不同段落时，应在对应段落中分别插入，不要只插第一张就结束。
+- 结束前请静默检查：只要本要求适用，答案中就应包含 Markdown 图片。`
 
 func stepContainsMarkdownImage(step types.AgentStep) bool {
 	for _, toolCall := range step.ToolCalls {

@@ -22,7 +22,7 @@ func NewWikiDeletePageTool(wikiPageService interfaces.WikiPageService, kbIDs []s
 	return &wikiDeletePageTool{
 		BaseTool: NewBaseTool(
 			ToolWikiDeletePage,
-			"Delete a Wiki page. Automatically cleans up incoming links on other pages to prevent dead links.",
+			"删除 Wiki 页面。自动清理其他页面上的入站链接，避免死链。",
 			json.RawMessage(`{
 				"type": "object",
 				"properties": {

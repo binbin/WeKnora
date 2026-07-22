@@ -219,7 +219,6 @@ import SystemAuditLog from '@/views/system/SystemAuditLog.vue'
 import IntegrationSettingsSection from '@/views/integrations/IntegrationSettingsSection.vue'
 import {
   INTEGRATION_PREVIEW_ITEMS,
-  INTEGRATION_TAB_MIN_ROLE,
   INTEGRATION_TABS,
   type IntegrationTab,
 } from '@/config/integrations'
@@ -248,40 +247,19 @@ type NavGroup = {
   items: NavItem[]
 }
 
-// 设置二级导航的最低可见角色：和 internal/router/router.go 的守卫矩阵对齐。
-// 以「页面里至少有 1 个有意义的写操作所要求的最低角色」为基准，把基础设
-// 施配置（models 写、ollama 下载、websearch 写、parser/storage/vector/mcp
-// CRUD、chat-history 配置）统一收到 admin；只读类（general / system info /
-// tenant-info / members 名册）保留 viewer 可见；最高敏感的 reset api
-// key 是 owner-only。改这张表前请在 router.go 里复核对应路由组。
-//
-// 特别说明：
-// - chathistory 页面唯一的「启用消息索引」开关 PUT /tenants/kv/chat-history-config
-//   后端走 g.Admin()。给 viewer/contributor 看到入口、点开开关、保存时
-//   403，体验很差，所以入口本身归 admin。
-// - models 列表 viewer 可读，页面内的「+ 添加模型 / 编辑 / 删除」按钮在
-//   ModelSettings.vue 里另用 hasRole('admin') 自己 gate，所以入口保留
-//   viewer 是合理的（contributor 也能浏览模型列表）。
-type RoleKey = 'viewer' | 'contributor' | 'admin' | 'owner'
-const SECTION_MIN_ROLE: Record<string, RoleKey> = {
-  general: 'viewer',
-  ollama: 'admin',
-  weknoracloud: 'admin',
-  models: 'viewer',
-  websearch: 'admin',
-  chathistory: 'admin',
-  vectorstore: 'admin',
-  parser: 'admin',
-  storage: 'admin',
-  mcp: 'admin',
-  system: 'viewer',
-  userprofile: 'viewer',
-  tenant: 'viewer',
-  members: 'viewer',
-  orgunits: 'viewer',
-}
+// Settings 可见性（与产品约定对齐）：
+// - 系统管理员（is_system_admin）：全部设置（含平台系统管理）
+// - 管理员（admin，含历史 owner）：空间级全部设置
+// - 编辑 / 访客：无任何设置项
+// 「所有者」角色不再作为可分配角色露出；存量 owner 仍按 admin+ 生效。
 
-const SYSTEM_ADMIN_SECTIONS = new Set(['system-global', 'runtime-queues', 'platform-api-keys', 'system-audit-log'])
+// Used by template for full-bleed layout of platform / integration panes.
+const SYSTEM_ADMIN_SECTIONS = new Set([
+  'system-global',
+  'runtime-queues',
+  'platform-api-keys',
+  'system-audit-log',
+])
 const INTEGRATION_SECTION_PREFIX = 'integration-'
 
 const integrationSectionKey = (tab: IntegrationTab) => `${INTEGRATION_SECTION_PREFIX}${tab}`
@@ -311,27 +289,25 @@ const normalizeSettingsSection = (section: string) => {
   return section
 }
 
+/** 管理员+ / 系统超管 / 跨空间超管：可见空间级全部设置。 */
+const canSeeWorkspaceSettings = (): boolean =>
+  authStore.isSystemAdmin ||
+  authStore.canAccessAllTenants ||
+  authStore.hasRole('admin')
+
 const canSeeSection = (key: string): boolean => {
-  if (isIntegrationSection(key)) {
-    const min = INTEGRATION_TAB_MIN_ROLE[integrationTabFromSection(key)]
-    if (!min) return true
-    if (authStore.canAccessAllTenants) return true
-    return authStore.hasRole(min)
-  }
+  // 平台级系统管理仅系统超管。
   if (SYSTEM_ADMIN_SECTIONS.has(key)) {
     return authStore.isSystemAdmin
   }
-  const min = SECTION_MIN_ROLE[key] ?? 'viewer'
-  // canAccessAllTenants（superuser）和路由层一样必须 bypass，否则 cross-tenant
-  // 管理员看不到自己有权操作的入口（参考 TenantMembers.vue 的 canManage）。
-  if (authStore.canAccessAllTenants) return true
-  return authStore.hasRole(min)
+  if (canSeeWorkspaceSettings()) {
+    return true
+  }
+  return false
 }
 
 const navItems = computed(() => {
-  // 一律走 SECTION_MIN_ROLE 表，避免 ad-hoc isAdmin/isOwner 散落在多处。
-  // 服务端在每条路由上仍以 g.Viewer/Admin/Owner 为准，这里只决定 UI 是
-  // 否露入口；改动入口规则请同步更新 SECTION_MIN_ROLE 注释里的对照路由。
+  // 管理员仅 members/orgunits；其余仅超级管理员。编辑/访客得到空列表。
   const integrationItems: NavItem[] = INTEGRATION_PREVIEW_ITEMS.map((item) => ({
     key: integrationSectionKey(item.key),
     icon: item.icon.type === 'icon' ? item.icon.name : 'integration',
@@ -361,9 +337,13 @@ const navItems = computed(() => {
     ...integrationItems,
   ]
   // currentTenantRole 为空表示「membership 还没加载」—— 比起渲染整套
-  // viewer 入口然后角色一返回又消失，先卡住不渲染更稳，跟原先 members
-  // 入口的策略一致。
-  if (!authStore.currentTenantRole && !authStore.canAccessAllTenants) {
+  // viewer 入口然后角色一返回又消失，先卡住不渲染更稳。系统超管即使
+  // 暂无租户角色也应能看到设置项。
+  if (
+    !authStore.currentTenantRole &&
+    !authStore.canAccessAllTenants &&
+    !authStore.isSystemAdmin
+  ) {
     return [] as NavItem[]
   }
   return all.filter((it) => canSeeSection(it.key))

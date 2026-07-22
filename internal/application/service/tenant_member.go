@@ -67,22 +67,26 @@ const (
 
 // tenantMemberService implements interfaces.TenantMemberService.
 type tenantMemberService struct {
-	repo  interfaces.TenantMemberRepository
-	audit interfaces.AuditLogService // optional; nil ⇒ no audit, business ops still succeed
+	repo         interfaces.TenantMemberRepository
+	audit        interfaces.AuditLogService // optional; nil ⇒ no audit
+	orgUnitService interfaces.OrgUnitService // optional; nil ⇒ skip org scope
 }
 
 // NewTenantMemberService constructs the service. Wired up via the DI
 // container alongside the other application services. The auditService
 // is optional — passing nil disables durable audit but keeps the
-// underlying mutations working, so a container reshuffle that
-// constructs tenant_member before audit_log won't crash and tests
-// don't need to stub the dependency unless they care about audit
-// behaviour.
+// underlying mutations working. orgUnitService is optional; when nil,
+// org-hierarchy manage limits are not enforced (tests / legacy wiring).
 func NewTenantMemberService(
 	repo interfaces.TenantMemberRepository,
 	audit interfaces.AuditLogService,
+	orgUnitService interfaces.OrgUnitService,
 ) interfaces.TenantMemberService {
-	return &tenantMemberService{repo: repo, audit: audit}
+	return &tenantMemberService{
+		repo:           repo,
+		audit:          audit,
+		orgUnitService: orgUnitService,
+	}
 }
 
 // emitAudit is the per-mutation audit hook. Best-effort: a nil audit
@@ -261,9 +265,8 @@ func (s *tenantMemberService) HasAnyMembers(ctx context.Context, tenantID uint64
 	return s.repo.HasAnyMembers(ctx, tenantID)
 }
 
-// UpdateRole enforces the "cannot demote the last Owner" invariant before
-// delegating to the repository. Re-promoting an existing Owner is a no-op
-// from the invariant's perspective.
+// UpdateRole enforces the "cannot demote the last Owner" invariant and
+// org-scoped admin manage limits before delegating to the repository.
 func (s *tenantMemberService) UpdateRole(
 	ctx context.Context,
 	userID string,
@@ -285,6 +288,9 @@ func (s *tenantMemberService) UpdateRole(
 	}
 	if newRole == types.TenantRoleOwner && !types.IsSystemAdminActor(ctx) {
 		return ErrOnlySystemAdminCanAssignOwner
+	}
+	if err := s.assertOrgManageScope(ctx, tenantID, userID, current.Role, newRole); err != nil {
+		return err
 	}
 	oldRole := current.Role
 	// Owner demotion is the dangerous path: two concurrent demotions of
@@ -354,6 +360,15 @@ func (s *tenantMemberService) RemoveMember(ctx context.Context, userID string, t
 	if current == nil {
 		return ErrMembershipNotFound
 	}
+	// Voluntary leave skips org-scope checks; kicking others does not.
+	actorID, _ := types.UserIDFromContext(ctx)
+	if actorID == "" || actorID != userID {
+		if err := s.assertOrgManageScope(
+			ctx, tenantID, userID, current.Role, "",
+		); err != nil {
+			return err
+		}
+	}
 	if current.Role == types.TenantRoleOwner {
 		err := s.repo.RemoveOwnerAtomically(ctx, userID, tenantID)
 		switch {
@@ -370,6 +385,23 @@ func (s *tenantMemberService) RemoveMember(ctx context.Context, userID string, t
 	}
 	s.emitRemovalAudit(ctx, tenantID, userID)
 	return nil
+}
+
+// assertOrgManageScope applies org-hierarchy limits for scoped admins.
+// newRole may be empty for remove-only. No-op when orgUnitService is nil.
+func (s *tenantMemberService) assertOrgManageScope(
+	ctx context.Context,
+	tenantID uint64,
+	targetUserID string,
+	targetRole types.TenantRole,
+	newRole types.TenantRole,
+) error {
+	if s.orgUnitService == nil {
+		return nil
+	}
+	return s.orgUnitService.AssertCanManageTenantMember(
+		ctx, tenantID, targetUserID, targetRole, newRole,
+	)
 }
 
 // emitRemovalAudit picks AuditActionMemberLeft when the caller is

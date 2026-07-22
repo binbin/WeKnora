@@ -29,17 +29,17 @@ const (
 
 var webFetchTool = BaseTool{
 	name: ToolWebFetch,
-	description: `Fetch detailed web content from previously discovered short wN web page IDs and analyze it with an LLM.
+	description: `根据先前发现的网页短 ID wN 拉取详细网页内容，并用 LLM 分析。
 
-## Usage
-- Receive one or more {url: "wN", prompt} combinations; the field name stays url, but its value is the short page ID
-- Fetch web page content and convert to Markdown text
-- Use prompt to call small model for analysis and summary (if model is available)
-- Return summary result and original content fragment
+## 用法
+- 接收一个或多个 {url: "wN", prompt} 组合；字段名仍为 url，但值为网页短 ID
+- 拉取网页内容并转为 Markdown 文本
+- 用 prompt 调用小模型进行分析与摘要（若模型可用）
+- 返回摘要结果与原文片段
 
-## When to Use
-- **MANDATORY**: After web_search returns results, if content is truncated or incomplete, use web_fetch to get full page content
-- When web_search snippet is insufficient for answering the question`,
+## 何时使用
+- **必须**：web_search 返回结果后，若内容被截断或不完整，使用 web_fetch 获取完整页面
+- 当 web_search 摘要不足以回答问题时`,
 	schema: utils.GenerateSchema[WebFetchInput](),
 }
 
@@ -366,11 +366,11 @@ func (t *WebFetchTool) processWithLLM(ctx context.Context, params webFetchParams
 		return "", fmt.Errorf("chat model not available for web_fetch")
 	}
 
-	systemMessage := "You are an intelligent assistant skilled at reading web page content. Answer the user's request based on the provided web page text. Never fabricate information that does not appear in the text."
-	userTemplate := `User request:
+	systemMessage := "你是擅长阅读网页内容的智能助手。请根据所提供的网页文本回答用户请求。绝不要编造文本中未出现的信息。"
+	userTemplate := `用户请求：
 %s
 
-Web page content:
+网页内容：
 %s`
 
 	messages := []chat.Message{

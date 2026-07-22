@@ -68,6 +68,10 @@ const messages = {
       "previewMockPage": "模拟宿主页面",
       "defaultChatTitle": "AI 助手",
       "newChat": "新建对话",
+      "chatHistory": "对话列表",
+      "chatHistoryEmpty": "暂无历史对话",
+      "untitledChat": "新对话",
+      "deleteChat": "删除对话",
       "rotateConfirmTitle": "确认轮换 Token？",
       "rotateConfirmBody": "轮换后旧 Token 立即失效，已发布的嵌入代码需全部更新。",
       "tokenRequiredForPreview": "需要发布 Token 才能预览。请先创建渠道，或点击「轮换 Token」获取新 Token。"
@@ -559,6 +563,10 @@ const messages = {
       "previewMockPage": "Mock host page",
       "defaultChatTitle": "AI Assistant",
       "newChat": "New chat",
+      "chatHistory": "Chats",
+      "chatHistoryEmpty": "No conversations yet",
+      "untitledChat": "New chat",
+      "deleteChat": "Delete chat",
       "rotateConfirmTitle": "Rotate publish token?",
       "rotateConfirmBody": "The old token stops working immediately. Update every deployed embed snippet.",
       "tokenRequiredForPreview": "A publish token is required to preview. Create a channel or rotate the token first."

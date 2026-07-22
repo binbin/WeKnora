@@ -14,86 +14,79 @@ import (
 
 var databaseQueryTool = BaseTool{
 	name: ToolDatabaseQuery,
-	description: `Execute SQL queries to retrieve information from the database.
+	description: `执行 SQL 查询以从数据库检索信息。
 
-## Security Features
-- Automatic tenant_id injection: All queries are automatically filtered by the logged-in user's tenant_id
-- Automatic soft-delete filtering: All queries are automatically filtered to include only records with deleted_at IS NULL
-- Read-only queries: Only SELECT statements are allowed
-- Safe tables: Only allow queries on authorized tables (knowledge_bases, knowledges, chunks)
+## 安全特性
+- 自动注入 tenant_id：所有查询按登录用户的 tenant_id 自动过滤
+- 自动软删除过滤：默认只包含 deleted_at IS NULL 的记录
+- 只读查询：仅允许 SELECT
+- 安全表：仅允许查询授权表（knowledge_bases、knowledges、chunks）
 
-## Available Tables and Columns
+## 可用表与字段
 
 ### knowledge_bases
-- id (VARCHAR): Knowledge base ID
-- name (VARCHAR): Knowledge base name
-- description (TEXT): Description
-- tenant_id (INTEGER): Owner tenant ID
-- embedding_model_id, summary_model_id, rerank_model_id (VARCHAR): Model IDs
-- vlm_config (JSON): Includes VLM settings such as enabled flag and model_id
+- id (VARCHAR)：知识库 ID
+- name (VARCHAR)：知识库名称
+- description (TEXT)：描述
+- tenant_id (INTEGER)：所属租户 ID
+- embedding_model_id, summary_model_id, rerank_model_id (VARCHAR)：模型 ID
+- vlm_config (JSON)：含 enabled、model_id 等 VLM 设置
 - created_at, updated_at, deleted_at (TIMESTAMP)
 
-### knowledges (documents)
-- id (VARCHAR): Document ID
-- tenant_id (INTEGER): Owner tenant ID
-- knowledge_base_id (VARCHAR): Parent knowledge base ID
-- type (VARCHAR): Document type
-- title (VARCHAR): Document title
-- description (TEXT): Description
-- source (VARCHAR): Source location
-- parse_status (VARCHAR): Processing status (unprocessed/processing/completed/failed)
-- enable_status (VARCHAR): Enable status (enabled/disabled)
-- file_name, file_type (VARCHAR): File information
-- file_size, storage_size (BIGINT): Size in bytes
+### knowledges（文档）
+- id (VARCHAR)：文档 ID
+- tenant_id (INTEGER)：所属租户 ID
+- knowledge_base_id (VARCHAR)：所属知识库 ID
+- type (VARCHAR)：文档类型
+- title (VARCHAR)：文档标题
+- description (TEXT)：描述
+- source (VARCHAR)：来源位置
+- parse_status (VARCHAR)：处理状态（unprocessed/processing/completed/failed）
+- enable_status (VARCHAR)：启用状态（enabled/disabled）
+- file_name, file_type (VARCHAR)：文件信息
+- file_size, storage_size (BIGINT)：字节大小
 - created_at, updated_at, processed_at, deleted_at (TIMESTAMP)
 
-
-
 ### chunks
-- id (VARCHAR): Chunk ID
-- tenant_id (INTEGER): Owner tenant ID
-- knowledge_base_id (VARCHAR): Parent knowledge base ID
-- knowledge_id (VARCHAR): Parent document ID
-- content (TEXT): Chunk content
-- chunk_index (INTEGER): Index in document
-- is_enabled (BOOLEAN): Enable status
-- chunk_type (VARCHAR): Type (text/image/table)
+- id (VARCHAR)：分块 ID
+- tenant_id (INTEGER)：所属租户 ID
+- knowledge_base_id (VARCHAR)：所属知识库 ID
+- knowledge_id (VARCHAR)：所属文档 ID
+- content (TEXT)：分块内容
+- chunk_index (INTEGER)：文档内索引
+- is_enabled (BOOLEAN)：启用状态
+- chunk_type (VARCHAR)：类型（text/image/table）
 - created_at, updated_at, deleted_at (TIMESTAMP)
 
-## Usage Examples
+## 用法示例
 
-Query knowledge base information:
+查询知识库信息：
 {
   "sql": "SELECT id, name, description FROM knowledge_bases ORDER BY created_at DESC LIMIT 10"
 }
 
-Count documents by status:
+按状态统计文档：
 {
   "sql": "SELECT parse_status, COUNT(*) as count FROM knowledges GROUP BY parse_status"
 }
 
-Find recent sessions:
-{
-  "sql": "SELECT id, title, created_at FROM sessions ORDER BY created_at DESC LIMIT 5"
-}
-
-Get storage usage:
+获取存储用量：
 {
   "sql": "SELECT SUM(storage_size) as total_storage FROM knowledges"
 }
 
-Join knowledge bases and documents:
+关联知识库与文档：
 {
   "sql": "SELECT kb.name as kb_name, COUNT(k.id) as doc_count FROM knowledge_bases kb LEFT JOIN knowledges k ON kb.id = k.knowledge_base_id GROUP BY kb.id, kb.name"
 }
 
-## Important Notes
-- DO NOT include tenant_id in WHERE clause - it's automatically added
-- DO NOT include deleted_at filtering manually unless needed - default query already enforces deleted_at IS NULL
-- Only SELECT queries are allowed
-- Limit results with LIMIT clause for better performance
-- Use appropriate JOINs when querying across tables
-- All timestamps are in UTC with time zone`,
+## 重要说明
+- 不要在 WHERE 中写 tenant_id——系统会自动添加
+- 一般不要手动过滤 deleted_at——默认已强制 deleted_at IS NULL
+- 仅允许 SELECT
+- 使用 LIMIT 控制结果量以提升性能
+- 跨表查询时使用合适的 JOIN
+- 所有时间戳为带时区的 UTC`,
 	schema: utils.GenerateSchema[DatabaseQueryInput](),
 }
 

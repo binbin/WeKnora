@@ -94,7 +94,9 @@ func enforceOrgUnitKBAccess(
 	kbUnitID := strings.TrimSpace(kb.OrgUnitID)
 
 	if requiredPermission == types.OrgRoleViewer {
-		okRead, err := svc.CanReadKB(ctx, tenantID, activeID, kbUnitID)
+		okRead, err := svc.CanReadKB(
+			ctx, tenantID, activeID, kbUnitID, kb.ShareWithDescendants,
+		)
 		if err != nil {
 			return err
 		}

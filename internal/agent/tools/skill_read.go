@@ -16,21 +16,21 @@ import (
 
 var readSkillTool = BaseTool{
 	name: ToolReadSkill,
-	description: `Read skill content on demand to learn specialized capabilities.
+	description: `按需读取技能内容以学习专业能力。
 
-## Usage
-- Use this tool when a user request matches an available skill's description
-- Provide the skill_name to load the skill's full instructions (SKILL.md content)
-- Optionally provide file_path to read additional files within the skill directory
+## 用法
+- 当用户请求匹配某个可用技能的描述时使用本工具
+- 提供 skill_name 以加载该技能的完整指令（SKILL.md 内容）
+- 可选提供 file_path 以读取技能目录中的其他文件
 
-## When to Use
-- When the system prompt shows an available skill that matches the user's request
-- Before performing tasks that match a skill's description
-- To read additional documentation or reference files within a skill
+## 何时使用
+- 系统提示中显示的可用技能与用户请求匹配时
+- 在执行与某技能描述匹配的任务之前
+- 需要阅读技能内的额外文档或参考文件时
 
-## Returns
-- Skill instructions and guidance for completing the task
-- File content if file_path is specified`,
+## 返回
+- 完成任务所需的技能指令与指导
+- 若指定了 file_path，则返回文件内容`,
 	schema: utils.GenerateSchema[ReadSkillInput](),
 }
 

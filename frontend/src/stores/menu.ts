@@ -63,6 +63,9 @@ export const useMenuStore = defineStore('menuStore', () => {
   // 共享空间 (organizations) 仅对当前空间的 admin / owner 暴露入口。
   // viewer / contributor 即便在共享空间里拥有资源，也无需自行管理共享关系，
   // 入口在侧栏只会徒增噪音；后端 RBAC 才是权限的最终来源（见 middleware/rbac.go）。
+  //
+  // 设置 (settings)：编辑 / 访客完全无入口；管理员仅成员+组织层级；
+  // 其余设置项仅超级管理员（见 Settings.vue canSeeSection）。
   const visibleMenuArr = computed(() => {
     const authStore = useAuthStore()
     return menuArr.filter(item => {
@@ -70,6 +73,12 @@ export const useMenuStore = defineStore('menuStore', () => {
         return false
       }
       if (item.path === 'organizations' && !authStore.hasRole('admin')) {
+        return false
+      }
+      if (item.path === 'agents' && !(authStore.hasRole('admin') || authStore.isSystemAdmin)) {
+        return false
+      }
+      if (item.path === 'settings' && !authStore.canAccessSettings) {
         return false
       }
       return true
