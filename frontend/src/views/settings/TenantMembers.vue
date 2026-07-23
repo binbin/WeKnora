@@ -392,9 +392,6 @@
                   </t-tag>
                 </div>
               </template>
-              <template #org_unit="{ row }">
-                <span>{{ row.org_unit_name || row.org_unit_id || '—' }}</span>
-              </template>
               <template #joined_at="{ row }">{{ formatDate(row.joined_at) }}</template>
               <template #actions="{ row }">
                 <t-tooltip
@@ -956,14 +953,6 @@ const columns = computed(() => [
     ? [{ colKey: 'org_unit', title: t('tenantMember.columns.orgUnit'), ellipsis: true, minWidth: 120 }]
     : []),
   { colKey: 'role', title: t('tenantMember.columns.role'), width: 128 },
-  ...(hasOrgHierarchy.value
-    ? [{
-        colKey: 'org_unit',
-        title: t('tenantInvitation.columns.orgUnit'),
-        ellipsis: true,
-        minWidth: 120,
-      }]
-    : []),
   { colKey: 'joined_at', title: t('tenantMember.columns.joinedAt'), width: 154 },
   {
     colKey: 'actions',
