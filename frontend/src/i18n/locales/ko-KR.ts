@@ -6775,6 +6775,10 @@ export default {
     roleChange: {
       success: "역할이 업데이트되었습니다",
     },
+    transferOrgUnit: "조직 변경",
+    transferOrgUnitTitle: "멤버를 다른 조직으로 이동",
+    transferOrgUnitConfirm: "변경 확인",
+    transferOrgUnitSuccess: "조직을 변경했습니다",
     errors: {
       emailRequired: "이메일을 입력하세요",
       emailFormat: "올바른 이메일 형식이 아닙니다",

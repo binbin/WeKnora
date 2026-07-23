@@ -6858,6 +6858,10 @@ export default {
     roleChange: {
       success: 'Role updated',
     },
+    transferOrgUnit: 'Change organization',
+    transferOrgUnitTitle: 'Move member to another organization',
+    transferOrgUnitConfirm: 'Confirm move',
+    transferOrgUnitSuccess: 'Organization updated',
     errors: {
       emailRequired: 'Email is required',
       emailFormat: 'Invalid email address',

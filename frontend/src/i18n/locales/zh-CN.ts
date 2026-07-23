@@ -6880,6 +6880,10 @@ export default {
     roleChange: {
       success: "角色已更新",
     },
+    transferOrgUnit: "调整组织",
+    transferOrgUnitTitle: "将成员调整到其他组织",
+    transferOrgUnitConfirm: "确认调整",
+    transferOrgUnitSuccess: "已调整组织",
     errors: {
       emailRequired: "请输入邮箱",
       emailFormat: "邮箱格式不正确",

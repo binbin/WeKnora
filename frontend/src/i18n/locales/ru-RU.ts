@@ -6597,6 +6597,10 @@ export default {
     roleChange: {
       success: 'Роль обновлена',
     },
+    transferOrgUnit: 'Сменить организацию',
+    transferOrgUnitTitle: 'Перевести участника в другую организацию',
+    transferOrgUnitConfirm: 'Подтвердить перевод',
+    transferOrgUnitSuccess: 'Организация изменена',
     errors: {
       emailRequired: 'Укажите email',
       emailFormat: 'Неверный формат email',
