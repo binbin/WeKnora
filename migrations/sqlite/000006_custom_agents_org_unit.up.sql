@@ -1,4 +1,4 @@
--- SQLite: mirror 000075_custom_agents_org_unit
+-- SQLite: mirror 000078_custom_agents_org_unit
 
 ALTER TABLE custom_agents ADD COLUMN org_unit_id TEXT NOT NULL DEFAULT '';
 

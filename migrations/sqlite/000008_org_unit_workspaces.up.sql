@@ -1,5 +1,5 @@
 -- SQLite: platform root OrgUnit → workspace Tenant mapping
--- (align with versioned 000077).
+-- (align with versioned 000080).
 
 CREATE TABLE IF NOT EXISTS org_unit_workspaces (
     root_org_unit_id TEXT PRIMARY KEY,

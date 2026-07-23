@@ -1,9 +1,9 @@
--- Migration: 000077_org_unit_workspaces
+-- Migration: 000080_org_unit_workspaces
 -- Description: Map platform root OrgUnits (tenant_id=0) to business
 --              workspace Tenants. Enables lazy workspace provisioning
 --              named「{组织名}的空间」on first login of org members.
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000077] Creating org_unit_workspaces...'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000080] Creating org_unit_workspaces...'; END $$;
 
 -- Platform catalog OrgUnits use tenant_id = 0 (no business workspace).
 -- Existing rows keep their tenant_id; new roots created by system admins
@@ -25,4 +25,4 @@ COMMENT ON COLUMN org_unit_workspaces.root_org_unit_id IS
 COMMENT ON COLUMN org_unit_workspaces.tenant_id IS
     'Business workspace Tenant that members of this org tree share';
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000077] org_unit_workspaces ready'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000080] org_unit_workspaces ready'; END $$;

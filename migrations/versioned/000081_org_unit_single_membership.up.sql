@@ -1,8 +1,8 @@
--- Migration: 000078_org_unit_single_membership
+-- Migration: 000081_org_unit_single_membership
 -- One OrgUnit membership per user per tenant.
 
 DO $$ BEGIN RAISE NOTICE
-  '[Migration 000078] Enforcing single org_unit membership...';
+  '[Migration 000081] Enforcing single org_unit membership...';
 END $$;
 
 DELETE FROM org_unit_members a
@@ -29,4 +29,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_org_unit_members_tenant_user_unique
 COMMENT ON TABLE org_unit_members IS
     'Maps users to exactly one OrgUnit per tenant; is_primary is legacy';
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000078] done'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000081] done'; END $$;

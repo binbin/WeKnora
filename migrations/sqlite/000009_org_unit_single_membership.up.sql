@@ -1,4 +1,4 @@
--- Migration: 000008_org_unit_single_membership
+-- Migration: 000009_org_unit_single_membership
 -- One OrgUnit membership per user per tenant.
 -- Prefer is_primary=1, else oldest created_at, else smallest id.
 -- Correlated subquery (no window functions) for SQLite compatibility.

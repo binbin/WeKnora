@@ -1,8 +1,8 @@
--- Migration: 000075_custom_agents_org_unit
+-- Migration: 000078_custom_agents_org_unit
 -- Description: Stamp custom_agents with the creator's org unit at create time
 --              so chat visibility is stable when users change departments.
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000075] Adding org_unit_id to custom_agents...'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000078] Adding org_unit_id to custom_agents...'; END $$;
 
 ALTER TABLE custom_agents
     ADD COLUMN IF NOT EXISTS org_unit_id VARCHAR(36) NOT NULL DEFAULT '';
@@ -38,4 +38,4 @@ WHERE ca.created_by <> ''
 COMMENT ON COLUMN custom_agents.org_unit_id IS
     'Org unit stamped at create time; chat lists agents by this exact unit (no descendants)';
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000075] custom_agents.org_unit_id ready'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000078] custom_agents.org_unit_id ready'; END $$;

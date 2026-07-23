@@ -1,7 +1,7 @@
--- Migration: 000076_embed_channel_web_slug
+-- Migration: 000079_embed_channel_web_slug
 -- Short public slug for direct-open web chat links (/w/:slug).
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000076] Adding web_slug to embed_channels...'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000079] Adding web_slug to embed_channels...'; END $$;
 
 ALTER TABLE embed_channels
     ADD COLUMN IF NOT EXISTS web_slug VARCHAR(16) NOT NULL DEFAULT '';
@@ -18,4 +18,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_embed_channels_web_slug
 COMMENT ON COLUMN embed_channels.web_slug IS
     'Short public code for direct web chat URLs (/w/:slug); not the publish token';
 
-DO $$ BEGIN RAISE NOTICE '[Migration 000076] web_slug ready'; END $$;
+DO $$ BEGIN RAISE NOTICE '[Migration 000079] web_slug ready'; END $$;
