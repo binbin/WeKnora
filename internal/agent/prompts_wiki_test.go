@@ -127,9 +127,9 @@ func TestWikiChunkCitationPrompt_PreservesPlaceholders(t *testing.T) {
 func TestWikiPageModifyUserPrompt_HidesInternalChunkAliases(t *testing.T) {
 	combined := WikiPageModifySystemPrompt + "\n" + WikiPageModifyUserPrompt
 	for _, guidance := range []string{
-		"永远不要将它们输出到页面正文或摘要中",
-		"来源关联由系统单独存储",
-		"干净的 Markdown，不包含内联文本块 ID",
+		"NEVER output them in the page body or summary",
+		"Source associations are stored separately by the system",
+		"clean Markdown without inline chunk IDs",
 	} {
 		if !strings.Contains(combined, guidance) {
 			t.Errorf("WikiPageModifyUserPrompt missing chunk-alias guidance %q", guidance)

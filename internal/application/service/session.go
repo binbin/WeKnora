@@ -43,7 +43,7 @@ func loadSessionForRead(
 	if err == nil {
 		imPlatform, _ := repo.GetIMPlatform(ctx, tenantID, sessionID)
 		if types.SessionRequiresAdminConsoleRead(session, imPlatform) && !isAdmin &&
-			!callerOwnsChannelSession(ownerID, session) {
+			!isIMRuntime && !callerOwnsChannelSession(ownerID, session) {
 			return nil, apperrors.ErrSessionNotFound
 		}
 		if imPlatform != "" {
