@@ -83,6 +83,28 @@ const router = createRouter({
           path: "settings",
           name: "settings",
           component: () => import("../views/settings/Settings.vue"),
+          meta: { requiresInit: true, requiresAuth: true },
+          // 成员管理 / 组织层级已迁出设置弹窗，兼容旧书签与深链。
+          beforeEnter: (to) => {
+            const section = to.query.section
+            if (section === 'members') {
+              return { path: '/platform/members' }
+            }
+            if (section === 'orgunits') {
+              return { path: '/platform/org-units' }
+            }
+          },
+        },
+        {
+          path: "members",
+          name: "tenantMembers",
+          component: () => import("../views/members/TenantMembersPage.vue"),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
+          path: "org-units",
+          name: "orgUnits",
+          component: () => import("../views/org-units/OrgUnitPage.vue"),
           meta: { requiresInit: true, requiresAuth: true }
         },
         {

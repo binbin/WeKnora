@@ -70,25 +70,49 @@ func TestListAgentsPurposeChatAndManage(t *testing.T) {
 		t.Fatalf("chat agents = %#v, want a1", chatAgents)
 	}
 
+	// manage + active OrgUnit → org-scoped list (所在组织), not creator-only
 	manageAgents, err := svc.ListAgents(ctx, "manage")
 	if err != nil {
 		t.Fatalf("manage list: %v", err)
 	}
-	if len(manageAgents) != 1 || manageAgents[0].ID != "a2" {
-		t.Fatalf("manage agents = %#v, want a2", manageAgents)
+	if len(manageAgents) != 1 || manageAgents[0].ID != "a1" {
+		t.Fatalf("manage agents = %#v, want a1 (org-scoped)", manageAgents)
 	}
 
 	sysCtx := context.WithValue(ctx, types.SystemAdminContextKey, true)
-	sysAgents, err := svc.ListAgents(sysCtx, "manage")
+	// System admin with an explicit OrgUnit still stays org-scoped when set.
+	sysScoped, err := svc.ListAgents(sysCtx, "manage")
+	if err != nil {
+		t.Fatalf("sys manage scoped: %v", err)
+	}
+	if len(sysScoped) != 1 || sysScoped[0].ID != "a1" {
+		t.Fatalf("sys admin with org unit = %#v, want a1", sysScoped)
+	}
+
+	sysAllCtx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
+	sysAllCtx = context.WithValue(sysAllCtx, types.SystemAdminContextKey, true)
+	sysAllCtx = context.WithValue(sysAllCtx, types.UserIDContextKey, "u1")
+	sysAgents, err := svc.ListAgents(sysAllCtx, "manage")
 	if err != nil {
 		t.Fatalf("sys manage list: %v", err)
 	}
 	if len(sysAgents) != 2 {
-		t.Fatalf("sys admin manage agents = %#v, want 2 custom", sysAgents)
+		t.Fatalf("sys admin unscoped manage agents = %#v, want 2 custom", sysAgents)
 	}
 	for _, agent := range sysAgents {
 		if agent.IsBuiltin || types.IsBuiltinAgentID(agent.ID) {
 			t.Fatalf("builtin leaked into manage list: %#v", agent)
 		}
+	}
+
+	adminAllCtx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(1))
+	adminAllCtx = context.WithValue(adminAllCtx, types.TenantRoleContextKey, types.TenantRoleAdmin)
+	adminAllCtx = context.WithValue(adminAllCtx, types.UserIDContextKey, "u1")
+	adminAgents, err := svc.ListAgents(adminAllCtx, "manage")
+	if err != nil {
+		t.Fatalf("admin unscoped manage: %v", err)
+	}
+	if len(adminAgents) != 2 {
+		t.Fatalf("admin unscoped manage = %#v, want 2", adminAgents)
 	}
 }

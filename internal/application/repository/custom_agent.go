@@ -51,14 +51,15 @@ func (r *customAgentRepository) ListAgentsByTenantID(ctx context.Context, tenant
 	return agents, nil
 }
 
-// ListCustomAgentsByOrgUnit lists non-builtin agents for an exact org unit.
+// ListCustomAgentsByOrgUnit lists non-builtin agents for an exact org unit
+// plus unbound (legacy) agents that remain tenant-wide readable.
 func (r *customAgentRepository) ListCustomAgentsByOrgUnit(
 	ctx context.Context, tenantID uint64, orgUnitID string,
 ) ([]*types.CustomAgent, error) {
 	var agents []*types.CustomAgent
 	if err := r.db.WithContext(ctx).
 		Where(
-			"tenant_id = ? AND is_builtin = ? AND org_unit_id = ?",
+			"tenant_id = ? AND is_builtin = ? AND (org_unit_id = ? OR org_unit_id = '')",
 			tenantID, false, orgUnitID,
 		).
 		Order("created_at DESC").

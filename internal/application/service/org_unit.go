@@ -93,7 +93,7 @@ func (s *orgUnitService) Get(
 	tenantID uint64,
 	id string,
 ) (*types.OrgUnit, error) {
-	unit, err := s.repo.GetByID(ctx, tenantID, id)
+	unit, err := s.resolveUnit(ctx, tenantID, id)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
@@ -103,13 +103,31 @@ func (s *orgUnitService) Get(
 	return unit, nil
 }
 
+// resolveUnit loads an OrgUnit by tenant scope, falling back to a global
+// lookup for system admins (platform catalog + legacy in-tenant trees).
+func (s *orgUnitService) resolveUnit(
+	ctx context.Context,
+	tenantID uint64,
+	id string,
+) (*types.OrgUnit, error) {
+	unit, err := s.repo.GetByID(ctx, tenantID, id)
+	if err == nil {
+		return unit, nil
+	}
+	if !errors.Is(err, apprepo.ErrOrgUnitNotFound) ||
+		!types.IsSystemAdminActor(ctx) {
+		return nil, err
+	}
+	return s.repo.GetByIDGlobal(ctx, id)
+}
+
 func (s *orgUnitService) Update(
 	ctx context.Context,
 	tenantID uint64,
 	id string,
 	req *types.UpdateOrgUnitRequest,
 ) (*types.OrgUnit, error) {
-	unit, err := s.repo.GetByID(ctx, tenantID, id)
+	unit, err := s.resolveUnit(ctx, tenantID, id)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
@@ -141,7 +159,14 @@ func (s *orgUnitService) Delete(
 	tenantID uint64,
 	id string,
 ) error {
-	childCount, err := s.repo.CountChildren(ctx, tenantID, id)
+	unit, err := s.resolveUnit(ctx, tenantID, id)
+	if err != nil {
+		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
+			return apperrors.NewNotFoundError("org unit not found")
+		}
+		return err
+	}
+	childCount, err := s.repo.CountChildren(ctx, unit.TenantID, id)
 	if err != nil {
 		return err
 	}
@@ -150,7 +175,7 @@ func (s *orgUnitService) Delete(
 			"cannot delete org unit with children; move or delete children first",
 		)
 	}
-	if err := s.repo.Delete(ctx, tenantID, id); err != nil {
+	if err := s.repo.Delete(ctx, unit.TenantID, id); err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return apperrors.NewNotFoundError("org unit not found")
 		}
@@ -175,6 +200,27 @@ func (s *orgUnitService) ListTree(
 		return nil, err
 	}
 	return buildOrgUnitTree(units), nil
+}
+
+// ListPlatformTree returns the full admin forest: platform catalog roots
+// (tenant_id=0) and legacy in-tenant trees created before the catalog
+// convention. Without the legacy merge, Settings → 组织层级 with
+// scope=platform would hide existing trees that still live under a
+// business tenant_id.
+func (s *orgUnitService) ListPlatformTree(
+	ctx context.Context,
+) ([]*types.OrgUnit, error) {
+	units, err := s.repo.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return buildOrgUnitTree(units), nil
+}
+
+func (s *orgUnitService) ListPlatformFlat(
+	ctx context.Context,
+) ([]*types.OrgUnit, error) {
+	return s.repo.ListAll(ctx)
 }
 
 func buildOrgUnitTree(units []*types.OrgUnit) []*types.OrgUnit {
@@ -211,13 +257,14 @@ func (s *orgUnitService) Move(
 	id string,
 	newParentID string,
 ) (*types.OrgUnit, error) {
-	unit, err := s.repo.GetByID(ctx, tenantID, id)
+	unit, err := s.resolveUnit(ctx, tenantID, id)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
 		}
 		return nil, err
 	}
+	tenantID = unit.TenantID
 	newParentID = strings.TrimSpace(newParentID)
 	if newParentID == unit.ID {
 		return nil, apperrors.NewBadRequestError("cannot move org unit under itself")
@@ -233,7 +280,7 @@ func (s *orgUnitService) Move(
 	newDepth := 0
 	newPathPrefix := "/"
 	if newParentID != "" {
-		parent, parentErr := s.repo.GetByID(ctx, tenantID, newParentID)
+		parent, parentErr := s.resolveUnit(ctx, tenantID, newParentID)
 		if parentErr != nil {
 			if errors.Is(parentErr, apprepo.ErrOrgUnitNotFound) {
 				return nil, apperrors.NewNotFoundError("parent org unit not found")
@@ -469,6 +516,13 @@ func (s *orgUnitService) ResolveActiveOrgUnit(
 		return requestedID, nil
 	}
 
+	// Super-admins browsing without an explicit unit stay unscoped so
+	// list APIs return all org units ("所有"). Do not fall back to their
+	// primary membership — that would silently shrink the "all" view.
+	if isUnscopedOrgBrowser(ctx) {
+		return "", nil
+	}
+
 	if userID == "" || types.IsSyntheticUserID(userID) {
 		return "", nil
 	}
@@ -559,8 +613,11 @@ func (s *orgUnitService) CanReadKB(
 		return true, nil
 	}
 	if activeOrgUnitID == "" {
-		// No active unit: only tenant Admin/Owner may browse bound KBs
-		// (they can still pick a unit via X-Org-Unit-ID).
+		// No active unit: tenant Admin/Owner and platform super-admins may
+		// browse all bound KBs (the UI "所有" / unscoped org view).
+		if isUnscopedOrgBrowser(ctx) {
+			return true, nil
+		}
 		role := types.TenantRoleFromContext(ctx)
 		return role == types.TenantRoleAdmin || role == types.TenantRoleOwner, nil
 	}
@@ -717,17 +774,25 @@ func (s *orgUnitService) ListInviteableOrgUnits(
 	return out, nil
 }
 
+// isUnscopedOrgBrowser reports callers whose default OrgUnit scope is
+// "all units" when no X-Org-Unit-ID is sent: system admins and
+// cross-tenant superusers.
+func isUnscopedOrgBrowser(ctx context.Context) bool {
+	if types.IsSystemAdminActor(ctx) {
+		return true
+	}
+	if user, ok := ctx.Value(types.UserContextKey).(*types.User); ok && user != nil {
+		return user.CanAccessAllTenants
+	}
+	return false
+}
+
 // isUnscopedOrgInviter reports callers who may invite without binding to
 // a current OrgUnit: platform system admins, cross-tenant operators,
 // and tenant Owners (covers the first-install bootstrap user).
 func isUnscopedOrgInviter(ctx context.Context) bool {
-	if types.IsSystemAdminFromContext(ctx) {
+	if isUnscopedOrgBrowser(ctx) {
 		return true
-	}
-	if user, ok := ctx.Value(types.UserContextKey).(*types.User); ok && user != nil {
-		if user.CanAccessAllTenants || user.IsSystemAdmin {
-			return true
-		}
 	}
 	return types.TenantRoleFromContext(ctx) == types.TenantRoleOwner
 }

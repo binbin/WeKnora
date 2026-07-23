@@ -4,6 +4,8 @@ export default {
     agents: 'Agents',
     integrations: 'Publish & Integrations',
     organizations: 'Shared Spaces',
+    members: 'Members',
+    orgUnits: 'Organization Hierarchy',
     chat: 'Chat',
     newChat: 'New Chat',
     createChat: 'Create Chat',
@@ -101,7 +103,7 @@ export default {
       },
       settings: {
         title: 'Account & settings',
-        desc: 'Open this to manage your account, members and system settings. You can reopen this tour from the help button next to your name at the top of this menu.',
+        desc: 'Open this to manage your account and system settings. You can reopen this tour from the help button next to your name at the top of this menu.',
       },
       models: {
         title: 'Configure your models',
@@ -333,6 +335,7 @@ export default {
   listSpaceSidebar: {
     title: 'Filter',
     all: 'All',
+    allOrgs: 'All orgs',
     workspace: 'Workspace',
     mine: 'Mine',
     spaces: 'Shared with me',
@@ -349,7 +352,7 @@ export default {
     mine: 'Mine',
     mineTooltip: 'Created by you',
     tenant: 'Workspace',
-    tenantTooltip: 'Created by another member of this workspace',
+    tenantTooltip: 'Created by another member of this organization',
     tenantTooltipWithCreator: 'Created by {creator}',
     space: 'Space',
     spaceTooltip: 'Shared via space "{space}"',
@@ -995,8 +998,8 @@ export default {
     sections: {
       builtin: 'Built-in',
       mine: 'Created by me',
-      tenantReadonly: 'Workspace · View only',
-      tenantOthers: 'Workspace · Other members',
+      tenantReadonly: '{name} · View only',
+      tenantOthers: '{name} · Other members',
       sharedByMe: 'Shared by me',
       sharedEditable: 'Shared with me · Can edit',
       sharedReadonly: 'Shared with me · View only',
@@ -2387,8 +2390,8 @@ export default {
     sections: {
       pinned: 'Pinned',
       mine: 'Created by me',
-      tenantReadonly: 'Workspace · View only',
-      tenantOthers: 'Workspace · Other members',
+      tenantReadonly: '{name} · View only',
+      tenantOthers: '{name} · Other members',
       sharedByMe: 'Shared by me',
       sharedEditable: 'Shared with me · Can edit',
       sharedReadonly: 'Shared with me · View only',
@@ -6796,6 +6799,10 @@ export default {
     title: 'User Profile',
     description: 'View your account info (user ID, username, email, registration time).',
   },
+  orgUnit: {
+    sectionDescription:
+      'Platform organization tree: root units are created by system admins. Members land in the org-named workspace and share it with users in child units.',
+  },
   tenantMember: {
     title: 'Members',
     sectionDescription: 'Invite teammates to the workspace and manage their roles. Only Owner can add or remove members.',
@@ -6822,6 +6829,7 @@ export default {
       member: 'Name & email',
       username: 'Name',
       email: 'Email',
+      orgUnit: 'Organization',
       role: 'Role',
       joinedAt: 'Joined',
       operations: 'Actions',

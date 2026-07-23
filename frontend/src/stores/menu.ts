@@ -1,8 +1,10 @@
 import { reactive, ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import i18n from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 
 type MenuChild = Record<string, any>
+type MenuMinRole = 'viewer' | 'contributor' | 'admin' | 'owner'
 
 interface MenuItem {
   title: string
@@ -11,6 +13,8 @@ interface MenuItem {
   path: string
   childrenPath?: string
   children?: MenuChild[]
+  /** 侧栏可见的最低角色；未设置则始终可见（如新对话/知识库） */
+  minRole?: MenuMinRole
 }
 
 const createMenuChildren = () => reactive<MenuChild[]>([])
@@ -27,9 +31,26 @@ export const useMenuStore = defineStore('menuStore', () => {
     },
     { title: '', titleKey: 'menu.knowledgeBase', icon: 'zhishiku', path: 'knowledge-bases' },
     { title: '', titleKey: 'menu.agents', icon: 'agent', path: 'agents' },
+    {
+      title: '',
+      titleKey: 'menu.members',
+      icon: 'members',
+      path: 'members',
+      minRole: 'viewer',
+    },
+    {
+      title: '',
+      titleKey: 'menu.orgUnits',
+      icon: 'organization',
+      path: 'org-units',
+      minRole: 'viewer',
+    },
     { title: '', titleKey: 'menu.settings', icon: 'setting', path: 'settings' },
     { title: '', titleKey: 'menu.logout', icon: 'logout', path: 'logout' }
   ])
+
+  /** 侧栏「新对话」入口：与 menu.vue SHOW_SIDEBAR_CHAT 同步隐藏 */
+  const SHOW_SIDEBAR_NEW_CHAT = false
 
   const isFirstSession = ref(false)
   const firstQuery = ref('')
@@ -56,8 +77,18 @@ export const useMenuStore = defineStore('menuStore', () => {
     }
   )
 
+  const canSeeMenuItem = (item: MenuItem): boolean => {
+    if (item.path === 'creatChat' && !SHOW_SIDEBAR_NEW_CHAT) return false
+    if (!item.minRole) return true
+    const authStore = useAuthStore()
+    // 与 Settings.vue SECTION_MIN_ROLE 一致：超管 bypass；角色未加载时不露入口，避免闪烁。
+    if (authStore.canAccessAllTenants) return true
+    if (!authStore.currentTenantRole) return false
+    return authStore.hasRole(item.minRole)
+  }
+
   const visibleMenuArr = computed(() => {
-    return menuArr
+    return menuArr.filter((item) => canSeeMenuItem(item))
   })
 
   const chatMenuIndex = menuArr.findIndex(item => item.path === 'creatChat')

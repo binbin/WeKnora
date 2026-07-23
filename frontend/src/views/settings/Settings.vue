@@ -62,7 +62,6 @@
             <!-- 右侧内容区域 -->
             <div class="settings-content">
               <div class="content-wrapper" :class="{
-                'content-wrapper--wide': currentSection === 'members',
                 'content-wrapper--full': SYSTEM_ADMIN_SECTIONS.has(currentSection),
               }">
                 <!-- 角色不允许访问当前 section（deep-link 进来 / 跨空间切换后角色降级）—— 优先于具体 section 渲染。
@@ -145,15 +144,6 @@
                     <TenantInfo />
                   </div>
 
-                  <!-- 成员管理 (#1303 PR 3) -->
-                  <div v-if="currentSection === 'members'" class="section">
-                    <TenantMembers />
-                  </div>
-
-                  <div v-if="currentSection === 'orgunits'" class="section">
-                    <OrgUnitSettings />
-                  </div>
-
                   <!-- MCP 服务 -->
                   <div v-if="currentSection === 'mcp'" class="section">
                     <McpSettings />
@@ -185,8 +175,6 @@ import ChatHistorySettings from './ChatHistorySettings.vue'
 import VectorStoreSettings from './VectorStoreSettings.vue'
 import ParserEngineSettings from './ParserEngineSettings.vue'
 import StorageEngineSettings from './StorageBackendSettings.vue'
-import TenantMembers from './TenantMembers.vue'
-import OrgUnitSettings from './OrgUnitSettings.vue'
 import SystemSettings from '@/views/system/SystemSettings.vue'
 import RuntimeQueues from '@/views/system/RuntimeQueues.vue'
 import PlatformAPIKeys from '@/views/system/PlatformAPIKeys.vue'
@@ -220,7 +208,7 @@ type NavGroup = {
 // 以「页面里至少有 1 个有意义的写操作所要求的最低角色」为基准，把基础设
 // 施配置（models 写、websearch 写、parser/storage/vector/mcp
 // CRUD、chat-history 配置）统一收到 admin；只读类（general / system info /
-// tenant-info / members 名册）保留 viewer 可见；最高敏感的 reset api
+// tenant-info）保留 viewer 可见；最高敏感的 reset api
 // key 是 owner-only。改这张表前请在 router.go 里复核对应路由组。
 //
 // 特别说明：
@@ -230,6 +218,7 @@ type NavGroup = {
 // - models 列表 viewer 可读，页面内的「+ 添加模型 / 编辑 / 删除」按钮在
 //   ModelSettings.vue 里另用 hasRole('admin') 自己 gate，所以入口保留
 //   viewer 是合理的（contributor 也能浏览模型列表）。
+// - members / orgunits 已迁至侧栏独立页，不再出现在设置弹窗导航中。
 type RoleKey = 'viewer' | 'contributor' | 'admin' | 'owner'
 const SECTION_MIN_ROLE: Record<string, RoleKey> = {
   general: 'viewer',
@@ -243,8 +232,6 @@ const SECTION_MIN_ROLE: Record<string, RoleKey> = {
   system: 'viewer',
   userprofile: 'viewer',
   tenant: 'viewer',
-  members: 'viewer',
-  orgunits: 'viewer',
 }
 
 const SYSTEM_ADMIN_SECTIONS = new Set(['system-global', 'runtime-queues', 'platform-api-keys', 'system-audit-log'])
@@ -259,9 +246,15 @@ const REMOVED_SETTINGS_SECTIONS = new Set([
   'integration-api',
   'integration-chrome',
   'integration-claw',
+  // 已迁至侧栏独立页；旧 openSettings / deep-link 会落到 general。
+  'members',
+  'orgunits',
 ])
 
 const normalizeSettingsSection = (section: string) => {
+  if (section === 'members' || section === 'orgunits') {
+    return 'general'
+  }
   if (REMOVED_SETTINGS_SECTIONS.has(section) || section.startsWith('integration-')) {
     return 'models'
   }
@@ -299,8 +292,6 @@ const navItems = computed(() => {
     { key: 'system-audit-log', icon: 'history', label: t('system.globalSettings.audit.tabLabel') },
     { key: 'userprofile', icon: 'user', label: t('userProfile.title') },
     { key: 'tenant', icon: 'user-circle', label: t('settings.tenantInfo') },
-    { key: 'members', icon: 'usergroup', label: t('tenantMember.title') },
-    { key: 'orgunits', icon: 'tree-list', label: '组织层级' },
   ]
   // currentTenantRole 为空表示「membership 还没加载」—— 比起渲染整套
   // viewer 入口然后角色一返回又消失，先卡住不渲染更稳，跟原先 members
@@ -324,7 +315,7 @@ const navGroups = computed<NavGroup[]>(() => {
     {
       key: 'workspace',
       label: t('settings.navGroups.workspace'),
-      items: pickItems(['tenant', 'members', 'orgunits', 'chathistory']),
+      items: pickItems(['tenant', 'chathistory']),
     },
     {
       key: 'models_runtime',

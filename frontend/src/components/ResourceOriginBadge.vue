@@ -9,7 +9,7 @@
 import { computed } from 'vue'
 import { Icon as TIcon } from 'tdesign-vue-next'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { useWorkspaceScopeLabel } from '@/composables/useWorkspaceScopeLabel'
 
 /**
  * ResourceOriginBadge – a unified, compact label that explains *where* a
@@ -22,13 +22,10 @@ import { useAuthStore } from '@/stores/auth'
  * Variants:
  *  - mine        : created by the current user in the current tenant
  *  - tenant      : owned by the current tenant but created by someone else
- *                  — label shows tenant name; use when context doesn't say
+ *                  — label shows org/workspace scope name
  *  - creator     : same data shape as `tenant`, but the surrounding section
- *                  header already names the tenant ("本空间 · 仅查看"), so
- *                  the badge only carries the creator name to avoid the
- *                  duplicated "本空间 / wizardchen's Workspace" pill on
- *                  every card. Falls back to the i18n label when the
- *                  creator name is unknown.
+ *                  header already names the org scope, so the badge only
+ *                  carries the creator name to avoid duplication
  *  - space       : reached through a cross-tenant space (organization)
  *  - shared      : cross-tenant share without a useful org name to show
  *
@@ -50,7 +47,7 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
-const authStore = useAuthStore()
+const { workspaceScopeLabel } = useWorkspaceScopeLabel()
 
 const iconName = computed(() => {
   switch (props.variant) {
@@ -76,14 +73,12 @@ const displayText = computed(() => {
     case 'mine':
       return t('resourceOrigin.mine')
     case 'tenant':
-      // Prefer the tenant name when known so the badge says where the
-      // resource lives, not a vague "tenant" label. Falls back to i18n.
-      return authStore.currentTenantName || t('resourceOrigin.tenant')
+      return workspaceScopeLabel.value || t('resourceOrigin.tenant')
     case 'creator':
-      // Section header already provides the「本空间」context, so we just
-      // show who created it. Fall back to a generic label when the user
+      // Section header already provides the org-scope context, so we just
+      // show who created it. Fall back to scope label when the user
       // can't be resolved (creator_name 缺失，例如已删除账号 / 老数据)。
-      return props.creatorName || t('resourceOrigin.tenant')
+      return props.creatorName || workspaceScopeLabel.value || t('resourceOrigin.tenant')
     case 'space':
       return props.spaceName || t('resourceOrigin.space')
     case 'shared':

@@ -94,6 +94,16 @@ func (r *orgUnitRepository) ListByTenant(
 	return units, err
 }
 
+func (r *orgUnitRepository) ListAll(
+	ctx context.Context,
+) ([]*types.OrgUnit, error) {
+	var units []*types.OrgUnit
+	err := r.db.WithContext(ctx).
+		Order("depth ASC, sort_order ASC, name ASC").
+		Find(&units).Error
+	return units, err
+}
+
 func (r *orgUnitRepository) ListRoots(
 	ctx context.Context,
 	tenantID uint64,

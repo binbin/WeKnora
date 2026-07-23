@@ -28,7 +28,16 @@ func (r *stubOrgUnitRepo) GetByIDGlobal(_ context.Context, id string) (*types.Or
 }
 func (r *stubOrgUnitRepo) Update(context.Context, *types.OrgUnit) error { return nil }
 func (r *stubOrgUnitRepo) Delete(context.Context, uint64, string) error  { return nil }
-func (r *stubOrgUnitRepo) ListByTenant(context.Context, uint64) ([]*types.OrgUnit, error) {
+func (r *stubOrgUnitRepo) ListByTenant(_ context.Context, tenantID uint64) ([]*types.OrgUnit, error) {
+	out := make([]*types.OrgUnit, 0, len(r.units))
+	for _, unit := range r.units {
+		if unit != nil && unit.TenantID == tenantID {
+			out = append(out, unit)
+		}
+	}
+	return out, nil
+}
+func (r *stubOrgUnitRepo) ListAll(context.Context) ([]*types.OrgUnit, error) {
 	out := make([]*types.OrgUnit, 0, len(r.units))
 	for _, unit := range r.units {
 		out = append(out, unit)
@@ -221,24 +230,27 @@ func TestOrgUnitAncestorReadSelfWrite(t *testing.T) {
 	}
 
 	cases := []struct {
-		name     string
-		active   string
-		kbUnit   string
-		wantRead bool
-		wantWrite bool
+		name                string
+		active              string
+		kbUnit              string
+		shareWithDescendants bool
+		wantRead            bool
+		wantWrite           bool
 	}{
-		{"county reads self", "county", "county", true, true},
-		{"county reads city", "county", "city", true, false},
-		{"county reads province", "county", "prov", true, false},
-		{"county cannot read sibling path", "county", "other", false, false},
-		{"city cannot read county", "city", "county", false, false},
-		{"province cannot read city", "prov", "city", false, false},
-		{"unbound always readable", "county", "", true, true},
+		{"county reads self", "county", "county", true, true, true},
+		{"county reads city", "county", "city", true, true, false},
+		{"county reads province", "county", "prov", true, true, false},
+		{"county cannot read sibling path", "county", "other", true, false, false},
+		{"city cannot read county", "city", "county", true, false, false},
+		{"province cannot read city", "prov", "city", true, false, false},
+		{"unbound always readable", "county", "", true, true, true},
+		{"no share blocks ancestor", "county", "city", false, false, false},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			gotRead, err := svc.CanReadKB(
-				ctx, tenantID, testCase.active, testCase.kbUnit, true,
+				ctx, tenantID, testCase.active, testCase.kbUnit,
+				testCase.shareWithDescendants,
 			)
 			if err != nil {
 				t.Fatalf("CanReadKB: %v", err)
@@ -441,5 +453,60 @@ func TestTransferMemberMovesUser(t *testing.T) {
 	list, err := svc.ListUserMemberships(context.Background(), 1, "u1")
 	if err != nil || len(list) != 1 || list[0].OrgUnitID != "city2" {
 		t.Fatalf("memberships=%#v err=%v", list, err)
+	}
+}
+
+func TestListPlatformTreeIncludesLegacyTenantTrees(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"platform-root": {
+				ID: "platform-root", TenantID: types.PlatformOrgTenantID,
+				ParentID: "", Path: "/platform-root/", Depth: 0,
+				Name: "PlatformRoot",
+			},
+			"legacy-root": {
+				ID: "legacy-root", TenantID: 10000,
+				ParentID: "", Path: "/legacy-root/", Depth: 0,
+				Name: "LegacyRoot",
+			},
+			"legacy-child": {
+				ID: "legacy-child", TenantID: 10000,
+				ParentID: "legacy-root", Path: "/legacy-root/legacy-child/",
+				Depth: 1, Name: "LegacyChild",
+			},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+
+	// Tenant-scoped list for platform catalog alone must not hide that
+	// legacy trees exist elsewhere — regression for /platform/org-units.
+	platformOnly, err := svc.ListTree(context.Background(), types.PlatformOrgTenantID)
+	if err != nil {
+		t.Fatalf("ListTree platform: %v", err)
+	}
+	if len(platformOnly) != 1 || platformOnly[0].ID != "platform-root" {
+		t.Fatalf("platform-only tree=%#v", platformOnly)
+	}
+
+	forest, err := svc.ListPlatformTree(context.Background())
+	if err != nil {
+		t.Fatalf("ListPlatformTree: %v", err)
+	}
+	if len(forest) != 2 {
+		t.Fatalf("want 2 roots, got %#v", forest)
+	}
+	byID := map[string]*types.OrgUnit{}
+	for _, root := range forest {
+		byID[root.ID] = root
+	}
+	if byID["platform-root"] == nil {
+		t.Fatal("missing platform-root")
+	}
+	legacy := byID["legacy-root"]
+	if legacy == nil {
+		t.Fatal("missing legacy-root")
+	}
+	if len(legacy.Children) != 1 || legacy.Children[0].ID != "legacy-child" {
+		t.Fatalf("legacy children=%#v", legacy.Children)
 	}
 }

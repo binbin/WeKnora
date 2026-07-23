@@ -4,6 +4,8 @@ export default {
     agents: "에이전트",
     integrations: "게시 및 통합",
     organizations: "공유 스페이스",
+    members: "멤버 관리",
+    orgUnits: "조직 계층",
     chat: "대화",
     newChat: "새 대화",
     createChat: "대화 생성",
@@ -101,7 +103,7 @@ export default {
       },
       settings: {
         title: "계정 및 설정 입구",
-        desc: "여기를 열면 계정, 멤버, 시스템 설정을 관리할 수 있습니다. 이 가이드는 메뉴 상단 닉네임 옆 도움말 버튼에서 다시 열 수 있습니다.",
+        desc: "여기를 열면 계정과 시스템 설정을 관리할 수 있습니다. 이 가이드는 메뉴 상단 닉네임 옆 도움말 버튼에서 다시 열 수 있습니다.",
       },
       models: {
         title: "모델 구성하기",
@@ -333,6 +335,7 @@ export default {
   listSpaceSidebar: {
     title: "필터",
     all: "모두",
+    allOrgs: "전체 조직",
     workspace: "워크스페이스",
     mine: "소유",
     spaces: "나와 공유됨",
@@ -349,7 +352,7 @@ export default {
     mine: "내 생성",
     mineTooltip: "현재 사용자가 생성",
     tenant: "워크스페이스",
-    tenantTooltip: "워크스페이스의 다른 멤버가 생성",
+    tenantTooltip: "소속 조직의 다른 멤버가 생성",
     tenantTooltipWithCreator: "{creator}님이 생성",
     space: "스페이스",
     spaceTooltip: "공유 스페이스 「{space}」에서 가져옴",
@@ -2080,8 +2083,8 @@ export default {
     sections: {
       builtin: "내장",
       mine: "내가 만듦",
-      tenantReadonly: "워크스페이스 · 읽기 전용",
-      tenantOthers: "워크스페이스 · 다른 멤버",
+      tenantReadonly: "{name} · 읽기 전용",
+      tenantOthers: "{name} · 다른 멤버",
       sharedByMe: "내가 공유한",
       sharedEditable: "공유받음 · 편집 가능",
       sharedReadonly: "공유받음 · 읽기 전용",
@@ -3626,8 +3629,8 @@ export default {
     sections: {
       pinned: "고정됨",
       mine: "내가 만듦",
-      tenantReadonly: "워크스페이스 · 읽기 전용",
-      tenantOthers: "워크스페이스 · 다른 멤버",
+      tenantReadonly: "{name} · 읽기 전용",
+      tenantOthers: "{name} · 다른 멤버",
       sharedByMe: "내가 공유한",
       sharedEditable: "공유받음 · 편집 가능",
       sharedReadonly: "공유받음 · 읽기 전용",
@@ -6714,6 +6717,10 @@ export default {
     title: "사용자 정보",
     description: "계정 기본 정보(사용자 ID, 사용자 이름, 이메일, 가입 시각)를 확인합니다.",
   },
+  orgUnit: {
+    sectionDescription:
+      '플랫폼 조직 트리: 루트 조직은 시스템 관리자가 생성합니다. 멤버는 로그인 후 「조직명 스페이스」에 자동 진입하며, 본 조직과 하위 조직 사용자가 해당 스페이스를 공유합니다.',
+  },
   tenantMember: {
     title: "멤버 관리",
     sectionDescription: "워크스페이스에 동료를 초대하고 역할을 관리합니다. 소유자만 멤버를 추가하거나 제거할 수 있습니다.",
@@ -6740,6 +6747,7 @@ export default {
       member: "이름 · 이메일",
       username: "이름",
       email: "이메일",
+      orgUnit: "소속 조직",
       role: "역할",
       joinedAt: "가입일",
       operations: "작업",

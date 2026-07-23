@@ -210,7 +210,12 @@ func (s *customAgentService) ListAgents(
 	)
 	switch purpose {
 	case "manage":
-		if types.IsSystemAdminActor(ctx) {
+		orgUnitID, _ := types.OrgUnitIDFromContext(ctx)
+		orgUnitID = strings.TrimSpace(orgUnitID)
+		// 「所在组织」桶：有活跃 OrgUnit 时列该组织（含未绑定遗留）；
+		// 无活跃 unit 时超管 / Admin·Owner → 全租户；其余回退创建者列表。
+		listAllOrgs := orgUnitID == "" && canListAllOrgAgents(ctx)
+		if listAllOrgs {
 			allAgents, listErr := s.repo.ListAgentsByTenantID(ctx, tenantID)
 			if listErr != nil {
 				err = listErr
@@ -223,6 +228,8 @@ func (s *customAgentService) ListAgents(
 				}
 				agents = append(agents, agent)
 			}
+		} else if orgUnitID != "" {
+			agents, err = s.repo.ListCustomAgentsByOrgUnit(ctx, tenantID, orgUnitID)
 		} else {
 			userID, _ := types.UserIDFromContext(ctx)
 			agents, err = s.repo.ListCustomAgentsByCreator(ctx, tenantID, userID)
@@ -247,6 +254,21 @@ func (s *customAgentService) ListAgents(
 		agent.EnsureDefaults()
 	}
 	return agents, nil
+}
+
+// canListAllOrgAgents reports callers who may list every custom agent in
+// the tenant when no active OrgUnit is set (tenant Admin/Owner).
+func canListAllOrgAgents(ctx context.Context) bool {
+	if types.IsSystemAdminActor(ctx) {
+		return true
+	}
+	if user, ok := ctx.Value(types.UserContextKey).(*types.User); ok && user != nil {
+		if user.CanAccessAllTenants {
+			return true
+		}
+	}
+	role := types.TenantRoleFromContext(ctx)
+	return role == types.TenantRoleAdmin || role == types.TenantRoleOwner
 }
 
 func (s *customAgentService) validateBuiltinKnowledgeQAModel(

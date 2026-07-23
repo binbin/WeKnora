@@ -362,6 +362,9 @@
                   <span v-if="memberSecondary(row)" class="member-email">{{ memberSecondary(row) }}</span>
                 </div>
               </template>
+              <template #org_unit="{ row }">
+                <span>{{ row.org_unit_name || row.org_unit_id || '—' }}</span>
+              </template>
               <template #role="{ row }">
                 <div class="role-cell">
                   <t-select
@@ -949,6 +952,9 @@ function roleMatrixIcon(role: TenantRole): string {
 
 const columns = computed(() => [
   { colKey: 'member', title: t('tenantMember.columns.member'), ellipsis: true, minWidth: 132 },
+  ...(hasOrgHierarchy.value
+    ? [{ colKey: 'org_unit', title: t('tenantMember.columns.orgUnit'), ellipsis: true, minWidth: 120 }]
+    : []),
   { colKey: 'role', title: t('tenantMember.columns.role'), width: 128 },
   ...(hasOrgHierarchy.value
     ? [{
@@ -1139,10 +1145,10 @@ watch(searchQuery, () => {
 
 const invitationColumns = computed(() => [
   { colKey: 'invitee', title: t('tenantInvitation.columns.invitee'), ellipsis: true, minWidth: 160 },
-  { colKey: 'role', title: t('tenantInvitation.columns.role'), width: 110 },
   ...(hasOrgHierarchy.value
     ? [{ colKey: 'org_unit', title: t('tenantInvitation.columns.orgUnit'), ellipsis: true, minWidth: 120 }]
     : []),
+  { colKey: 'role', title: t('tenantInvitation.columns.role'), width: 110 },
   { colKey: 'inviter', title: t('tenantInvitation.columns.inviter'), ellipsis: true, minWidth: 140 },
   { colKey: 'expires_at', title: t('tenantInvitation.columns.expiresAt'), width: 160 },
   { colKey: 'status', title: t('tenantInvitation.columns.status'), width: 100 },

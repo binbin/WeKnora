@@ -15,6 +15,10 @@ type OrgUnitService interface {
 	Delete(ctx context.Context, tenantID uint64, id string) error
 	ListFlat(ctx context.Context, tenantID uint64) ([]*types.OrgUnit, error)
 	ListTree(ctx context.Context, tenantID uint64) ([]*types.OrgUnit, error)
+	// ListPlatformTree returns the platform catalog (tenant_id=0) plus
+	// legacy in-tenant org trees so system admins see the full forest.
+	ListPlatformTree(ctx context.Context) ([]*types.OrgUnit, error)
+	ListPlatformFlat(ctx context.Context) ([]*types.OrgUnit, error)
 	Move(ctx context.Context, tenantID uint64, id string, newParentID string) (*types.OrgUnit, error)
 
 	AddMember(ctx context.Context, tenantID uint64, orgUnitID string, userID string, isPrimary bool) (*types.OrgUnitMember, error)
@@ -106,6 +110,9 @@ type OrgUnitRepository interface {
 	Update(ctx context.Context, unit *types.OrgUnit) error
 	Delete(ctx context.Context, tenantID uint64, id string) error
 	ListByTenant(ctx context.Context, tenantID uint64) ([]*types.OrgUnit, error)
+	// ListAll returns every live OrgUnit across tenants (platform catalog
+	// and legacy in-tenant trees). Used by system-admin platform views.
+	ListAll(ctx context.Context) ([]*types.OrgUnit, error)
 	ListRoots(ctx context.Context, tenantID uint64) ([]*types.OrgUnit, error)
 	CountByTenant(ctx context.Context, tenantID uint64) (int64, error)
 	CountChildren(ctx context.Context, tenantID uint64, parentID string) (int64, error)

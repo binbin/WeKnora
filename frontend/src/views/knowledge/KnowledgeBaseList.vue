@@ -146,7 +146,7 @@
               @keydown.enter.prevent="toggleKbSection('tenantOthers')"
               @keydown.space.prevent="toggleKbSection('tenantOthers')">
               <t-icon :name="tenantSectionIconName" size="14px" />
-              <span>{{ $t(tenantSectionLabelKey) }}</span>
+              <span>{{ tenantSectionLabel }}</span>
               <span class="kb-section-count">{{ filteredKbSectionCounts.tenantOthers }}</span>
               <t-icon class="kb-section-toggle"
                 :name="isKbSectionCollapsed('tenantOthers') ? 'chevron-right' : 'chevron-down'" size="14px" />
@@ -416,7 +416,7 @@
               @keydown.enter.prevent="toggleKbSection('tenantOthers')"
               @keydown.space.prevent="toggleKbSection('tenantOthers')">
               <t-icon :name="tenantSectionIconName" size="14px" />
-              <span>{{ $t(tenantSectionLabelKey) }}</span>
+              <span>{{ tenantSectionLabel }}</span>
               <span class="kb-section-count">{{ mineKbSectionCounts.tenantOthers }}</span>
               <t-icon class="kb-section-toggle"
                 :name="isKbSectionCollapsed('tenantOthers') ? 'chevron-right' : 'chevron-down'" size="14px" />
@@ -803,6 +803,7 @@ import { useTenantModelReadiness } from '@/composables/useTenantModelReadiness'
 import { useI18n } from 'vue-i18n'
 import { useListUrlState } from '@/composables/useListUrlState'
 import { useResourcePins } from '@/composables/useResourcePins'
+import { useWorkspaceScopeLabel } from '@/composables/useWorkspaceScopeLabel'
 
 const router = useRouter()
 const route = useRoute()
@@ -1077,11 +1078,12 @@ const showShareGroupHeaders = computed(() => true)
 // contributor / viewer 在本空间里对这些 KB 没有写权限，所以打"仅查看"；
 // admin / owner 反而对整个空间都有编辑权限，"仅查看"会反复误导他们以为
 // 自己改不了——这一段实际上是"工作空间里其他成员创建的 KB"，按所有权
-// 而非权限来标注更准确。
-const tenantSectionLabelKey = computed(() =>
+// 而非权限来标注更准确。前缀用所在组织名（超管为「所有」）。
+const { workspaceScopeLabel } = useWorkspaceScopeLabel()
+const tenantSectionLabel = computed(() =>
   authStore.hasRole('admin')
-    ? 'knowledgeList.sections.tenantOthers'
-    : 'knowledgeList.sections.tenantReadonly'
+    ? t('knowledgeList.sections.tenantOthers', { name: workspaceScopeLabel.value })
+    : t('knowledgeList.sections.tenantReadonly', { name: workspaceScopeLabel.value })
 )
 
 // 图标和上面的文案对齐：admin/owner 看到的是"本空间 · 其他成员"，按所有权

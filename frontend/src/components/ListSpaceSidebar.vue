@@ -156,6 +156,7 @@ import { useI18n } from 'vue-i18n'
 import { Icon as TIcon } from 'tdesign-vue-next'
 import SpaceAvatar from './SpaceAvatar.vue'
 import { useOrganizationStore } from '@/stores/organization'
+import { useWorkspaceScopeLabel } from '@/composables/useWorkspaceScopeLabel'
 
 const COLLAPSED_WIDTH = 56
 const EXPANDED_WIDTH = 208
@@ -257,14 +258,8 @@ const selected = computed({
   set: (v: string) => emit('update:modelValue', v)
 })
 
-// workspaceLabel is the unified label for the tenant-owned bucket.
-// Earlier iterations rendered the active tenant's display name here, but
-// long names (e.g. "wizardlab Test Team") got truncated to unreadable
-// stubs ("wiza…") in the collapsed strip and competed visually with the
-// org/space entries below. A constant i18n label sidesteps both issues;
-// the tenant identity is already conveyed by the dedicated TenantSelector
-// in the global header, so we don't lose information.
-const workspaceLabel = computed(() => t('listSpaceSidebar.workspace'))
+// 「本空间」位展示所在组织名；超管固定为「所有」。
+const { workspaceScopeLabel: workspaceLabel } = useWorkspaceScopeLabel()
 
 const organizations = computed(() => orgStore.organizations || [])
 

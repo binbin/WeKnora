@@ -103,7 +103,7 @@
               @keydown.enter.prevent="toggleAgentSection('tenantOthers')"
               @keydown.space.prevent="toggleAgentSection('tenantOthers')">
               <t-icon :name="tenantSectionIconName" size="14px" />
-              <span>{{ $t(tenantSectionLabelKey) }}</span>
+              <span>{{ tenantSectionLabel }}</span>
               <span class="agent-section-count">{{ filteredAgentSectionCounts.tenantOthers }}</span>
               <t-icon class="agent-section-toggle"
                 :name="isAgentSectionCollapsed('tenantOthers') ? 'chevron-right' : 'chevron-down'" size="14px" />
@@ -337,7 +337,7 @@
               @keydown.enter.prevent="toggleAgentSection('tenantOthers')"
               @keydown.space.prevent="toggleAgentSection('tenantOthers')">
               <t-icon :name="tenantSectionIconName" size="14px" />
-              <span>{{ $t(tenantSectionLabelKey) }}</span>
+              <span>{{ tenantSectionLabel }}</span>
               <span class="agent-section-count">{{ mineAgentSectionCounts.tenantOthers }}</span>
               <t-icon class="agent-section-toggle"
                 :name="isAgentSectionCollapsed('tenantOthers') ? 'chevron-right' : 'chevron-down'" size="14px" />
@@ -819,6 +819,7 @@ import { shouldShowResourceOriginBadge } from '@/utils/card-list-badge'
 import { useAuthStore } from '@/stores/auth'
 import { useListUrlState } from '@/composables/useListUrlState'
 import { useResourcePins } from '@/composables/useResourcePins'
+import { useWorkspaceScopeLabel } from '@/composables/useWorkspaceScopeLabel'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -1323,11 +1324,12 @@ const showShareGroupHeaders = computed(() => true)
 // 同空间、非当前用户创建的 Agent 分组标题。
 // contributor / viewer 在本空间里对这些 Agent 没有写权限，所以打"仅查看"；
 // admin / owner 对整个空间都有编辑权限，"仅查看"反而误导，统一改成
-// "本空间 · 其他成员"——按所有权而非权限来标注。
-const tenantSectionLabelKey = computed(() =>
+// "{组织} · 其他成员"——按所有权而非权限来标注。前缀用所在组织名（超管为「所有」）。
+const { workspaceScopeLabel } = useWorkspaceScopeLabel()
+const tenantSectionLabel = computed(() =>
   authStore.hasRole('admin')
-    ? 'agent.sections.tenantOthers'
-    : 'agent.sections.tenantReadonly'
+    ? t('agent.sections.tenantOthers', { name: workspaceScopeLabel.value })
+    : t('agent.sections.tenantReadonly', { name: workspaceScopeLabel.value })
 )
 
 // 与 KB 列表 .tenantSectionIconName 同理：admin/owner 看到"其他成员"配

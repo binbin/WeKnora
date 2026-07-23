@@ -44,6 +44,35 @@ export function setStoredOrgUnitId(orgUnitId: string): void {
   } else {
     localStorage.removeItem(ORG_UNIT_STORAGE_KEY)
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('weknora-org-unit-changed'))
+  }
+}
+
+/**
+ * 超管侧栏「所有」对应不带 X-Org-Unit-ID，让后端按全组织范围列资源。
+ * 普通用户仍附带 localStorage 中的当前组织。
+ */
+export function shouldSendOrgUnitHeader(): boolean {
+  try {
+    const raw = localStorage.getItem('weknora_user')
+    if (!raw) return true
+    const user = JSON.parse(raw) as {
+      can_access_all_tenants?: boolean
+      is_system_admin?: boolean
+    }
+    if (user?.can_access_all_tenants || user?.is_system_admin) {
+      return false
+    }
+  } catch {
+    // ignore parse errors — fall through to send header
+  }
+  return true
+}
+
+export function getRequestOrgUnitId(): string {
+  if (!shouldSendOrgUnitHeader()) return ''
+  return getStoredOrgUnitId().trim()
 }
 
 export async function listOrgUnits(

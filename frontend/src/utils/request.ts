@@ -3,6 +3,7 @@ import axios from "axios";
 import { generateRandomString, MAX_FILE_SIZE_MB } from "./index";
 import i18n from '@/i18n'
 import { getApiBaseUrl } from './api-base';
+import { getRequestOrgUnitId } from '@/api/org-unit'
 
 const t = (key: string) => i18n.global.t(key)
 
@@ -57,7 +58,7 @@ instance.interceptors.request.use(
       if (selectedTenantId) {
         config.headers["X-Tenant-ID"] = selectedTenantId;
       }
-      const selectedOrgUnitId = localStorage.getItem('weknora_org_unit_id');
+      const selectedOrgUnitId = getRequestOrgUnitId();
       if (selectedOrgUnitId) {
         config.headers["X-Org-Unit-ID"] = selectedOrgUnitId;
       }

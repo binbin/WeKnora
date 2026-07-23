@@ -83,9 +83,7 @@
                         :class="['menu_item', item.childrenPath && item.childrenPath == currentpath ? 'menu_item_c_active' : isMenuItemActive(item.path) ? 'menu_item_active' : '']">
                         <div class="menu_item-box">
                             <div class="menu_icon">
-                                <img class="icon"
-                                    :src="getImgSrc(item.icon == 'zhishiku' ? knowledgeIcon : item.icon == 'agent' ? agentIcon : item.icon == 'organization' ? organizationIcon : item.icon == 'logout' ? logoutIcon : item.icon == 'setting' ? settingIcon : prefixIcon)"
-                                    alt="">
+                                <img class="icon" :src="getImgSrc(resolveMenuIcon(item))" alt="">
                             </div>
                             <template v-if="!uiStore.sidebarCollapsed">
                                 <span class="menu_title" :title="item.title">{{ item.title }}</span>
@@ -100,7 +98,7 @@
             </div>
 
             <!-- 历史会话：按来源筛选后统一按日期分组展示 -->
-            <div class="submenu" v-if="!uiStore.sidebarCollapsed">
+            <div class="submenu" v-if="SHOW_SIDEBAR_CHAT && !uiStore.sidebarCollapsed">
                 <!-- Stable, always-mounted source filter: reserving its row here
                      (instead of embedding it in the first date group, which
                      appears/disappears while a bucket loads) prevents the
@@ -169,7 +167,7 @@
         </div>
 
         <!-- 批量管理底部操作条：固定在侧栏底部、用户头像上方 -->
-        <div v-if="batchMode && !uiStore.sidebarCollapsed" class="batch-inline-footer">
+        <div v-if="SHOW_SIDEBAR_CHAT && batchMode && !uiStore.sidebarCollapsed" class="batch-inline-footer">
             <div class="batch-footer-left">
                 <t-checkbox :checked="isAllBatchSelected" :indeterminate="isBatchIndeterminate"
                     @change="toggleBatchSelectAll">
@@ -389,6 +387,18 @@ const isInAgentList = computed<boolean>(() => route.name === 'agentList');
 // 是否在组织列表页面
 const isInOrganizationList = computed<boolean>(() => route.name === 'organizationList');
 
+/** 侧栏「新对话」与历史会话列表：当前产品形态下隐藏入口与相关能力 */
+const SHOW_SIDEBAR_CHAT = false;
+
+const TOP_MENU_PATHS = new Set([
+    ...(SHOW_SIDEBAR_CHAT ? ['creatChat'] as const : []),
+    'knowledge-bases',
+    'agents',
+    'members',
+    'org-units',
+    'organizations',
+]);
+
 // 统一的菜单项激活状态判断
 const isMenuItemActive = (itemPath: string): boolean => {
     const currentRoute = route.name;
@@ -402,6 +412,10 @@ const isMenuItemActive = (itemPath: string): boolean => {
             return currentRoute === 'agentList';
         case 'organizations':
             return currentRoute === 'organizationList';
+        case 'members':
+            return currentRoute === 'tenantMembers';
+        case 'org-units':
+            return currentRoute === 'orgUnits';
         case 'creatChat':
             return currentRoute === 'kbCreatChat' || currentRoute === 'globalCreatChat';
         case 'settings':
@@ -427,19 +441,16 @@ const getIconActiveState = (itemPath: string) => {
     };
 };
 
-// 分离上下两部分菜单（使用 visibleMenuArr 以便 lite 模式过滤 logout）
+// 分离上下两部分菜单（使用 visibleMenuArr 做角色可见性过滤）
 const topMenuItems = computed<MenuItem[]>(() => {
     return (visibleMenuArr.value as unknown as MenuItem[]).filter((item: MenuItem) =>
-        item.path === 'knowledge-bases' || item.path === 'agents' || item.path === 'organizations' || item.path === 'creatChat'
+        TOP_MENU_PATHS.has(item.path)
     );
 });
 
 const bottomMenuItems = computed<MenuItem[]>(() => {
     return (visibleMenuArr.value as unknown as MenuItem[]).filter((item: MenuItem) => {
-        if (item.path === 'knowledge-bases' || item.path === 'agents' || item.path === 'organizations' || item.path === 'creatChat') {
-            return false;
-        }
-        return true;
+        return !TOP_MENU_PATHS.has(item.path);
     });
 });
 
@@ -973,12 +984,14 @@ onMounted(async () => {
 
     await loadCurrentKbInfo((route.params as any)?.kbId as string)
 
-    await loadSessionOriginMeta();
-    await getMessageList();
-    const initialChatId = route.params.chatid as string | undefined;
-    if (initialChatId) {
-        ensureSessionInSidebar(initialChatId);
-        await syncActiveBucketFromChat(initialChatId);
+    if (SHOW_SIDEBAR_CHAT) {
+        await loadSessionOriginMeta();
+        await getMessageList();
+        const initialChatId = route.params.chatid as string | undefined;
+        if (initialChatId) {
+            ensureSessionInSidebar(initialChatId);
+            await syncActiveBucketFromChat(initialChatId);
+        }
     }
     // 若组织列表未加载则拉取一次，用于侧栏「待审批」角标
     if (orgStore.organizations.length === 0) {
@@ -1002,7 +1015,7 @@ watch([() => route.name, () => route.params], (newvalue, oldvalue) => {
     // 创建新会话时 creatChat 会先 updataMenuChildren，再跳转 chat/:id。
     // 侧栏实际渲染 sessionBuckets，需按 buckets 判断是否缺失，不能把 menuStore 当真相来源。
     const newChatId = (newvalue[1] as any)?.chatid as string | undefined;
-    if (nameStr === 'chat' && newChatId) {
+    if (SHOW_SIDEBAR_CHAT && nameStr === 'chat' && newChatId) {
         ensureSessionInSidebar(newChatId);
         void syncActiveBucketFromChat(newChatId);
     }
@@ -1021,14 +1034,37 @@ let logoutIcon = ref('logout.svg');
 let settingIcon = ref('setting.svg');
 let agentIcon = ref('agent.svg');
 let organizationIcon = ref('organization.svg');
+let membersIcon = ref('members.svg');
 let pathPrefix = ref(route.name)
+
+const resolveMenuIcon = (item: MenuItem): string => {
+    switch (item.icon) {
+        case 'zhishiku':
+            return knowledgeIcon.value;
+        case 'agent':
+            return agentIcon.value;
+        case 'organization':
+            return organizationIcon.value;
+        case 'members':
+            return membersIcon.value;
+        case 'logout':
+            return logoutIcon.value;
+        case 'setting':
+            return settingIcon.value;
+        default:
+            return prefixIcon.value;
+    }
+};
+
 const getIcon = (path: string) => {
     // 根据当前路由状态更新所有图标
     const kbActiveState = getIconActiveState('knowledge-bases');
     const creatChatActiveState = getIconActiveState('creatChat');
     const settingsActiveState = getIconActiveState('settings');
     const agentsActiveState = route.name === 'agentList';
-    const organizationsActiveState = route.name === 'organizationList';
+    const organizationsActiveState =
+        route.name === 'organizationList' || route.name === 'orgUnits';
+    const membersActiveState = route.name === 'tenantMembers';
 
     // 知识库图标：只在知识库页面显示绿色
     knowledgeIcon.value = kbActiveState.isKbActive ? 'zhishiku-green.svg' : 'zhishiku.svg';
@@ -1036,8 +1072,11 @@ const getIcon = (path: string) => {
     // 智能体图标：只在智能体页面显示绿色
     agentIcon.value = agentsActiveState ? 'agent-green.svg' : 'agent.svg';
 
-    // 组织图标：只在组织页面显示绿色
+    // 组织层级图标：只在组织层级页面显示绿色
     organizationIcon.value = organizationsActiveState ? 'organization-green.svg' : 'organization.svg';
+
+    // 成员管理图标
+    membersIcon.value = membersActiveState ? 'members-green.svg' : 'members.svg';
 
     // 对话图标：只在对话创建页面显示绿色，其他情况显示默认
     prefixIcon.value = creatChatActiveState.isCreatChatActive ? 'prefixIcon-green.svg' : 'prefixIcon.svg';
@@ -1063,6 +1102,10 @@ const handleMenuClick = async (path: string) => {
     } else if (path === 'organizations') {
         // 组织菜单项：跳转到组织列表
         router.push('/platform/organizations')
+    } else if (path === 'members') {
+        router.push('/platform/members')
+    } else if (path === 'org-units') {
+        router.push('/platform/org-units')
     } else if (path === 'settings') {
         // 设置菜单项：打开设置弹窗并跳转路由
         uiStore.openSettings()

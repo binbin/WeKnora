@@ -85,18 +85,22 @@ func (h *OrgUnitHandler) Delete(c *gin.Context) {
 func (h *OrgUnitHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 	tenantID := c.GetUint64(types.TenantIDContextKey.String())
-	// System admins manage the platform catalog (tenant_id=0) from
-	// Settings → 组织层级, independent of the workspace they are browsing.
-	if types.IsSystemAdminActor(ctx) &&
-		(c.Query("scope") == "platform" || c.Query("platform") == "1") {
-		tenantID = types.PlatformOrgTenantID
-	}
 	asTree := c.Query("tree") == "1" || c.Query("tree") == "true"
+	wantPlatform := c.Query("scope") == "platform" || c.Query("platform") == "1"
 	var (
 		units []*types.OrgUnit
 		err   error
 	)
-	if asTree {
+	// System admins manage the global org forest from /platform/org-units,
+	// independent of the workspace they are browsing. Include both the
+	// platform catalog (tenant_id=0) and legacy in-tenant trees.
+	if types.IsSystemAdminActor(ctx) && wantPlatform {
+		if asTree {
+			units, err = h.orgUnitService.ListPlatformTree(ctx)
+		} else {
+			units, err = h.orgUnitService.ListPlatformFlat(ctx)
+		}
+	} else if asTree {
 		units, err = h.orgUnitService.ListTree(ctx, tenantID)
 	} else {
 		units, err = h.orgUnitService.ListFlat(ctx, tenantID)

@@ -1,10 +1,9 @@
 <template>
   <div class="org-unit-settings">
     <div class="section-header">
-      <h3 class="section-title">组织层级</h3>
+      <h3 class="section-title">{{ $t('menu.orgUnits') }}</h3>
       <p class="section-desc">
-        平台组织树：根组织由系统管理员创建；成员登录后自动进入「组织名的空间」，
-        本组织与下级组织用户共享该空间。
+        {{ $t('orgUnit.sectionDescription') }}
       </p>
     </div>
 

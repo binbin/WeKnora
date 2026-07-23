@@ -10,6 +10,7 @@ import {
   markdownDomPurifyConfig,
   markdownDomPurifySecurityHooks,
 } from './markdownDomPurify.ts';
+import { getRequestOrgUnitId } from '@/api/org-unit'
 
 const PROVIDER_IMAGE_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const PROVIDER_SCHEME_PATTERN = 'resource|local|minio|cos|tos|s3|oss|ks3|obs';
@@ -434,7 +435,7 @@ function getProtectedFileRequestHeaders(): Record<string, string> {
       // fetches landing on the home tenant.
       headers['X-Tenant-ID'] = selectedTenantId;
     }
-    const selectedOrgUnitId = (localStorage.getItem('weknora_org_unit_id') || '').trim();
+    const selectedOrgUnitId = getRequestOrgUnitId();
     if (selectedOrgUnitId) {
       headers['X-Org-Unit-ID'] = selectedOrgUnitId;
     }

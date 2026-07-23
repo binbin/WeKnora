@@ -32,17 +32,8 @@ export interface CommandContext {
  */
 export function buildCommands(ctx: CommandContext): CmdkCommand[] {
   const { router, t, close } = ctx
+  // 与侧栏 SHOW_SIDEBAR_CHAT 同步：隐藏「新对话」快捷入口
   return [
-    {
-      id: 'new-chat',
-      label: t('commandPalette.quick.newChat'),
-      icon: 'chat-add',
-      keywords: ['new', 'chat', 'conversation', '新建', '对话', 'создать'],
-      run: () => {
-        close()
-        router.push('/platform/creatChat')
-      },
-    },
     {
       id: 'open-kb-list',
       label: t('commandPalette.quick.knowledgeBases'),

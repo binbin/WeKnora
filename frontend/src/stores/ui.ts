@@ -25,6 +25,10 @@ export const useUIStore = defineStore('ui', {
 
   actions: {
     openSettings(section?: string, subSection?: string) {
+      // 成员管理 / 组织层级已迁出设置弹窗，误调用时不应再打开弹窗。
+      if (section === 'members' || section === 'orgunits') {
+        return
+      }
       this.settingsInitialSection = section || null
       this.settingsInitialSubSection = subSection || null
       this.showSettingsModal = true

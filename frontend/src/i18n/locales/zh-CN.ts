@@ -4,6 +4,8 @@ export default {
     agents: "智能体",
     integrations: "发布集成",
     organizations: "共享空间",
+    members: "成员管理",
+    orgUnits: "组织层级",
     chat: "对话",
     newChat: "新对话",
     createChat: "创建对话",
@@ -101,7 +103,7 @@ export default {
       },
       settings: {
         title: "账户与设置入口",
-        desc: "点开这里可以管理账户、成员与系统设置。需要再次查看本引导时，可点击菜单顶部昵称旁的帮助按钮重新打开。",
+        desc: "点开这里可以管理账户与系统设置。需要再次查看本引导时，可点击菜单顶部昵称旁的帮助按钮重新打开。",
       },
       models: {
         title: "配置你的模型",
@@ -333,6 +335,7 @@ export default {
   listSpaceSidebar: {
     title: "筛选",
     all: "全部",
+    allOrgs: "所有",
     workspace: "本空间",
     mine: "我的",
     spaces: "共享给我",
@@ -349,7 +352,7 @@ export default {
     mine: "我创建",
     mineTooltip: "由当前用户创建",
     tenant: "本空间",
-    tenantTooltip: "本空间其他成员创建",
+    tenantTooltip: "所在组织其他成员创建",
     tenantTooltipWithCreator: "由 {creator} 创建",
     space: "共享空间",
     spaceTooltip: "来自共享空间「{space}」",
@@ -2086,8 +2089,8 @@ export default {
     sections: {
       builtin: "内置",
       mine: "我创建的",
-      tenantReadonly: "本空间 · 仅查看",
-      tenantOthers: "本空间 · 其他成员",
+      tenantReadonly: "{name} · 仅查看",
+      tenantOthers: "{name} · 其他成员",
       sharedByMe: "我共享的",
       sharedEditable: "共享给我 · 可编辑",
       sharedReadonly: "共享给我 · 仅查看",
@@ -3647,8 +3650,8 @@ export default {
     sections: {
       pinned: "置顶",
       mine: "我创建的",
-      tenantReadonly: "本空间 · 仅查看",
-      tenantOthers: "本空间 · 其他成员",
+      tenantReadonly: "{name} · 仅查看",
+      tenantOthers: "{name} · 其他成员",
       sharedByMe: "我共享的",
       sharedEditable: "共享给我 · 可编辑",
       sharedReadonly: "共享给我 · 仅查看",
@@ -6818,6 +6821,10 @@ export default {
     title: "用户信息",
     description: "查看您的账户基础信息（用户 ID、用户名、邮箱、注册时间）",
   },
+  orgUnit: {
+    sectionDescription:
+      '平台组织树：根组织由系统管理员创建；成员登录后自动进入「组织名的空间」，本组织与下级组织用户共享该空间。',
+  },
   tenantMember: {
     title: "成员管理",
     sectionDescription: "邀请伙伴加入当前空间并分配角色。只有 Owner 可以新增或移除成员。",
@@ -6844,6 +6851,7 @@ export default {
       member: "姓名与邮箱",
       username: "姓名",
       email: "邮箱",
+      orgUnit: "所属组织",
       role: "角色",
       joinedAt: "加入时间",
       operations: "操作",
