@@ -29,6 +29,9 @@ type OrgUnit struct {
 func (OrgUnit) TableName() string { return "org_units" }
 
 // OrgUnitMember binds a user to an OrgUnit within a tenant.
+// Product rule: at most one membership per (tenant_id, user_id);
+// IsPrimary is always true for new rows (legacy multi-membership
+// fields remain for rollout compatibility).
 type OrgUnitMember struct {
 	ID        string    `json:"id"          gorm:"type:varchar(36);primaryKey"`
 	OrgUnitID string    `json:"org_unit_id" gorm:"type:varchar(36);index;not null"`
@@ -75,9 +78,18 @@ type UpdateOrgUnitRequest struct {
 }
 
 // AddOrgUnitMemberRequest is the body for POST /org-units/:id/members.
+// IsPrimary is ignored by the service (new memberships are always
+// primary under the single-membership model); kept for API compat.
 type AddOrgUnitMemberRequest struct {
 	UserID    string `json:"user_id"    binding:"required"`
 	IsPrimary bool   `json:"is_primary"`
+}
+
+// TransferOrgUnitMemberRequest is the body for transferring a user
+// to another OrgUnit within the same tenant.
+type TransferOrgUnitMemberRequest struct {
+	UserID      string `json:"user_id"        binding:"required"`
+	ToOrgUnitID string `json:"to_org_unit_id" binding:"required"`
 }
 
 // OrgUnitVisibility describes which OrgUnit IDs the current caller may

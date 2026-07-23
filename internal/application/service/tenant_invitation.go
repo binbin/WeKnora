@@ -206,8 +206,10 @@ func (s *tenantInvitationService) resolveOrgUnitID(
 }
 
 // assignOrgUnitMembership places the user into the invitation's OrgUnit
-// as primary. Best-effort after tenant membership succeeds — failure is
-// logged so Accept still returns the membership.
+// via TransferMember (single-membership path). Covers re-invite / data
+// repair when the user already belongs elsewhere. Best-effort after
+// tenant membership succeeds — failure is logged so Accept still
+// returns the membership.
 func (s *tenantInvitationService) assignOrgUnitMembership(
 	ctx context.Context,
 	tenantID uint64,
@@ -217,8 +219,8 @@ func (s *tenantInvitationService) assignOrgUnitMembership(
 	if s.orgUnitService == nil || orgUnitID == "" || userID == "" {
 		return
 	}
-	if _, err := s.orgUnitService.AddMember(
-		ctx, tenantID, orgUnitID, userID, true,
+	if _, err := s.orgUnitService.TransferMember(
+		ctx, tenantID, userID, orgUnitID,
 	); err != nil {
 		logger.Errorf(ctx,
 			"invitation accepted but org_unit membership failed: tenant=%d user=%s unit=%s err=%v",

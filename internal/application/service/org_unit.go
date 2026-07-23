@@ -276,6 +276,7 @@ func (s *orgUnitService) AddMember(
 	userID string,
 	isPrimary bool,
 ) (*types.OrgUnitMember, error) {
+	_ = isPrimary // product semantics: new memberships are always primary
 	if _, err := s.repo.GetByID(ctx, tenantID, orgUnitID); err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
@@ -286,10 +287,22 @@ func (s *orgUnitService) AddMember(
 	if userID == "" {
 		return nil, apperrors.NewValidationError("user_id is required")
 	}
-	if existing, err := s.repo.GetMember(ctx, orgUnitID, userID); err == nil && existing != nil {
-		return existing, nil
-	} else if err != nil && !errors.Is(err, apprepo.ErrOrgUnitMemberNotFound) {
+
+	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	if err != nil {
 		return nil, err
+	}
+	for _, membership := range memberships {
+		if membership != nil && membership.OrgUnitID == orgUnitID {
+			return membership, nil
+		}
+	}
+	for _, membership := range memberships {
+		if membership != nil {
+			return nil, apperrors.NewConflictError(
+				"user already belongs to another org unit; use transfer",
+			)
+		}
 	}
 
 	now := time.Now()
@@ -298,16 +311,54 @@ func (s *orgUnitService) AddMember(
 		OrgUnitID: orgUnitID,
 		TenantID:  tenantID,
 		UserID:    userID,
-		IsPrimary: isPrimary,
+		IsPrimary: true,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if isPrimary {
-		if err := s.repo.ClearPrimary(ctx, tenantID, userID); err != nil {
-			return nil, err
-		}
-	}
 	if err := s.repo.AddMember(ctx, member); err != nil {
+		return nil, err
+	}
+	return member, nil
+}
+
+func (s *orgUnitService) TransferMember(
+	ctx context.Context,
+	tenantID uint64,
+	userID string,
+	toOrgUnitID string,
+) (*types.OrgUnitMember, error) {
+	toOrgUnitID = strings.TrimSpace(toOrgUnitID)
+	if _, err := s.repo.GetByID(ctx, tenantID, toOrgUnitID); err != nil {
+		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
+			return nil, apperrors.NewNotFoundError("org unit not found")
+		}
+		return nil, err
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, apperrors.NewValidationError("user_id is required")
+	}
+
+	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(memberships) == 1 && memberships[0] != nil &&
+		memberships[0].OrgUnitID == toOrgUnitID {
+		return memberships[0], nil
+	}
+
+	now := time.Now()
+	member := &types.OrgUnitMember{
+		ID:        uuid.New().String(),
+		OrgUnitID: toOrgUnitID,
+		TenantID:  tenantID,
+		UserID:    userID,
+		IsPrimary: true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.repo.TransferMember(ctx, member); err != nil {
 		return nil, err
 	}
 	return member, nil
@@ -425,6 +476,8 @@ func (s *orgUnitService) ResolveActiveOrgUnit(
 	if err != nil {
 		return "", err
 	}
+	// Single-membership model: usually one row. Prefer IsPrimary when
+	// multiple rows still exist during rollout, else the first.
 	for _, membership := range memberships {
 		if membership != nil && membership.IsPrimary {
 			return membership.OrgUnitID, nil

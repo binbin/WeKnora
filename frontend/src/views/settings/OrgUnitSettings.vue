@@ -11,12 +11,16 @@
     <div class="active-unit" v-if="memberships.length || tree.length">
       <label class="field-label">当前组织</label>
       <t-select
+        v-if="canSwitchScope"
         v-model="activeOrgUnitId"
         :options="flatOptions"
         placeholder="选择当前组织"
         clearable
         @change="onActiveChange"
       />
+      <div v-else class="readonly-org">
+        {{ currentOrgUnitLabel }}
+      </div>
     </div>
 
     <div class="toolbar" v-if="canManage">
@@ -71,7 +75,6 @@ import {
   getStoredOrgUnitId,
   listMyOrgUnitMemberships,
   listOrgUnits,
-  setPrimaryOrgUnit,
   setStoredOrgUnitId,
   type OrgUnit,
   type OrgUnitMember,
@@ -82,6 +85,10 @@ const authStore = useAuthStore()
 const canManage = computed(() => authStore.hasRole('admin'))
 /** 根组织（无上级）仅平台超级管理员可创建 */
 const canCreateRoot = computed(() => authStore.isSystemAdmin === true)
+/** 非管理员单归属：只读展示，不可切换浏览范围 */
+const canSwitchScope = computed(
+  () => canManage.value || memberships.value.length !== 1,
+)
 
 const loading = ref(false)
 const creating = ref(false)
@@ -111,6 +118,17 @@ const parentOptions = computed(() => [
   ...flatOptions.value,
 ])
 
+const currentOrgUnitLabel = computed(() => {
+  const sole = memberships.value[0]
+  if (sole?.org_unit?.name) {
+    return sole.org_unit.name
+  }
+  const match = flatOptions.value.find(
+    (option) => option.value === (activeOrgUnitId.value || sole?.org_unit_id),
+  )
+  return match?.label?.replace(/^—+\s*/, '') || sole?.org_unit_id || '—'
+})
+
 async function reload() {
   loading.value = true
   try {
@@ -120,11 +138,17 @@ async function reload() {
     ])
     tree.value = units
     memberships.value = mine
-    if (!activeOrgUnitId.value) {
-      const primary = mine.find((item) => item.is_primary)
-      if (primary) {
-        activeOrgUnitId.value = primary.org_unit_id
-        setStoredOrgUnitId(primary.org_unit_id)
+    // Non-admin single membership: always overwrite stale localStorage /
+    // active id so read-only label and X-Org-Unit-ID stay in sync.
+    if (!canManage.value && mine.length === 1) {
+      const soleId = mine[0].org_unit_id
+      activeOrgUnitId.value = soleId
+      setStoredOrgUnitId(soleId)
+    } else if (!activeOrgUnitId.value) {
+      const sole = mine[0]
+      if (sole) {
+        activeOrgUnitId.value = sole.org_unit_id
+        setStoredOrgUnitId(sole.org_unit_id)
       }
     }
   } catch (error: unknown) {
@@ -177,19 +201,16 @@ async function onDelete(id: string) {
 }
 
 function selectUnit(id: string) {
+  if (!canSwitchScope.value) {
+    return
+  }
   activeOrgUnitId.value = id
   setStoredOrgUnitId(id)
 }
 
-async function onActiveChange(value: string) {
+function onActiveChange(value: string) {
+  // Scope switch is header-only (X-Org-Unit-ID); do not call SetPrimary.
   setStoredOrgUnitId(value || '')
-  if (value) {
-    try {
-      await setPrimaryOrgUnit(value)
-    } catch {
-      // membership may be missing for admins browsing any unit
-    }
-  }
 }
 
 onMounted(reload)
@@ -213,6 +234,11 @@ onMounted(reload)
 }
 .active-unit {
   max-width: 360px;
+}
+.readonly-org {
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--td-text-color-primary);
 }
 .field-label {
   display: block;

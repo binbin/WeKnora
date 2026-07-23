@@ -2103,7 +2103,7 @@ export default {
     },
     shareScope: {
       title: "공유 범위 설명",
-      desc: "스페이스 구성원은 읽기 전용 모드로 에이전트를 사용하며 현재 구성된 기능과 리소스를 따릅니다. 에이전트에 대한 수정 사항은 공유 스페이스에 동기화됩니다. 스페이스 구성원이 지식베이스 콘텐츠를 편집할 수 있도록 허용하려면 지식베이스를 스페이스에 공유하세요.",
+      desc: "스페이스 구성원은 읽기 전용 모드로 에이전트를 사용하며 현재 구성된 기능과 리소스를 따릅니다. 에이전트에 대한 수정 사항은 공유 스페이스에 동기화됩니다. 스페이스 구성원이 지식베이스 콘텐츠를 편집할 수 있도록 허용하려면 지식베이스를 공유 스페이스에 공유하세요.",
       knowledgeBase: "지식베이스",
       chatModel: "대화 모델",
       rerankModel: "모델을 재배열하다",
@@ -5315,13 +5315,14 @@ export default {
       },
     },
     share: {
-      title: "스페이스에 공유",
-      shareToSpace: "스페이스에 공유",
-      shareModelToSpace: '"{name}"을 스페이스에 공유',
-      shareAgentToSpace: '"{name}"을 스페이스에 공유',
-      modelShareDesc: "스페이스 구성원이 모델을 사용할 수 있도록 모델을 스페이스에 공유합니다.",
+      title: "공유 스페이스에 공유",
+      shareToSpace: "공유 스페이스에 공유",
+      shareModelToSpace: '"{name}"을 공유 스페이스에 공유',
+      shareAgentToSpace: '"{name}"을 공유 스페이스에 공유',
+      modelShareDesc:
+        "공유 스페이스 구성원이 모델을 사용할 수 있도록 모델을 공유 스페이스에 공유합니다.",
       agentShareDesc:
-        "스페이스 구성원이 에이전트를 사용할 수 있도록 에이전트를 스페이스에 공유합니다.",
+        "공유 스페이스 구성원이 에이전트를 사용할 수 있도록 에이전트를 공유 스페이스에 공유합니다.",
       spaceAgentShareCountTip: "스페이스에 있는 공유 에이전트 수",
       selectOrg: "스페이스 선택",
       selectOrgPlaceholder: "공유할 스페이스를 선택해주세요",
@@ -6775,6 +6776,10 @@ export default {
     roleChange: {
       success: "역할이 업데이트되었습니다",
     },
+    transferOrgUnit: "조직 변경",
+    transferOrgUnitTitle: "멤버를 다른 조직으로 이동",
+    transferOrgUnitConfirm: "변경 확인",
+    transferOrgUnitSuccess: "조직을 변경했습니다",
     errors: {
       emailRequired: "이메일을 입력하세요",
       emailFormat: "올바른 이메일 형식이 아닙니다",

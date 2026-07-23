@@ -2108,7 +2108,7 @@ export default {
     },
     shareScope: {
       title: "共享范围说明",
-      desc: "空间成员以只读方式使用该智能体，将遵循您当前配置的能力与资源；您对智能体的修改会同步给已共享的空间。如需允许空间成员编辑知识库内容，请将知识库共享到空间。",
+      desc: "空间成员以只读方式使用该智能体，将遵循您当前配置的能力与资源；您对智能体的修改会同步给已共享的空间。如需允许空间成员编辑知识库内容，请将知识库共享到共享空间。",
       knowledgeBase: "知识库",
       chatModel: "对话模型",
       rerankModel: "重排模型",
@@ -5321,12 +5321,12 @@ export default {
       },
     },
     share: {
-      title: "共享到空间",
-      shareToSpace: "共享到空间",
-      shareModelToSpace: "共享「{name}」到空间",
-      shareAgentToSpace: "共享「{name}」到空间",
-      modelShareDesc: "将模型共享到空间，空间成员可使用该模型",
-      agentShareDesc: "将智能体共享到空间，空间成员可使用该智能体",
+      title: "共享到共享空间",
+      shareToSpace: "共享到共享空间",
+      shareModelToSpace: "共享「{name}」到共享空间",
+      shareAgentToSpace: "共享「{name}」到共享空间",
+      modelShareDesc: "将模型共享到共享空间，空间成员可使用该模型",
+      agentShareDesc: "将智能体共享到共享空间，空间成员可使用该智能体",
       spaceAgentShareCountTip: "该空间的共享智能体数量",
       selectOrg: "选择空间",
       selectOrgPlaceholder: "请选择要共享的空间",
@@ -6880,6 +6880,10 @@ export default {
     roleChange: {
       success: "角色已更新",
     },
+    transferOrgUnit: "调整组织",
+    transferOrgUnitTitle: "将成员调整到其他组织",
+    transferOrgUnitConfirm: "确认调整",
+    transferOrgUnitSuccess: "已调整组织",
     errors: {
       emailRequired: "请输入邮箱",
       emailFormat: "邮箱格式不正确",

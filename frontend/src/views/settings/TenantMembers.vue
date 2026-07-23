@@ -389,8 +389,25 @@
                   </t-tag>
                 </div>
               </template>
+              <template #org_unit="{ row }">
+                <span>{{ row.org_unit_name || row.org_unit_id || '—' }}</span>
+              </template>
               <template #joined_at="{ row }">{{ formatDate(row.joined_at) }}</template>
               <template #actions="{ row }">
+                <t-tooltip
+                  v-if="canTransferMemberRow(row)"
+                  :content="$t('tenantMember.transferOrgUnit')"
+                  placement="top"
+                >
+                  <t-button
+                    shape="square"
+                    variant="text"
+                    size="small"
+                    @click.stop="openTransferDialog(row)"
+                  >
+                    <template #icon><t-icon name="swap" /></template>
+                  </t-button>
+                </t-tooltip>
                 <t-popconfirm
                   v-if="canEditMemberRow(row)"
                   :content="$t('tenantMember.remove.confirmBody', { name: row.username || row.email })"
@@ -416,6 +433,34 @@
       </div>
 
     </div>
+
+    <!-- Transfer member to another org unit (调岗). Admin/Owner get the
+         full org tree; others stay on inviteable scope for the *actor*.
+         Uses dedicated transferOrgUnitTree so invite forms are untouched. -->
+    <t-dialog
+      v-model:visible="transferDialogVisible"
+      :header="$t('tenantMember.transferOrgUnitTitle')"
+      :confirm-btn="{
+        content: $t('tenantMember.transferOrgUnitConfirm'),
+        loading: transferring,
+        disabled: !canConfirmTransfer,
+      }"
+      :cancel-btn="$t('common.cancel')"
+      width="420px"
+      @confirm="confirmTransfer"
+    >
+      <div class="transfer-org-dialog">
+        <p class="transfer-org-dialog__hint">
+          {{ transferMemberLabel }}
+        </p>
+        <t-select
+          v-model="transferTargetOrgUnitId"
+          :options="transferOrgUnitOptions"
+          :placeholder="$t('tenantInvitation.orgUnitPlaceholder')"
+          :popup-props="roleSelectPopupProps"
+        />
+      </div>
+    </t-dialog>
 
     <!-- Audit log drawer. Only rendered for Admin+ because the backend
          route is g.Admin()-gated; rendering it for lower roles would
@@ -573,6 +618,7 @@ import {
   getStoredOrgUnitId,
   listInviteableOrgUnits,
   listOrgUnits,
+  transferOrgUnitMember,
   type OrgUnit,
 } from '@/api/org-unit'
 import {
@@ -686,9 +732,19 @@ const addForm = reactive<{ email: string; role: TenantRole; org_unit_id: string 
 
 const orgUnitTree = ref<OrgUnit[]>([])
 const hasOrgHierarchy = ref(false)
+// Transfer dialog keeps its own tree so opening 调岗 never rewrites
+// invite form org_unit_id / shared orgUnitTree used by add + share-link.
+const transferOrgUnitTree = ref<OrgUnit[]>([])
 
 const orgUnitOptions = computed(() =>
   orgUnitTree.value.map((unit) => ({
+    label: `${'—'.repeat(unit.depth || 0)} ${unit.name}`.trim(),
+    value: unit.id,
+  })),
+)
+
+const transferOrgUnitOptions = computed(() =>
+  transferOrgUnitTree.value.map((unit) => ({
     label: `${'—'.repeat(unit.depth || 0)} ${unit.name}`.trim(),
     value: unit.id,
   })),
@@ -756,6 +812,33 @@ const canManage = computed(
     authStore.canAccessAllTenants === true ||
     authStore.isSystemAdmin === true,
 )
+
+/** Load transfer targets only — never mutates invite form org trees. */
+async function loadTransferOrgUnits() {
+  try {
+    await refreshHierarchyFlag()
+    if (!hasOrgHierarchy.value) {
+      transferOrgUnitTree.value = []
+      return
+    }
+    // Drive options by the *actor*, not the target member's role.
+    // Admin/Owner (canManage) need the full tree so they can move a
+    // member (including another admin) to sibling org units.
+    if (canManage.value) {
+      transferOrgUnitTree.value = await listOrgUnits(false)
+      return
+    }
+    const actorRole = (currentRole.value || 'contributor') as TenantRole
+    transferOrgUnitTree.value = await listInviteableOrgUnits(actorRole)
+  } catch (error: unknown) {
+    transferOrgUnitTree.value = []
+    MessagePlugin.warning(
+      (error as { message?: string })?.message ||
+        t('tenantInvitation.errors.inviterOrgUnitRequired'),
+    )
+  }
+}
+
 // Admin+ (and cross-tenant superusers) can view the audit log. Mirrors
 // the server's g.Admin() guard on /tenants/:id/audit-log so we don't
 // render a tab that would just 403.
@@ -792,6 +875,11 @@ function canEditMemberRow(row: TenantMember): boolean {
     return true
   }
   return row.can_manage
+}
+
+/** 有组织树且成员已归属某组织时，可调岗（与可编辑行同权限）。 */
+function canTransferMemberRow(row: TenantMember): boolean {
+  return canEditMemberRow(row) && hasOrgHierarchy.value && !!row.org_unit_id
 }
 
 /** 同级非管理员不可提升为管理员。 */
@@ -862,9 +950,69 @@ function roleMatrixIcon(role: TenantRole): string {
 const columns = computed(() => [
   { colKey: 'member', title: t('tenantMember.columns.member'), ellipsis: true, minWidth: 132 },
   { colKey: 'role', title: t('tenantMember.columns.role'), width: 128 },
+  ...(hasOrgHierarchy.value
+    ? [{
+        colKey: 'org_unit',
+        title: t('tenantInvitation.columns.orgUnit'),
+        ellipsis: true,
+        minWidth: 120,
+      }]
+    : []),
   { colKey: 'joined_at', title: t('tenantMember.columns.joinedAt'), width: 154 },
-  { colKey: 'actions', title: t('tenantMember.columns.operations'), width: 88, align: 'left' },
+  {
+    colKey: 'actions',
+    title: t('tenantMember.columns.operations'),
+    width: hasOrgHierarchy.value ? 120 : 88,
+    align: 'left' as const,
+  },
 ])
+
+const transferDialogVisible = ref(false)
+const transferring = ref(false)
+const transferUserId = ref('')
+const transferCurrentOrgUnitId = ref('')
+const transferTargetOrgUnitId = ref('')
+const transferMemberLabel = ref('')
+
+const canConfirmTransfer = computed(
+  () =>
+    !!transferTargetOrgUnitId.value &&
+    transferTargetOrgUnitId.value !== transferCurrentOrgUnitId.value,
+)
+
+async function openTransferDialog(row: TenantMember) {
+  transferUserId.value = row.user_id
+  transferCurrentOrgUnitId.value = row.org_unit_id || ''
+  transferTargetOrgUnitId.value = ''
+  transferMemberLabel.value = memberPrimary(row)
+  transferDialogVisible.value = true
+  await loadTransferOrgUnits()
+  const firstOther = transferOrgUnitTree.value.find(
+    (unit) => unit.id !== row.org_unit_id,
+  )
+  transferTargetOrgUnitId.value = firstOther?.id || ''
+}
+
+async function confirmTransfer() {
+  if (!canConfirmTransfer.value || !transferUserId.value) {
+    return
+  }
+  transferring.value = true
+  try {
+    await transferOrgUnitMember(
+      transferUserId.value,
+      transferTargetOrgUnitId.value,
+    )
+    transferDialogVisible.value = false
+    await loadMembers()
+    MessagePlugin.success(t('tenantMember.transferOrgUnitSuccess'))
+  } catch (err: unknown) {
+    const message = (err as { message?: string })?.message
+    MessagePlugin.error(message || t('tenantMember.errors.generic'))
+  } finally {
+    transferring.value = false
+  }
+}
 
 function memberPrimary(row: { username?: string; email?: string }) {
   return row.username?.trim() || row.email?.trim() || '—'
@@ -2149,6 +2297,19 @@ watch(
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+.transfer-org-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  .transfer-org-dialog__hint {
+    margin: 0;
+    font-size: 13px;
+    color: var(--td-text-color-secondary);
+    line-height: 1.5;
+  }
 }
 
 /* Share-link result panel — single-row layout: input field stretches,

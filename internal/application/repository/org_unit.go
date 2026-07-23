@@ -310,3 +310,27 @@ func (r *orgUnitRepository) SetPrimary(
 		return nil
 	})
 }
+
+func (r *orgUnitRepository) RemoveMembersByTenantUser(
+	ctx context.Context,
+	tenantID uint64,
+	userID string,
+) error {
+	return r.db.WithContext(ctx).
+		Where("tenant_id = ? AND user_id = ?", tenantID, userID).
+		Delete(&types.OrgUnitMember{}).Error
+}
+
+func (r *orgUnitRepository) TransferMember(
+	ctx context.Context,
+	member *types.OrgUnitMember,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.
+			Where("tenant_id = ? AND user_id = ?", member.TenantID, member.UserID).
+			Delete(&types.OrgUnitMember{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(member).Error
+	})
+}

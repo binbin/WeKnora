@@ -1063,7 +1063,7 @@ export default {
     },
     shareScope: {
       title: 'Share Scope',
-      desc: 'Space members have read-only access to this agent and will use it according to your current configuration; your changes to the agent will sync to shared spaces. To allow space members to edit knowledge base content, share the knowledge base to the space.',
+      desc: 'Space members have read-only access to this agent and will use it according to your current configuration; your changes to the agent will sync to shared spaces. To allow space members to edit knowledge base content, share the knowledge base to the shared space.',
       knowledgeBase: 'Knowledge bases',
       chatModel: 'Chat model',
       rerankModel: 'Rerank model',
@@ -5948,12 +5948,14 @@ export default {
       }
     },
     share: {
-      title: 'Share Knowledge Base',
-      shareToSpace: 'Share to space',
-      shareModelToSpace: 'Share "{name}" to space',
-      shareAgentToSpace: 'Share "{name}" to space',
-      modelShareDesc: 'Share this model to a space so members can use it',
-      agentShareDesc: 'Share this agent to a space so members can use it',
+      title: 'Поделиться в общее пространство',
+      shareToSpace: 'Поделиться в общее пространство',
+      shareModelToSpace: 'Поделиться «{name}» в общее пространство',
+      shareAgentToSpace: 'Поделиться «{name}» в общее пространство',
+      modelShareDesc:
+        'Поделитесь этой моделью в общее пространство, чтобы участники могли её использовать',
+      agentShareDesc:
+        'Поделитесь этим агентом в общее пространство, чтобы участники могли его использовать',
       spaceAgentShareCountTip: 'Number of agents shared to this space',
       selectOrg: 'Select Space',
       selectOrgPlaceholder: 'Select a space to share with',
@@ -6597,6 +6599,10 @@ export default {
     roleChange: {
       success: 'Роль обновлена',
     },
+    transferOrgUnit: 'Сменить организацию',
+    transferOrgUnitTitle: 'Перевести участника в другую организацию',
+    transferOrgUnitConfirm: 'Подтвердить перевод',
+    transferOrgUnitSuccess: 'Организация изменена',
     errors: {
       emailRequired: 'Укажите email',
       emailFormat: 'Неверный формат email',
