@@ -5948,12 +5948,14 @@ export default {
       }
     },
     share: {
-      title: 'Share Knowledge Base',
-      shareToSpace: 'Share to shared space',
-      shareModelToSpace: 'Share "{name}" to space',
-      shareAgentToSpace: 'Share "{name}" to space',
-      modelShareDesc: 'Share this model to a space so members can use it',
-      agentShareDesc: 'Share this agent to a space so members can use it',
+      title: 'Поделиться в общее пространство',
+      shareToSpace: 'Поделиться в общее пространство',
+      shareModelToSpace: 'Поделиться «{name}» в общее пространство',
+      shareAgentToSpace: 'Поделиться «{name}» в общее пространство',
+      modelShareDesc:
+        'Поделитесь этой моделью в общее пространство, чтобы участники могли её использовать',
+      agentShareDesc:
+        'Поделитесь этим агентом в общее пространство, чтобы участники могли его использовать',
       spaceAgentShareCountTip: 'Number of agents shared to this space',
       selectOrg: 'Select Space',
       selectOrgPlaceholder: 'Select a space to share with',

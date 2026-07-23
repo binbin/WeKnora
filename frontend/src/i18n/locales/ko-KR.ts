@@ -5315,13 +5315,14 @@ export default {
       },
     },
     share: {
-      title: "스페이스에 공유",
+      title: "공유 스페이스에 공유",
       shareToSpace: "공유 스페이스에 공유",
-      shareModelToSpace: '"{name}"을 스페이스에 공유',
-      shareAgentToSpace: '"{name}"을 스페이스에 공유',
-      modelShareDesc: "스페이스 구성원이 모델을 사용할 수 있도록 모델을 스페이스에 공유합니다.",
+      shareModelToSpace: '"{name}"을 공유 스페이스에 공유',
+      shareAgentToSpace: '"{name}"을 공유 스페이스에 공유',
+      modelShareDesc:
+        "공유 스페이스 구성원이 모델을 사용할 수 있도록 모델을 공유 스페이스에 공유합니다.",
       agentShareDesc:
-        "스페이스 구성원이 에이전트를 사용할 수 있도록 에이전트를 스페이스에 공유합니다.",
+        "공유 스페이스 구성원이 에이전트를 사용할 수 있도록 에이전트를 공유 스페이스에 공유합니다.",
       spaceAgentShareCountTip: "스페이스에 있는 공유 에이전트 수",
       selectOrg: "스페이스 선택",
       selectOrgPlaceholder: "공유할 스페이스를 선택해주세요",
