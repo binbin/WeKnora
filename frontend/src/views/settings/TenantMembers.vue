@@ -434,9 +434,9 @@
 
     </div>
 
-    <!-- Transfer member to another org unit (调岗). Same inviteable
-         options source as the invite form; confirm disabled when the
-         target equals the member's current org_unit_id. -->
+    <!-- Transfer member to another org unit (调岗). Options come from
+         the same listInviteableOrgUnits API as invite, but via a
+         dedicated transferOrgUnitTree so invite forms are untouched. -->
     <t-dialog
       v-model:visible="transferDialogVisible"
       :header="$t('tenantMember.transferOrgUnitTitle')"
@@ -455,7 +455,7 @@
         </p>
         <t-select
           v-model="transferTargetOrgUnitId"
-          :options="orgUnitOptions"
+          :options="transferOrgUnitOptions"
           :placeholder="$t('tenantInvitation.orgUnitPlaceholder')"
           :popup-props="roleSelectPopupProps"
         />
@@ -732,9 +732,19 @@ const addForm = reactive<{ email: string; role: TenantRole; org_unit_id: string 
 
 const orgUnitTree = ref<OrgUnit[]>([])
 const hasOrgHierarchy = ref(false)
+// Transfer dialog keeps its own tree so opening 调岗 never rewrites
+// invite form org_unit_id / shared orgUnitTree used by add + share-link.
+const transferOrgUnitTree = ref<OrgUnit[]>([])
 
 const orgUnitOptions = computed(() =>
   orgUnitTree.value.map((unit) => ({
+    label: `${'—'.repeat(unit.depth || 0)} ${unit.name}`.trim(),
+    value: unit.id,
+  })),
+)
+
+const transferOrgUnitOptions = computed(() =>
+  transferOrgUnitTree.value.map((unit) => ({
     label: `${'—'.repeat(unit.depth || 0)} ${unit.name}`.trim(),
     value: unit.id,
   })),
@@ -781,6 +791,24 @@ async function loadOrgUnits(role?: TenantRole) {
     }
   } catch (error: unknown) {
     orgUnitTree.value = []
+    MessagePlugin.warning(
+      (error as { message?: string })?.message ||
+        t('tenantInvitation.errors.inviterOrgUnitRequired'),
+    )
+  }
+}
+
+/** Load inviteable units for transfer only — no invite form mutation. */
+async function loadTransferOrgUnits(role: TenantRole) {
+  try {
+    await refreshHierarchyFlag()
+    if (!hasOrgHierarchy.value) {
+      transferOrgUnitTree.value = []
+      return
+    }
+    transferOrgUnitTree.value = await listInviteableOrgUnits(role)
+  } catch (error: unknown) {
+    transferOrgUnitTree.value = []
     MessagePlugin.warning(
       (error as { message?: string })?.message ||
         t('tenantInvitation.errors.inviterOrgUnitRequired'),
@@ -949,8 +977,8 @@ async function openTransferDialog(row: TenantMember) {
   transferTargetOrgUnitId.value = ''
   transferMemberLabel.value = memberPrimary(row)
   transferDialogVisible.value = true
-  await loadOrgUnits(row.role)
-  const firstOther = orgUnitTree.value.find(
+  await loadTransferOrgUnits(row.role)
+  const firstOther = transferOrgUnitTree.value.find(
     (unit) => unit.id !== row.org_unit_id,
   )
   transferTargetOrgUnitId.value = firstOther?.id || ''
