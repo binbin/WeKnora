@@ -138,7 +138,13 @@ async function reload() {
     ])
     tree.value = units
     memberships.value = mine
-    if (!activeOrgUnitId.value) {
+    // Non-admin single membership: always overwrite stale localStorage /
+    // active id so read-only label and X-Org-Unit-ID stay in sync.
+    if (!canManage.value && mine.length === 1) {
+      const soleId = mine[0].org_unit_id
+      activeOrgUnitId.value = soleId
+      setStoredOrgUnitId(soleId)
+    } else if (!activeOrgUnitId.value) {
       const sole = mine[0]
       if (sole) {
         activeOrgUnitId.value = sole.org_unit_id
