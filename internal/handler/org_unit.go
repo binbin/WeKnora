@@ -148,6 +148,24 @@ func (h *OrgUnitHandler) AddMember(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": member})
 }
 
+func (h *OrgUnitHandler) TransferMember(c *gin.Context) {
+	ctx := c.Request.Context()
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+	var req types.TransferOrgUnitMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError(err.Error()))
+		return
+	}
+	member, err := h.orgUnitService.TransferMember(
+		ctx, tenantID, req.UserID, req.ToOrgUnitID,
+	)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": member})
+}
+
 func (h *OrgUnitHandler) RemoveMember(c *gin.Context) {
 	ctx := c.Request.Context()
 	tenantID := c.GetUint64(types.TenantIDContextKey.String())

@@ -1222,6 +1222,8 @@ func RegisterOrgUnitRoutes(
 		units.GET("/me", g.Viewer(), orgUnitHandler.ListMyMemberships)
 		units.GET("/visibility", g.Viewer(), orgUnitHandler.GetVisibility)
 		units.GET("/inviteable", g.Viewer(), orgUnitHandler.ListInviteable)
+		// Register before /:id so Gin does not treat "members" as an id.
+		units.POST("/members/transfer", g.Admin(), orgUnitHandler.TransferMember)
 		units.POST("", g.Admin(), orgUnitHandler.Create)
 		units.GET("/:id", g.Viewer(), orgUnitHandler.Get)
 		units.PUT("/:id", g.Admin(), orgUnitHandler.Update)
