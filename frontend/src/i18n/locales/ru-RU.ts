@@ -5949,7 +5949,7 @@ export default {
     },
     share: {
       title: 'Share Knowledge Base',
-      shareToSpace: 'Share to space',
+      shareToSpace: 'Share to shared space',
       shareModelToSpace: 'Share "{name}" to space',
       shareAgentToSpace: 'Share "{name}" to space',
       modelShareDesc: 'Share this model to a space so members can use it',

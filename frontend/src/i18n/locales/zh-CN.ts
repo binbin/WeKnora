@@ -5322,7 +5322,7 @@ export default {
     },
     share: {
       title: "共享到空间",
-      shareToSpace: "共享到空间",
+      shareToSpace: "共享到共享空间",
       shareModelToSpace: "共享「{name}」到空间",
       shareAgentToSpace: "共享「{name}」到空间",
       modelShareDesc: "将模型共享到空间，空间成员可使用该模型",

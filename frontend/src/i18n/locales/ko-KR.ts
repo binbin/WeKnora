@@ -5316,7 +5316,7 @@ export default {
     },
     share: {
       title: "스페이스에 공유",
-      shareToSpace: "스페이스에 공유",
+      shareToSpace: "공유 스페이스에 공유",
       shareModelToSpace: '"{name}"을 스페이스에 공유',
       shareAgentToSpace: '"{name}"을 스페이스에 공유',
       modelShareDesc: "스페이스 구성원이 모델을 사용할 수 있도록 모델을 스페이스에 공유합니다.",
