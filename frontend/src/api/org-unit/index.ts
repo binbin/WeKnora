@@ -105,8 +105,20 @@ export async function listMyOrgUnitMemberships(): Promise<OrgUnitMember[]> {
   return response?.data ?? []
 }
 
+/** @deprecated Prefer header-only scope via setStoredOrgUnitId; kept for API compat. */
 export async function setPrimaryOrgUnit(id: string): Promise<void> {
   await post(`/api/v1/org-units/${id}/primary`, {})
+}
+
+export async function transferOrgUnitMember(
+  userId: string,
+  toOrgUnitId: string,
+): Promise<OrgUnitMember> {
+  const response = await post('/api/v1/org-units/members/transfer', {
+    user_id: userId,
+    to_org_unit_id: toOrgUnitId,
+  })
+  return response.data
 }
 
 export async function getOrgUnitVisibility(): Promise<OrgUnitVisibility> {
