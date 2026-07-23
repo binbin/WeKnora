@@ -45,9 +45,28 @@ type TenantInvitationRepository interface {
 	// ListByTenant (tenant_id + optional pending-only vs include-terminal).
 	CountByTenantList(ctx context.Context, tenantID uint64, includeTerminal bool) (int64, error)
 
+	// CountByTenantListInOrgUnits counts invitations whose org_unit_id is
+	// in orgUnitIDs. Empty orgUnitIDs yields 0.
+	CountByTenantListInOrgUnits(
+		ctx context.Context,
+		tenantID uint64,
+		includeTerminal bool,
+		orgUnitIDs []string,
+	) (int64, error)
+
 	// ListByTenantPage returns invitations for the tenant with id DESC
 	// paging, same filtering semantics as ListByTenant.
 	ListByTenantPage(ctx context.Context, tenantID uint64, includeTerminal bool, offset, limit int) ([]*types.TenantInvitation, error)
+
+	// ListByTenantPageInOrgUnits pages invitations restricted to orgUnitIDs.
+	// Empty orgUnitIDs yields an empty slice.
+	ListByTenantPageInOrgUnits(
+		ctx context.Context,
+		tenantID uint64,
+		includeTerminal bool,
+		offset, limit int,
+		orgUnitIDs []string,
+	) ([]*types.TenantInvitation, error)
 
 	// ListByInvitee returns invitations addressed to the user across
 	// all tenants. Ordered by id DESC. Used both by the inbox page

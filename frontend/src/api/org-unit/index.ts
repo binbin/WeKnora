@@ -33,16 +33,37 @@ export interface OrgUnitVisibility {
 }
 
 const ORG_UNIT_STORAGE_KEY = 'weknora_org_unit_id'
+const ORG_UNIT_USER_STORAGE_KEY = 'weknora_org_unit_user_id'
 
 export function getStoredOrgUnitId(): string {
   return localStorage.getItem(ORG_UNIT_STORAGE_KEY) || ''
 }
 
+export function clearStoredOrgUnitId(): void {
+  localStorage.removeItem(ORG_UNIT_STORAGE_KEY)
+  localStorage.removeItem(ORG_UNIT_USER_STORAGE_KEY)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('weknora-org-unit-changed'))
+  }
+}
+
 export function setStoredOrgUnitId(orgUnitId: string): void {
   if (orgUnitId) {
     localStorage.setItem(ORG_UNIT_STORAGE_KEY, orgUnitId)
+    try {
+      const raw = localStorage.getItem('weknora_user')
+      if (raw) {
+        const user = JSON.parse(raw) as { id?: string }
+        if (user?.id) {
+          localStorage.setItem(ORG_UNIT_USER_STORAGE_KEY, user.id)
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
   } else {
     localStorage.removeItem(ORG_UNIT_STORAGE_KEY)
+    localStorage.removeItem(ORG_UNIT_USER_STORAGE_KEY)
   }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('weknora-org-unit-changed'))
@@ -50,29 +71,96 @@ export function setStoredOrgUnitId(orgUnitId: string): void {
 }
 
 /**
- * 超管侧栏「所有」对应不带 X-Org-Unit-ID，让后端按全组织范围列资源。
- * 普通用户仍附带 localStorage 中的当前组织。
+ * 是否附带 X-Org-Unit-ID。
+ * 有选中组织就发送——含系统管理员；清空 localStorage 表示显式「所有」。
+ * 旧逻辑对 is_system_admin 一律不发 header，导致超管永远看到下级知识库。
  */
 export function shouldSendOrgUnitHeader(): boolean {
-  try {
-    const raw = localStorage.getItem('weknora_user')
-    if (!raw) return true
-    const user = JSON.parse(raw) as {
-      can_access_all_tenants?: boolean
-      is_system_admin?: boolean
-    }
-    if (user?.can_access_all_tenants || user?.is_system_admin) {
-      return false
-    }
-  } catch {
-    // ignore parse errors — fall through to send header
-  }
-  return true
+  return getStoredOrgUnitId().trim() !== ''
 }
 
 export function getRequestOrgUnitId(): string {
   if (!shouldSendOrgUnitHeader()) return ''
   return getStoredOrgUnitId().trim()
+}
+
+/**
+ * Ensure localStorage has an OrgUnit when the user has memberships.
+ * System admins previously stayed on empty「所有」forever and listed
+ * every subordinate KB; hydrate to primary/home so lists are scoped.
+ * Cross-tenant operators (can_access_all_tenants) keep empty = 所有.
+ */
+export function allowAllOrgsDefaultFromUserStorage(): boolean {
+  try {
+    const raw = localStorage.getItem('weknora_user')
+    if (!raw) return false
+    const user = JSON.parse(raw) as { can_access_all_tenants?: boolean }
+    return user?.can_access_all_tenants === true
+  } catch {
+    return false
+  }
+}
+
+function currentUserIdFromStorage(): string {
+  try {
+    const raw = localStorage.getItem('weknora_user')
+    if (!raw) return ''
+    const user = JSON.parse(raw) as { id?: string }
+    return user?.id?.trim() || ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Ensure localStorage has an OrgUnit for the *current* user.
+ * Clears stale IDs left by a previous account (same browser) — that bug
+ * made parent-org admins keep a subordinate X-Org-Unit-ID while the UI
+ * label fell back to their home name, so subordinate KBs still appeared.
+ */
+export async function ensureStoredOrgUnitFromMembership(options?: {
+  allowAllOrgsDefault?: boolean
+}): Promise<string> {
+  const allowAll =
+    options?.allowAllOrgsDefault ?? allowAllOrgsDefaultFromUserStorage()
+  const currentUserId = currentUserIdFromStorage()
+  const storedUserId = (
+    localStorage.getItem(ORG_UNIT_USER_STORAGE_KEY) || ''
+  ).trim()
+  // Different user (or missing owner tag from older builds): drop stale scope.
+  if (
+    currentUserId &&
+    storedUserId &&
+    storedUserId !== currentUserId
+  ) {
+    clearStoredOrgUnitId()
+  } else if (currentUserId && !storedUserId && getStoredOrgUnitId()) {
+    // Legacy rows without owner tag — treat as untrusted across accounts.
+    clearStoredOrgUnitId()
+  }
+
+  const existing = getStoredOrgUnitId().trim()
+  if (existing) {
+    if (currentUserId && !storedUserId) {
+      localStorage.setItem(ORG_UNIT_USER_STORAGE_KEY, currentUserId)
+    }
+    return existing
+  }
+  if (allowAll) {
+    return ''
+  }
+  try {
+    const memberships = await listMyOrgUnitMemberships()
+    const preferred =
+      memberships.find((item) => item.is_primary) || memberships[0]
+    const orgUnitId = preferred?.org_unit_id?.trim() || ''
+    if (orgUnitId) {
+      setStoredOrgUnitId(orgUnitId)
+    }
+    return orgUnitId
+  } catch {
+    return ''
+  }
 }
 
 export async function listOrgUnits(

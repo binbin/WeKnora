@@ -6824,6 +6824,8 @@ export default {
   orgUnit: {
     sectionDescription:
       '平台组织树：根组织由系统管理员创建；成员登录后自动进入「组织名的空间」，本组织与下级组织用户共享该空间。',
+    sectionDescriptionScoped:
+      '从您所属的组织节点起管理下级：可在本级下新增、调整下级组织，不能改动上级或平级。',
   },
   tenantMember: {
     title: "成员管理",
@@ -6969,7 +6971,7 @@ export default {
       "将向 {email} 发出加入邀请（角色：{role}，组织：{orgUnit}）。TA 在站内接受后才会成为成员。",
     confirmSend: "发送",
     orgUnitLabel: "所属组织",
-    orgUnitPlaceholder: "本级 / 平级 / 下级（所有者仅下级）",
+    orgUnitPlaceholder: "本级 / 下级（管理员角色仅下级）",
     copyLink: "复制邀请链接",
     copied: "已复制到剪贴板",
     copyFailed: "复制失败，请手动选中文本",
@@ -7034,7 +7036,7 @@ export default {
       forbidden: "只有被邀请人本人可以接受或拒绝该邀请。",
       notFound: "邀请不存在或已被撤销。",
       orgUnitRequired: "请选择被邀请人所属的组织层级。",
-      orgUnitNotInviteable: "只能邀请编辑/访客到本级或平级；管理员仅可邀请到下级组织。",
+      orgUnitNotInviteable: "只能邀请编辑/访客到本级或下级；管理员角色仅可邀请到下级组织。",
       inviterOrgUnitRequired: "请先选择当前组织，再邀请成员。",
       generic: "操作失败，请稍后重试。",
     },

@@ -682,7 +682,10 @@ func (s *customAgentService) getSuggestedQuestions(
 	if err != nil {
 		return nil, err
 	}
-	effectiveKBIDs = filteredKBIDs
+	effectiveKBIDs, err = s.kbService.FilterReadableKnowledgeBaseIDs(ctx, filteredKBIDs)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(effectiveKBIDs) == 0 && len(knowledgeIDs) == 0 && len(resolvedTags.TagIDsByTenant) == 0 {
 		return finalizeStarterSuggestions(curated, nil, starterMode, limit), nil

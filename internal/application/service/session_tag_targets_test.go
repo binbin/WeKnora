@@ -30,6 +30,12 @@ func (s *tagTargetKnowledgeBaseService) GetKnowledgeBasesByIDsOnly(
 	return out, nil
 }
 
+func (s *tagTargetKnowledgeBaseService) FilterReadableKnowledgeBaseIDs(
+	_ context.Context, kbIDs []string,
+) ([]string, error) {
+	return kbIDs, nil
+}
+
 type tagTargetKnowledgeService struct {
 	interfaces.KnowledgeService
 	knowledges []*types.Knowledge

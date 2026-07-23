@@ -82,6 +82,11 @@ func (s *processSyncKBService) ListKnowledgeBases(context.Context) ([]*types.Kno
 func (s *processSyncKBService) ListKnowledgeBasesByTenantID(context.Context, uint64) ([]*types.KnowledgeBase, error) {
 	return nil, nil
 }
+func (s *processSyncKBService) FilterReadableKnowledgeBaseIDs(
+	_ context.Context, kbIDs []string,
+) ([]string, error) {
+	return kbIDs, nil
+}
 func (s *processSyncKBService) UpdateKnowledgeBase(
 	context.Context, string, string, string, *types.KnowledgeBaseConfig, *bool,
 ) (*types.KnowledgeBase, error) {

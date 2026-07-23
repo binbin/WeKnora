@@ -243,6 +243,7 @@ func TestOrgUnitAncestorReadSelfWrite(t *testing.T) {
 		{"county cannot read sibling path", "county", "other", true, false, false},
 		{"city cannot read county", "city", "county", true, false, false},
 		{"province cannot read city", "prov", "city", true, false, false},
+		{"city cannot read peer city2", "city", "city2", true, false, false},
 		{"unbound always readable", "county", "", true, true, true},
 		{"no share blocks ancestor", "county", "city", false, false, false},
 	}
@@ -269,12 +270,92 @@ func TestOrgUnitAncestorReadSelfWrite(t *testing.T) {
 	}
 }
 
+func TestCanReadKB_ScopedAdminEmptyActiveDenied(t *testing.T) {
+	svc := newTestOrgUnitService()
+	tenantID := uint64(1)
+	adminCtx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleAdmin,
+	)
+	got, err := svc.CanReadKB(adminCtx, tenantID, "", "city", false)
+	if err != nil {
+		t.Fatalf("CanReadKB: %v", err)
+	}
+	if got {
+		t.Fatal("scoped admin without active org must not read bound KBs")
+	}
+	ownerCtx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleOwner,
+	)
+	got, err = svc.CanReadKB(ownerCtx, tenantID, "", "city", false)
+	if err != nil {
+		t.Fatalf("CanReadKB owner: %v", err)
+	}
+	if !got {
+		t.Fatal("tenant owner without active org may still browse bound KBs")
+	}
+}
+
+func TestResolveActiveOrgUnit_ScopedAdminCannotActivatePeer(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"prov": {
+				ID: "prov", TenantID: 1, Path: "/prov/", Depth: 0, Name: "Province",
+			},
+			"city": {
+				ID: "city", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city/", Depth: 1, Name: "City",
+			},
+			"city2": {
+				ID: "city2", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city2/", Depth: 1, Name: "CityB",
+			},
+			"county": {
+				ID: "county", TenantID: 1, ParentID: "city",
+				Path: "/prov/city/county/", Depth: 2, Name: "County",
+			},
+		},
+		members: []*types.OrgUnitMember{
+			{OrgUnitID: "city", TenantID: 1, UserID: "admin-city", IsPrimary: true},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	tenantID := uint64(1)
+	ctx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleAdmin,
+	)
+	ctx = context.WithValue(ctx, types.UserIDContextKey, "admin-city")
+
+	if _, err := svc.ResolveActiveOrgUnit(ctx, tenantID, "admin-city", "city2"); err == nil {
+		t.Fatal("expected peer org unit activation to be denied")
+	}
+	got, err := svc.ResolveActiveOrgUnit(ctx, tenantID, "admin-city", "county")
+	if err != nil {
+		t.Fatalf("descendant activation: %v", err)
+	}
+	if got != "county" {
+		t.Fatalf("got %q want county", got)
+	}
+	got, err = svc.ResolveActiveOrgUnit(ctx, tenantID, "admin-city", "city")
+	if err != nil {
+		t.Fatalf("home activation: %v", err)
+	}
+	if got != "city" {
+		t.Fatalf("got %q want city", got)
+	}
+}
+
 func TestOrgUnitInviteableScope(t *testing.T) {
 	svc := newTestOrgUnitService()
 	ctx := context.Background()
 	tenantID := uint64(1)
 
-	// City actor: self + sibling cities + descendants (county)
+	// City actor inviting contributor: 本级 + 下级 (no peer city2)
 	units, err := svc.ListInviteableOrgUnits(
 		ctx, tenantID, "city", types.TenantRoleContributor,
 	)
@@ -285,8 +366,11 @@ func TestOrgUnitInviteableScope(t *testing.T) {
 	for _, unit := range units {
 		ids[unit.ID] = true
 	}
-	if !ids["city"] || !ids["county"] || !ids["city2"] {
-		t.Fatalf("expected city+city2+county, got %#v", ids)
+	if !ids["city"] || !ids["county"] {
+		t.Fatalf("expected city+county, got %#v", ids)
+	}
+	if ids["city2"] {
+		t.Fatalf("must not include peer city2: %#v", ids)
 	}
 	if ids["prov"] {
 		t.Fatalf("must not include ancestor province: %#v", ids)
@@ -314,6 +398,12 @@ func TestOrgUnitInviteableScope(t *testing.T) {
 	)
 	if err != nil || ok {
 		t.Fatalf("owner must not invite self: ok=%v err=%v", ok, err)
+	}
+	ok, err = svc.CanInviteToOrgUnit(
+		ctx, tenantID, "city", "city2", types.TenantRoleContributor,
+	)
+	if err != nil || ok {
+		t.Fatalf("must not invite peer: ok=%v err=%v", ok, err)
 	}
 }
 
@@ -371,6 +461,192 @@ func TestBuildOrgUnitTree(t *testing.T) {
 	}
 	if len(roots[0].Children[0].Children) != 1 {
 		t.Fatalf("county missing")
+	}
+}
+
+func adminCtxWithHome(userID string) context.Context {
+	ctx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleAdmin,
+	)
+	return context.WithValue(ctx, types.UserIDContextKey, userID)
+}
+
+func TestListTreeScopedToAdminHome(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"prov": {
+				ID: "prov", TenantID: 1, ParentID: "",
+				Path: "/prov/", Depth: 0, Name: "Province",
+			},
+			"city": {
+				ID: "city", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city/", Depth: 1, Name: "City",
+			},
+			"city2": {
+				ID: "city2", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city2/", Depth: 1, Name: "CityB",
+			},
+			"county": {
+				ID: "county", TenantID: 1, ParentID: "city",
+				Path: "/prov/city/county/", Depth: 2, Name: "County",
+			},
+		},
+		members: []*types.OrgUnitMember{
+			{OrgUnitID: "city", TenantID: 1, UserID: "admin-city"},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	ctx := adminCtxWithHome("admin-city")
+
+	tree, err := svc.ListTree(ctx, 1)
+	if err != nil {
+		t.Fatalf("ListTree: %v", err)
+	}
+	if len(tree) != 1 || tree[0].ID != "city" {
+		t.Fatalf("want tree rooted at city, got %#v", tree)
+	}
+	if len(tree[0].Children) != 1 || tree[0].Children[0].ID != "county" {
+		t.Fatalf("want county under city, got %#v", tree[0].Children)
+	}
+
+	// Owner still sees the full forest.
+	ownerCtx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleOwner,
+	)
+	ownerCtx = context.WithValue(ownerCtx, types.UserIDContextKey, "owner")
+	ownerTree, err := svc.ListTree(ownerCtx, 1)
+	if err != nil {
+		t.Fatalf("owner ListTree: %v", err)
+	}
+	if len(ownerTree) != 1 || ownerTree[0].ID != "prov" {
+		t.Fatalf("owner should see province root, got %#v", ownerTree)
+	}
+}
+
+func TestAdminCreateDeleteOrgUnitScope(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"prov": {
+				ID: "prov", TenantID: 1, ParentID: "",
+				Path: "/prov/", Depth: 0, Name: "Province",
+			},
+			"city": {
+				ID: "city", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city/", Depth: 1, Name: "City",
+			},
+			"city2": {
+				ID: "city2", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city2/", Depth: 1, Name: "CityB",
+			},
+			"county": {
+				ID: "county", TenantID: 1, ParentID: "city",
+				Path: "/prov/city/county/", Depth: 2, Name: "County",
+			},
+		},
+		members: []*types.OrgUnitMember{
+			{OrgUnitID: "city", TenantID: 1, UserID: "admin-city"},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	ctx := adminCtxWithHome("admin-city")
+
+	// Cannot create under a peer (city2).
+	_, err := svc.Create(ctx, 1, &types.CreateOrgUnitRequest{
+		Name: "X", ParentID: "city2",
+	})
+	if err == nil {
+		t.Fatal("expected create under peer to fail")
+	}
+
+	// Can create under self.
+	child, err := svc.Create(ctx, 1, &types.CreateOrgUnitRequest{
+		Name: "District", ParentID: "city",
+	})
+	if err != nil {
+		t.Fatalf("create under self: %v", err)
+	}
+	if child.ParentID != "city" {
+		t.Fatalf("parent=%s", child.ParentID)
+	}
+
+	// Cannot delete own home.
+	if err := svc.Delete(ctx, 1, "city"); err == nil {
+		t.Fatal("expected delete home to fail")
+	}
+
+	// Can delete a descendant.
+	if err := svc.Delete(ctx, 1, "county"); err != nil {
+		t.Fatalf("delete descendant: %v", err)
+	}
+}
+
+func TestResolveMemberListScopeSelfAndDescendants(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"prov": {
+				ID: "prov", TenantID: 1, ParentID: "",
+				Path: "/prov/", Depth: 0, Name: "Province",
+			},
+			"city": {
+				ID: "city", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city/", Depth: 1, Name: "City",
+			},
+			"city2": {
+				ID: "city2", TenantID: 1, ParentID: "prov",
+				Path: "/prov/city2/", Depth: 1, Name: "CityB",
+			},
+			"county": {
+				ID: "county", TenantID: 1, ParentID: "city",
+				Path: "/prov/city/county/", Depth: 2, Name: "County",
+			},
+		},
+		members: []*types.OrgUnitMember{
+			{OrgUnitID: "prov", TenantID: 1, UserID: "u-prov"},
+			{OrgUnitID: "city", TenantID: 1, UserID: "admin-city"},
+			{OrgUnitID: "city2", TenantID: 1, UserID: "u-city2"},
+			{OrgUnitID: "county", TenantID: 1, UserID: "u-county"},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	ctx := adminCtxWithHome("admin-city")
+
+	ids, restricted, err := svc.ResolveMemberListScope(ctx, 1)
+	if err != nil {
+		t.Fatalf("ResolveMemberListScope: %v", err)
+	}
+	if !restricted {
+		t.Fatal("expected restricted scope for admin")
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		seen[id] = true
+	}
+	if !seen["admin-city"] || !seen["u-county"] {
+		t.Fatalf("want self+descendant, got %#v", ids)
+	}
+	if seen["u-prov"] {
+		t.Fatalf("must not include ancestor member: %#v", ids)
+	}
+	if seen["u-city2"] {
+		t.Fatalf("must not include peer member: %#v", ids)
+	}
+
+	ownerCtx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleOwner,
+	)
+	ownerCtx = context.WithValue(ownerCtx, types.UserIDContextKey, "owner")
+	_, ownerRestricted, err := svc.ResolveMemberListScope(ownerCtx, 1)
+	if err != nil {
+		t.Fatalf("owner scope: %v", err)
+	}
+	if ownerRestricted {
+		t.Fatal("owner must not be restricted")
 	}
 }
 

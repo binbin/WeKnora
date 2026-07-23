@@ -2,8 +2,10 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
+  ensureStoredOrgUnitFromMembership,
   getStoredOrgUnitId,
   listMyOrgUnitMemberships,
+  listOrgUnits,
 } from '@/api/org-unit'
 
 /** OrgUnit 切换时派发，供列表侧栏等刷新「所在组织」文案。 */
@@ -12,23 +14,68 @@ export const ORG_UNIT_CHANGED_EVENT = 'weknora-org-unit-changed'
 const sharedOrgUnitName = ref('')
 let loadToken = 0
 
+function findOrgUnitName(
+  units: Array<{ id: string; name: string; children?: unknown[] }>,
+  targetId: string,
+): string {
+  for (const unit of units) {
+    if (unit.id === targetId) {
+      return unit.name?.trim() || ''
+    }
+    const nested = unit.children as
+      | Array<{ id: string; name: string; children?: unknown[] }>
+      | undefined
+    if (nested?.length) {
+      const found = findOrgUnitName(nested, targetId)
+      if (found) return found
+    }
+  }
+  return ''
+}
+
 async function loadOrgUnitName(
-  canSkip: boolean,
+  allowAllOrgsDefault: boolean,
 ): Promise<void> {
   const token = ++loadToken
-  if (canSkip) {
-    sharedOrgUnitName.value = ''
-    return
-  }
   try {
+    await ensureStoredOrgUnitFromMembership({
+      allowAllOrgsDefault,
+    })
+    if (token !== loadToken) return
+
+    const storedId = getStoredOrgUnitId()
+    if (!storedId) {
+      sharedOrgUnitName.value = ''
+      return
+    }
+
+    // Prefer the name of the *active* (stored) unit — not membership
+    // fallback — so a subordinate selection is not mislabeled as home.
     const memberships = await listMyOrgUnitMemberships()
     if (token !== loadToken) return
-    const storedId = getStoredOrgUnitId()
-    const preferred =
-      memberships.find((item) => item.org_unit_id === storedId) ||
-      memberships.find((item) => item.is_primary) ||
-      memberships[0]
-    sharedOrgUnitName.value = preferred?.org_unit?.name?.trim() || ''
+    const fromMembership = memberships.find(
+      (item) => item.org_unit_id === storedId,
+    )
+    if (fromMembership?.org_unit?.name?.trim()) {
+      sharedOrgUnitName.value = fromMembership.org_unit.name.trim()
+      return
+    }
+
+    try {
+      const tree = await listOrgUnits(true)
+      if (token !== loadToken) return
+      const fromTree = findOrgUnitName(tree, storedId)
+      if (fromTree) {
+        sharedOrgUnitName.value = fromTree
+        return
+      }
+    } catch {
+      // fall through to membership primary name
+    }
+
+    const primary =
+      memberships.find((item) => item.is_primary) || memberships[0]
+    sharedOrgUnitName.value = primary?.org_unit?.name?.trim() || ''
   } catch {
     if (token !== loadToken) return
     sharedOrgUnitName.value = ''
@@ -37,19 +84,19 @@ async function loadOrgUnitName(
 
 /**
  * 知识库 / 智能体列表中「本空间」位的展示名：
- * - 超管（跨租户或系统管理员）→「所有」
- * - 其余 → 当前所在组织（OrgUnit）名，缺省回退到当前空间名
+ * - 显式未选组织（清空）且可看全林 →「所有」
+ * - 其余 → 当前活跃 OrgUnit 名（与 X-Org-Unit-ID 一致）
  */
 export function useWorkspaceScopeLabel() {
   const { t } = useI18n()
   const authStore = useAuthStore()
 
-  const isSuperAdmin = computed(
+  const canBrowseAllOrgs = computed(
     () => authStore.canAccessAllTenants || authStore.isSystemAdmin,
   )
 
   const refresh = () => {
-    void loadOrgUnitName(isSuperAdmin.value)
+    void loadOrgUnitName(authStore.canAccessAllTenants === true)
   }
 
   onMounted(() => {
@@ -66,6 +113,7 @@ export function useWorkspaceScopeLabel() {
       authStore.effectiveTenantId,
       authStore.canAccessAllTenants,
       authStore.isSystemAdmin,
+      authStore.user?.id,
     ],
     () => {
       refresh()
@@ -73,7 +121,8 @@ export function useWorkspaceScopeLabel() {
   )
 
   const workspaceScopeLabel = computed(() => {
-    if (isSuperAdmin.value) {
+    const storedId = getStoredOrgUnitId().trim()
+    if (canBrowseAllOrgs.value && !storedId) {
       return t('listSpaceSidebar.allOrgs')
     }
     return (
@@ -86,6 +135,6 @@ export function useWorkspaceScopeLabel() {
   return {
     workspaceScopeLabel,
     refreshWorkspaceScopeLabel: refresh,
-    isSuperAdminScope: isSuperAdmin,
+    isSuperAdminScope: canBrowseAllOrgs,
   }
 }

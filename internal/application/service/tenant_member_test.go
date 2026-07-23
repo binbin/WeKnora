@@ -122,6 +122,28 @@ func (r *fakeTenantMemberRepo) CountFilteredByTenant(
 	return int64(len(r.filterTenantRows(tenantID, search))), nil
 }
 
+func (r *fakeTenantMemberRepo) CountFilteredByTenantUsers(
+	ctx context.Context,
+	tenantID uint64,
+	search string,
+	userIDs []string,
+) (int64, error) {
+	if len(userIDs) == 0 {
+		return 0, nil
+	}
+	allowed := make(map[string]struct{}, len(userIDs))
+	for _, uid := range userIDs {
+		allowed[uid] = struct{}{}
+	}
+	count := int64(0)
+	for _, row := range r.filterTenantRows(tenantID, search) {
+		if _, ok := allowed[row.UserID]; ok {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *fakeTenantMemberRepo) ListPagedByTenant(
 	ctx context.Context, tenantID uint64, search string, offset, limit int,
 ) ([]*types.TenantMember, error) {
@@ -134,6 +156,36 @@ func (r *fakeTenantMemberRepo) ListPagedByTenant(
 		end = len(all)
 	}
 	return append([]*types.TenantMember(nil), all[offset:end]...), nil
+}
+
+func (r *fakeTenantMemberRepo) ListPagedByTenantUsers(
+	ctx context.Context,
+	tenantID uint64,
+	search string,
+	offset, limit int,
+	userIDs []string,
+) ([]*types.TenantMember, error) {
+	if len(userIDs) == 0 {
+		return []*types.TenantMember{}, nil
+	}
+	allowed := make(map[string]struct{}, len(userIDs))
+	for _, uid := range userIDs {
+		allowed[uid] = struct{}{}
+	}
+	var filtered []*types.TenantMember
+	for _, row := range r.filterTenantRows(tenantID, search) {
+		if _, ok := allowed[row.UserID]; ok {
+			filtered = append(filtered, row)
+		}
+	}
+	if offset >= len(filtered) {
+		return []*types.TenantMember{}, nil
+	}
+	end := offset + limit
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	return append([]*types.TenantMember(nil), filtered[offset:end]...), nil
 }
 
 func (r *fakeTenantMemberRepo) UpdateRole(ctx context.Context, userID string, tenantID uint64, role types.TenantRole) error {

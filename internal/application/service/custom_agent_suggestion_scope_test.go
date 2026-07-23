@@ -61,6 +61,12 @@ func (s *suggestionKBService) GetKnowledgeBasesByIDsOnly(
 	return result, nil
 }
 
+func (s *suggestionKBService) FilterReadableKnowledgeBaseIDs(
+	_ context.Context, kbIDs []string,
+) ([]string, error) {
+	return kbIDs, nil
+}
+
 type suggestionKBShareService struct {
 	interfaces.KBShareService
 	allowed map[string]bool

@@ -6802,6 +6802,8 @@ export default {
   orgUnit: {
     sectionDescription:
       'Platform organization tree: root units are created by system admins. Members land in the org-named workspace and share it with users in child units.',
+    sectionDescriptionScoped:
+      'Manage subordinate organizations from your own unit: add or adjust child units under yourself. Ancestors and peer units are out of scope.',
   },
   tenantMember: {
     title: 'Members',
@@ -6947,7 +6949,7 @@ export default {
       'Send an invitation to {email} (role: {role}, org: {orgUnit}). They will join only after accepting.',
     confirmSend: 'Send',
     orgUnitLabel: 'Organization',
-    orgUnitPlaceholder: 'Own / peer / subordinate (Owner: subordinate only)',
+    orgUnitPlaceholder: 'Own / subordinate (admin role: subordinate only)',
     copyLink: 'Copy invite link',
     copied: 'Copied to clipboard',
     copyFailed: 'Copy failed; please select the text manually',
@@ -7014,7 +7016,7 @@ export default {
       notFound: 'Invitation not found or already withdrawn.',
       orgUnitRequired: 'Select the organization unit for the invitee.',
       orgUnitNotInviteable:
-        'Editors/viewers may join your own, peer, or subordinate units; admin may only be assigned to subordinates.',
+        'Editors/viewers may join your own or subordinate units; admin may only be assigned to subordinates.',
       inviterOrgUnitRequired: 'Select your current organization before inviting.',
       generic: 'Something went wrong. Please try again.',
     },

@@ -116,6 +116,28 @@ func (r *fakeInvitationRepo) CountByTenantList(
 	return int64(len(r.filteredTenantRows(tenantID, includeTerminal))), nil
 }
 
+func (r *fakeInvitationRepo) CountByTenantListInOrgUnits(
+	ctx context.Context,
+	tenantID uint64,
+	includeTerminal bool,
+	orgUnitIDs []string,
+) (int64, error) {
+	if len(orgUnitIDs) == 0 {
+		return 0, nil
+	}
+	allowed := make(map[string]struct{}, len(orgUnitIDs))
+	for _, id := range orgUnitIDs {
+		allowed[id] = struct{}{}
+	}
+	count := int64(0)
+	for _, row := range r.filteredTenantRows(tenantID, includeTerminal) {
+		if _, ok := allowed[row.OrgUnitID]; ok {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *fakeInvitationRepo) ListByTenantPage(
 	ctx context.Context,
 	tenantID uint64,
@@ -131,6 +153,36 @@ func (r *fakeInvitationRepo) ListByTenantPage(
 		end = len(all)
 	}
 	return append([]*types.TenantInvitation(nil), all[offset:end]...), nil
+}
+
+func (r *fakeInvitationRepo) ListByTenantPageInOrgUnits(
+	ctx context.Context,
+	tenantID uint64,
+	includeTerminal bool,
+	offset, limit int,
+	orgUnitIDs []string,
+) ([]*types.TenantInvitation, error) {
+	if len(orgUnitIDs) == 0 {
+		return []*types.TenantInvitation{}, nil
+	}
+	allowed := make(map[string]struct{}, len(orgUnitIDs))
+	for _, id := range orgUnitIDs {
+		allowed[id] = struct{}{}
+	}
+	var filtered []*types.TenantInvitation
+	for _, row := range r.filteredTenantRows(tenantID, includeTerminal) {
+		if _, ok := allowed[row.OrgUnitID]; ok {
+			filtered = append(filtered, row)
+		}
+	}
+	if offset >= len(filtered) {
+		return []*types.TenantInvitation{}, nil
+	}
+	end := offset + limit
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	return append([]*types.TenantInvitation(nil), filtered[offset:end]...), nil
 }
 
 func (r *fakeInvitationRepo) ListByInvitee(

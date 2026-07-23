@@ -803,7 +803,10 @@ import { useTenantModelReadiness } from '@/composables/useTenantModelReadiness'
 import { useI18n } from 'vue-i18n'
 import { useListUrlState } from '@/composables/useListUrlState'
 import { useResourcePins } from '@/composables/useResourcePins'
-import { useWorkspaceScopeLabel } from '@/composables/useWorkspaceScopeLabel'
+import {
+  ORG_UNIT_CHANGED_EVENT,
+  useWorkspaceScopeLabel,
+} from '@/composables/useWorkspaceScopeLabel'
 
 const router = useRouter()
 const route = useRoute()
@@ -1277,6 +1280,11 @@ watch(creatorFilter, () => {
   fetchList(true)
 })
 
+const handleOrgUnitChanged = () => {
+  // Org scope changed (含超管从「所有」落到本级)：强制重拉列表。
+  fetchList(true)
+}
+
 onMounted(() => {
   fetchList().then(() => {
     // 检查路由参数中是否有需要高亮的知识库ID
@@ -1294,6 +1302,7 @@ onMounted(() => {
   window.addEventListener('knowledgeFileUploadProgress', handleUploadProgressEvent as EventListener)
   window.addEventListener('knowledgeFileUploadComplete', handleUploadCompleteEvent as EventListener)
   window.addEventListener('knowledgeFileUploaded', handleUploadFinishedEvent as EventListener)
+  window.addEventListener(ORG_UNIT_CHANGED_EVENT, handleOrgUnitChanged)
 })
 
 onUnmounted(() => {
@@ -1301,6 +1310,7 @@ onUnmounted(() => {
   window.removeEventListener('knowledgeFileUploadProgress', handleUploadProgressEvent as EventListener)
   window.removeEventListener('knowledgeFileUploadComplete', handleUploadCompleteEvent as EventListener)
   window.removeEventListener('knowledgeFileUploaded', handleUploadFinishedEvent as EventListener)
+  window.removeEventListener(ORG_UNIT_CHANGED_EVENT, handleOrgUnitChanged)
 
   uploadCleanupTimers.forEach(timer => clearTimeout(timer))
   uploadCleanupTimers.clear()

@@ -6720,6 +6720,8 @@ export default {
   orgUnit: {
     sectionDescription:
       '플랫폼 조직 트리: 루트 조직은 시스템 관리자가 생성합니다. 멤버는 로그인 후 「조직명 스페이스」에 자동 진입하며, 본 조직과 하위 조직 사용자가 해당 스페이스를 공유합니다.',
+    sectionDescriptionScoped:
+      '소속 조직부터 하위만 관리합니다. 본급 아래에 하위 조직을 추가·조정할 수 있으며, 상위·동급은 범위 밖입니다.',
   },
   tenantMember: {
     title: "멤버 관리",

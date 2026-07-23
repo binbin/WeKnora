@@ -197,6 +197,8 @@ instance.interceptors.response.use(
           localStorage.removeItem('weknora_refresh_token');
           localStorage.removeItem('weknora_user');
           localStorage.removeItem('weknora_tenant');
+          localStorage.removeItem('weknora_org_unit_id');
+          localStorage.removeItem('weknora_org_unit_user_id');
           
           processQueue(refreshError, null);
           
@@ -211,6 +213,8 @@ instance.interceptors.response.use(
         localStorage.removeItem('weknora_token');
         localStorage.removeItem('weknora_user');
         localStorage.removeItem('weknora_tenant');
+        localStorage.removeItem('weknora_org_unit_id');
+        localStorage.removeItem('weknora_org_unit_user_id');
         
         redirectToLogin();
         

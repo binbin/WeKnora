@@ -56,6 +56,14 @@ func (s *sessionService) resolveKnowledgeBases(
 	if err != nil {
 		return nil, nil, err
 	}
+	// Drop peer / descendant / unshared-ancestor KBs so @mentions and
+	// agent selected lists cannot reference out-of-scope org units.
+	if s.knowledgeBaseService != nil {
+		kbIDs, err = s.knowledgeBaseService.FilterReadableKnowledgeBaseIDs(ctx, kbIDs)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	return kbIDs, knowledgeIDs, nil
 }
 

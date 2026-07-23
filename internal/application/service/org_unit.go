@@ -41,6 +41,14 @@ func (s *orgUnitService) Create(
 			"only system admin can create a top-level organization",
 		)
 	}
+	// Scoped admins may only create under self or descendants.
+	if parentID != "" {
+		if err := s.assertCanManageOrgUnitTarget(
+			ctx, tenantID, parentID, true,
+		); err != nil {
+			return nil, err
+		}
+	}
 
 	depth := 0
 	pathPrefix := ""
@@ -127,6 +135,10 @@ func (s *orgUnitService) Update(
 	id string,
 	req *types.UpdateOrgUnitRequest,
 ) (*types.OrgUnit, error) {
+	// Scoped admins may rename self or descendants; ancestors/peers blocked.
+	if err := s.assertCanManageOrgUnitTarget(ctx, tenantID, id, true); err != nil {
+		return nil, err
+	}
 	unit, err := s.resolveUnit(ctx, tenantID, id)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
@@ -159,6 +171,10 @@ func (s *orgUnitService) Delete(
 	tenantID uint64,
 	id string,
 ) error {
+	// Scoped admins may delete descendants only — not their own node.
+	if err := s.assertCanManageOrgUnitTarget(ctx, tenantID, id, false); err != nil {
+		return err
+	}
 	unit, err := s.resolveUnit(ctx, tenantID, id)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
@@ -188,18 +204,41 @@ func (s *orgUnitService) ListFlat(
 	ctx context.Context,
 	tenantID uint64,
 ) ([]*types.OrgUnit, error) {
-	return s.repo.ListByTenant(ctx, tenantID)
+	return s.listUnitsForActor(ctx, tenantID)
 }
 
 func (s *orgUnitService) ListTree(
 	ctx context.Context,
 	tenantID uint64,
 ) ([]*types.OrgUnit, error) {
-	units, err := s.repo.ListByTenant(ctx, tenantID)
+	units, err := s.listUnitsForActor(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	return buildOrgUnitTree(units), nil
+}
+
+// listUnitsForActor returns the full tenant tree for unscoped actors
+// (system admin / cross-tenant superuser / tenant Owner). Scoped admins
+// and lower roles only see their home OrgUnit subtree (self + 下级).
+func (s *orgUnitService) listUnitsForActor(
+	ctx context.Context,
+	tenantID uint64,
+) ([]*types.OrgUnit, error) {
+	if isUnscopedOrgInviter(ctx) {
+		return s.repo.ListByTenant(ctx, tenantID)
+	}
+	home, err := s.resolveActorHomeOrgUnit(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, ErrActorOrgUnitRequired) {
+			return []*types.OrgUnit{}, nil
+		}
+		return nil, err
+	}
+	if home == nil {
+		return s.repo.ListByTenant(ctx, tenantID)
+	}
+	return s.repo.ListByPathPrefix(ctx, home.TenantID, home.Path)
 }
 
 // ListPlatformTree returns the full admin forest: platform catalog roots
@@ -257,6 +296,10 @@ func (s *orgUnitService) Move(
 	id string,
 	newParentID string,
 ) (*types.OrgUnit, error) {
+	// Moved node must be a descendant; new parent may be self or descendant.
+	if err := s.assertCanManageOrgUnitTarget(ctx, tenantID, id, false); err != nil {
+		return nil, err
+	}
 	unit, err := s.resolveUnit(ctx, tenantID, id)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
@@ -268,6 +311,13 @@ func (s *orgUnitService) Move(
 	newParentID = strings.TrimSpace(newParentID)
 	if newParentID == unit.ID {
 		return nil, apperrors.NewBadRequestError("cannot move org unit under itself")
+	}
+	if newParentID != "" {
+		if err := s.assertCanManageOrgUnitTarget(
+			ctx, tenantID, newParentID, true,
+		); err != nil {
+			return nil, err
+		}
 	}
 	// Promoting a node to top-level (empty parent) is the same privilege
 	// boundary as creating a root org unit.
@@ -491,15 +541,17 @@ func (s *orgUnitService) ResolveActiveOrgUnit(
 
 	requestedID = strings.TrimSpace(requestedID)
 	if requestedID != "" {
-		if _, err := s.repo.GetByID(ctx, tenantID, requestedID); err != nil {
+		requested, err := s.repo.GetByID(ctx, tenantID, requestedID)
+		if err != nil {
 			if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 				return "", apperrors.NewBadRequestError("invalid X-Org-Unit-ID")
 			}
 			return "", err
 		}
-		// Tenant Admins/Owners may switch to any unit; members may only
-		// use units they belong to. Role is checked by caller middleware
-		// via membership when userID is set and not synthetic.
+		// Members may only use units they belong to. Scoped admins may
+		// activate home + descendants (本级/下级) — never peers/ancestors,
+		// otherwise KB lists would expose sibling or parent-sibling trees.
+		// Unscoped browsers (system admin / cross-tenant) keep any-unit.
 		if userID != "" && !types.IsSyntheticUserID(userID) {
 			role := types.TenantRoleFromContext(ctx)
 			if role != types.TenantRoleAdmin && role != types.TenantRoleOwner {
@@ -510,6 +562,12 @@ func (s *orgUnitService) ResolveActiveOrgUnit(
 						)
 					}
 					return "", memberErr
+				}
+			} else if !isUnscopedOrgBrowser(ctx) {
+				if err := s.assertRequestedOrgUnitInHomeSubtree(
+					ctx, tenantID, requested,
+				); err != nil {
+					return "", err
 				}
 			}
 		}
@@ -613,13 +671,14 @@ func (s *orgUnitService) CanReadKB(
 		return true, nil
 	}
 	if activeOrgUnitID == "" {
-		// No active unit: tenant Admin/Owner and platform super-admins may
-		// browse all bound KBs (the UI "所有" / unscoped org view).
+		// No active unit: only true unscoped browsers (system admin /
+		// cross-tenant) and tenant Owners (bootstrap) may browse all
+		// bound KBs. Scoped tenant Admins must operate under a home
+		// OrgUnit — otherwise peer/descendant KBs would leak.
 		if isUnscopedOrgBrowser(ctx) {
 			return true, nil
 		}
-		role := types.TenantRoleFromContext(ctx)
-		return role == types.TenantRoleAdmin || role == types.TenantRoleOwner, nil
+		return types.TenantRoleFromContext(ctx) == types.TenantRoleOwner, nil
 	}
 	if kbOrgUnitID == activeOrgUnitID {
 		return true, nil
@@ -675,9 +734,9 @@ func (s *orgUnitService) HasHierarchy(
 	return count > 0, nil
 }
 
-// ListInviteableOrgUnits implements peer/self + descendant scope for
-// contributor/viewer invites. Admin and Owner roles are restricted to
-// descendants only (同级不可再任命管理员).
+// ListInviteableOrgUnits returns units the actor may assign when inviting.
+// Scope is always 本级 + 下级 (self + descendants). Granting admin/owner
+// further restricts to descendants only (同级不可再任命管理员).
 //
 // When the actor has no current OrgUnit, system admins / cross-tenant
 // superusers / tenant Owners (bootstrap first user) may list the full
@@ -723,21 +782,9 @@ func (s *orgUnitService) ListInviteableOrgUnits(
 		role == types.TenantRoleAdmin
 	out := make([]*types.OrgUnit, 0)
 
+	// 编辑/访客：本级 + 下级（不再包含平级）。
 	if !descendantsOnly {
 		out = append(out, actor)
-		all, listErr := s.repo.ListByTenant(ctx, tenantID)
-		if listErr != nil {
-			return nil, listErr
-		}
-		for _, unit := range all {
-			if unit == nil || unit.ID == actor.ID {
-				continue
-			}
-			// 平级: same parent (including other roots when actor is root).
-			if unit.ParentID == actor.ParentID {
-				out = append(out, unit)
-			}
-		}
 	}
 
 	descendants, err := s.repo.ListByPathPrefix(ctx, tenantID, actor.Path)
@@ -859,7 +906,140 @@ var (
 	ErrActorOrgUnitRequired = errors.New(
 		"current org unit is required to manage members",
 	)
+
+	// ErrOrgUnitOutsideManageScope is returned when a scoped admin
+	// tries to mutate an OrgUnit outside self+descendants (or delete
+	// their own home node).
+	ErrOrgUnitOutsideManageScope = errors.New(
+		"can only manage subordinate organizations from your own unit",
+	)
 )
+
+// assertRequestedOrgUnitInHomeSubtree allows requested only when it is
+// the actor's home unit or a descendant. Peers and ancestors are denied
+// so scoped admins cannot pivot X-Org-Unit-ID to browse sibling KBs.
+func (s *orgUnitService) assertRequestedOrgUnitInHomeSubtree(
+	ctx context.Context,
+	tenantID uint64,
+	requested *types.OrgUnit,
+) error {
+	if requested == nil {
+		return apperrors.NewBadRequestError("invalid X-Org-Unit-ID")
+	}
+	home, err := s.resolveActorHomeOrgUnit(ctx, tenantID)
+	if err != nil {
+		return apperrors.NewForbiddenError(err.Error())
+	}
+	if home == nil {
+		// Owner/bootstrap without a home unit: keep any-unit (invite path).
+		return nil
+	}
+	if requested.ID == home.ID {
+		return nil
+	}
+	if home.Path == "" ||
+		!strings.HasPrefix(requested.Path, home.Path) ||
+		requested.ID == home.ID {
+		return apperrors.NewForbiddenError(
+			"can only activate your organization or a subordinate unit",
+		)
+	}
+	return nil
+}
+
+// resolveActorHomeOrgUnit returns the caller's membership OrgUnit
+// (primary, else first). Unscoped actors (system admin / Owner / …)
+// and callers without a real user principal return (nil, nil).
+// A real user with no membership returns ErrActorOrgUnitRequired.
+func (s *orgUnitService) resolveActorHomeOrgUnit(
+	ctx context.Context,
+	tenantID uint64,
+) (*types.OrgUnit, error) {
+	if isUnscopedOrgInviter(ctx) {
+		return nil, nil
+	}
+	userID, _ := types.UserIDFromContext(ctx)
+	userID = strings.TrimSpace(userID)
+	// No human principal (tests / internal jobs): leave unscoped.
+	// HTTP auth always attaches a real user id for interactive admins.
+	if userID == "" || types.IsSyntheticUserID(userID) {
+		return nil, nil
+	}
+	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	if err != nil {
+		return nil, err
+	}
+	// Platform-catalog memberships (tenant_id=0) cover users bound before
+	// workspace provisioning; merge when the business tenant has none.
+	if len(memberships) == 0 && tenantID != types.PlatformOrgTenantID {
+		platformMembers, platformErr := s.repo.ListUserMemberships(
+			ctx, types.PlatformOrgTenantID, userID,
+		)
+		if platformErr != nil {
+			return nil, platformErr
+		}
+		memberships = platformMembers
+	}
+	homeID := primaryOrgUnitIDFromMemberships(memberships)
+	if homeID == "" {
+		return nil, ErrActorOrgUnitRequired
+	}
+	unit, err := s.repo.GetByID(ctx, tenantID, homeID)
+	if err != nil && tenantID != types.PlatformOrgTenantID {
+		unit, err = s.repo.GetByID(ctx, types.PlatformOrgTenantID, homeID)
+	}
+	if err != nil {
+		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
+			return nil, ErrActorOrgUnitRequired
+		}
+		return nil, err
+	}
+	return unit, nil
+}
+
+// assertCanManageOrgUnitTarget enforces subtree limits for OrgUnit CRUD.
+// allowSelf=true permits the actor's home unit (create-under / rename);
+// allowSelf=false requires a strict descendant (delete / move source).
+func (s *orgUnitService) assertCanManageOrgUnitTarget(
+	ctx context.Context,
+	tenantID uint64,
+	targetID string,
+	allowSelf bool,
+) error {
+	if isUnscopedOrgInviter(ctx) {
+		return nil
+	}
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		return apperrors.NewForbiddenError(ErrOrgUnitOutsideManageScope.Error())
+	}
+	home, err := s.resolveActorHomeOrgUnit(ctx, tenantID)
+	if err != nil {
+		return apperrors.NewForbiddenError(err.Error())
+	}
+	if home == nil {
+		return nil
+	}
+	if targetID == home.ID {
+		if allowSelf {
+			return nil
+		}
+		return apperrors.NewForbiddenError(ErrOrgUnitOutsideManageScope.Error())
+	}
+	target, err := s.repo.GetByID(ctx, home.TenantID, targetID)
+	if err != nil {
+		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
+			return apperrors.NewNotFoundError("org unit not found")
+		}
+		return err
+	}
+	if home.Path == "" ||
+		!strings.HasPrefix(target.Path, home.Path) ||
+		target.ID == home.ID {
+		return apperrors.NewForbiddenError(ErrOrgUnitOutsideManageScope.Error())
+	}
+	return nil
+}
 
 func isAdminOrHigherRole(role types.TenantRole) bool {
 	return role == types.TenantRoleAdmin || role == types.TenantRoleOwner
@@ -975,4 +1155,80 @@ func (s *orgUnitService) AssertCanManageTenantMember(
 	default:
 		return ErrMemberOutsideManageScope
 	}
+}
+
+// ResolveMemberListScope limits the members list to users whose OrgUnit
+// is the actor's home unit or a descendant (本级 + 下级). Ancestors and
+// peer units are excluded. Unscoped actors / tenants without hierarchy
+// return restricted=false.
+func (s *orgUnitService) ResolveMemberListScope(
+	ctx context.Context,
+	tenantID uint64,
+) ([]string, bool, error) {
+	if isUnscopedOrgInviter(ctx) {
+		return nil, false, nil
+	}
+	hasHierarchy, err := s.HasHierarchy(ctx, tenantID)
+	if err != nil {
+		return nil, false, err
+	}
+	if !hasHierarchy {
+		return nil, false, nil
+	}
+
+	home, err := s.resolveActorHomeOrgUnit(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, ErrActorOrgUnitRequired) {
+			return []string{}, true, nil
+		}
+		return nil, false, err
+	}
+	if home == nil {
+		return nil, false, nil
+	}
+
+	units, err := s.repo.ListByPathPrefix(ctx, home.TenantID, home.Path)
+	if err != nil {
+		return nil, false, err
+	}
+	orgUnitIDs := make([]string, 0, len(units))
+	for _, unit := range units {
+		if unit != nil && unit.ID != "" {
+			orgUnitIDs = append(orgUnitIDs, unit.ID)
+		}
+	}
+	if len(orgUnitIDs) == 0 {
+		orgUnitIDs = []string{home.ID}
+	}
+
+	orgMembers, err := s.repo.ListMembersByOrgUnitIDs(ctx, orgUnitIDs)
+	if err != nil {
+		return nil, false, err
+	}
+	seen := make(map[string]struct{}, len(orgMembers)+1)
+	out := make([]string, 0, len(orgMembers)+1)
+	for _, membership := range orgMembers {
+		if membership == nil {
+			continue
+		}
+		uid := strings.TrimSpace(membership.UserID)
+		if uid == "" {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		out = append(out, uid)
+	}
+	// Always include the caller so the list is never empty of "me".
+	if callerID, ok := types.UserIDFromContext(ctx); ok {
+		callerID = strings.TrimSpace(callerID)
+		if callerID != "" {
+			if _, exists := seen[callerID]; !exists {
+				out = append(out, callerID)
+			}
+		}
+	}
+	return out, true, nil
 }

@@ -199,8 +199,8 @@ func (s *knowledgeBaseService) applyAndValidateStorageBackend(ctx context.Contex
 }
 
 // filterKBsByOrgUnit keeps KBs the active OrgUnit may read (self +
-// ancestors + unbound). No-op when OrgUnitService is nil or hierarchy
-// is inactive.
+// shared ancestors + unbound). Peer and descendant KBs are dropped.
+// No-op when OrgUnitService is nil or hierarchy is inactive.
 func (s *knowledgeBaseService) filterKBsByOrgUnit(
 	ctx context.Context,
 	tenantID uint64,
@@ -227,6 +227,75 @@ func (s *knowledgeBaseService) filterKBsByOrgUnit(
 		}
 	}
 	return filtered
+}
+
+// FilterReadableKnowledgeBaseIDs drops KB IDs the active OrgUnit cannot
+// read (平级 / 下级 / 未勾选共享的上级). Used by agent selected-mode and
+// @mention resolution so retrieval cannot reference out-of-scope KBs.
+func (s *knowledgeBaseService) FilterReadableKnowledgeBaseIDs(
+	ctx context.Context,
+	kbIDs []string,
+) ([]string, error) {
+	if len(kbIDs) == 0 {
+		return kbIDs, nil
+	}
+	if s.orgUnitService == nil {
+		return kbIDs, nil
+	}
+	tenantID, ok := types.TenantIDFromContext(ctx)
+	if !ok || tenantID == 0 {
+		return kbIDs, nil
+	}
+	has, err := s.orgUnitService.HasHierarchy(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !has {
+		return kbIDs, nil
+	}
+
+	kbs, err := s.repo.GetKnowledgeBaseByIDs(ctx, kbIDs)
+	if err != nil {
+		return nil, err
+	}
+	readable := make(map[string]struct{}, len(kbs))
+	activeID, _ := types.OrgUnitIDFromContext(ctx)
+	for _, kb := range kbs {
+		if kb == nil {
+			continue
+		}
+		okRead, readErr := s.orgUnitService.CanReadKB(
+			ctx, tenantID, activeID, kb.OrgUnitID, kb.ShareWithDescendants,
+		)
+		if readErr != nil {
+			logger.Warnf(ctx,
+				"org unit read check failed for kb %s: %v", kb.ID, readErr)
+			continue
+		}
+		if okRead {
+			readable[kb.ID] = struct{}{}
+		}
+	}
+
+	out := make([]string, 0, len(kbIDs))
+	seen := make(map[string]struct{}, len(kbIDs))
+	for _, id := range kbIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		if _, okRead := readable[id]; !okRead {
+			logger.Infof(ctx,
+				"dropping KB %s: outside active org unit read scope", id)
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 // applyTenantDefaultStorageProvider fills an empty KB storage provider from the

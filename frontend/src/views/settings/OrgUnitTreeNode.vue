@@ -3,14 +3,14 @@
     <div
       class="row"
       :class="{ active: node.id === activeId }"
-      :style="{ paddingLeft: `${node.depth * 16}px` }"
+      :style="{ paddingLeft: `${displayDepth * 16}px` }"
     >
       <button type="button" class="name" @click="$emit('select', node.id)">
         {{ node.name }}
         <span v-if="node.code" class="code">{{ node.code }}</span>
       </button>
       <t-button
-        v-if="canManage"
+        v-if="canDeleteNode"
         size="small"
         variant="text"
         theme="danger"
@@ -25,7 +25,9 @@
         :key="child.id"
         :node="child"
         :can-manage="canManage"
+        :home-org-unit-id="homeOrgUnitId"
         :active-id="activeId"
+        :display-depth="displayDepth + 1"
         @select="$emit('select', $event)"
         @delete="$emit('delete', $event)"
       />
@@ -34,18 +36,37 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { OrgUnit } from '@/api/org-unit'
 
-defineProps<{
-  node: OrgUnit
-  canManage: boolean
-  activeId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    node: OrgUnit
+    canManage: boolean
+    activeId: string
+    /** 管理员所属节点：不可删除本级，只能删下级 */
+    homeOrgUnitId?: string
+    /** 相对展示深度（子树根为 0），避免绝对 depth 造成左侧空档 */
+    displayDepth?: number
+  }>(),
+  {
+    homeOrgUnitId: '',
+    displayDepth: 0,
+  },
+)
 
 defineEmits<{
   select: [id: string]
   delete: [id: string]
 }>()
+
+const canDeleteNode = computed(() => {
+  if (!props.canManage) return false
+  if (props.homeOrgUnitId && props.node.id === props.homeOrgUnitId) {
+    return false
+  }
+  return true
+})
 </script>
 
 <script lang="ts">

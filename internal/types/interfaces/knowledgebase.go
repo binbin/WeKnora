@@ -59,6 +59,10 @@ type KnowledgeBaseService interface {
 	ListKnowledgeBases(ctx context.Context) ([]*types.KnowledgeBase, error)
 	// ListKnowledgeBasesByTenantID lists all knowledge bases for a specific tenant (e.g. for shared agent context).
 	ListKnowledgeBasesByTenantID(ctx context.Context, tenantID uint64) ([]*types.KnowledgeBase, error)
+	// FilterReadableKnowledgeBaseIDs drops KB IDs the active OrgUnit may
+	// not read (peer / descendant / unshared ancestor). No-op when the
+	// tenant has no hierarchy. Preserves input order.
+	FilterReadableKnowledgeBaseIDs(ctx context.Context, kbIDs []string) ([]string, error)
 
 	// UpdateKnowledgeBase updates knowledge base information
 	// Parameters:

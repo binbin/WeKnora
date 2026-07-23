@@ -65,9 +65,8 @@ var (
 	ErrInviterOrgUnitRequired = errors.New("inviter must select a current organization before inviting")
 
 	// ErrOrgUnitNotInviteable is returned when the target OrgUnit is
-	// outside the inviter's peer/self + descendant (or Owner-only
-	// descendant) scope.
-	ErrOrgUnitNotInviteable = errors.New("org unit is outside the inviter's peer or subordinate scope")
+	// outside the inviter's own-unit + descendant scope.
+	ErrOrgUnitNotInviteable = errors.New("org unit is outside the inviter's own unit or subordinate scope")
 
 	// ErrOnlySystemAdminCanAssignOwner is returned when a non-system-admin
 	// tries to invite or share-link with TenantRoleOwner. Product UI no
@@ -159,7 +158,7 @@ func detailsFor(invID uint64, role types.TenantRole, orgUnitID string) types.JSO
 // resolveOrgUnitID validates and normalises the OrgUnit binding for an
 // invitation. When the tenant has no hierarchy the field is cleared.
 // When hierarchy exists, a non-empty unit in the inviter's inviteable
-// scope is required (平级/本级/下级; Owner role → 下级 only).
+// scope is required (本级/下级; Owner/Admin role grant → 下级 only).
 func (s *tenantInvitationService) resolveOrgUnitID(
 	ctx context.Context,
 	tenantID uint64,
@@ -497,7 +496,9 @@ func (s *tenantInvitationService) ListByTenant(
 }
 
 // ListTenantInvitationsPage sweeps then returns a page plus total rows
-// matching the same filter as ListByTenant.
+// matching the same filter as ListByTenant. Scoped admins only see
+// invitations whose target OrgUnit is their home unit or a descendant
+// (本级发出/管理范围内的待接受邀请).
 func (s *tenantInvitationService) ListTenantInvitationsPage(
 	ctx context.Context,
 	tenantID uint64,
@@ -518,16 +519,68 @@ func (s *tenantInvitationService) ListTenantInvitationsPage(
 	if pageSize > maxSize {
 		pageSize = maxSize
 	}
+	offset := (page - 1) * pageSize
+
+	orgUnitIDs, restricted, scopeErr := s.resolveInvitationListOrgUnitIDs(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, 0, scopeErr
+	}
+	if restricted {
+		total, err := s.repo.CountByTenantListInOrgUnits(
+			ctx, tenantID, includeTerminal, orgUnitIDs,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		rows, err := s.repo.ListByTenantPageInOrgUnits(
+			ctx, tenantID, includeTerminal, offset, pageSize, orgUnitIDs,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		return rows, total, nil
+	}
+
 	total, err := s.repo.CountByTenantList(ctx, tenantID, includeTerminal)
 	if err != nil {
 		return nil, 0, err
 	}
-	offset := (page - 1) * pageSize
 	rows, err := s.repo.ListByTenantPage(ctx, tenantID, includeTerminal, offset, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+// resolveInvitationListOrgUnitIDs returns OrgUnit IDs whose invitations
+// a scoped actor may see (home + descendants). restricted=false means
+// no filter (Owner / system admin / no hierarchy).
+func (s *tenantInvitationService) resolveInvitationListOrgUnitIDs(
+	ctx context.Context,
+	tenantID uint64,
+) ([]string, bool, error) {
+	if s.orgUnitService == nil || isUnscopedOrgInviter(ctx) {
+		return nil, false, nil
+	}
+	has, err := s.orgUnitService.HasHierarchy(ctx, tenantID)
+	if err != nil {
+		return nil, false, err
+	}
+	if !has {
+		return nil, false, nil
+	}
+	// ListFlat is already scoped to the actor's home subtree.
+	units, err := s.orgUnitService.ListFlat(ctx, tenantID)
+	if err != nil {
+		return nil, false, err
+	}
+	ids := make([]string, 0, len(units))
+	for _, unit := range units {
+		if unit != nil && strings.TrimSpace(unit.ID) != "" {
+			ids = append(ids, unit.ID)
+		}
+	}
+	return ids, true, nil
 }
 
 // ListByInvitee sweeps then returns. Same reasoning as ListByTenant.

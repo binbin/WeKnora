@@ -98,9 +98,34 @@ func (r *tenantMemberRepository) ListByTenant(ctx context.Context, tenantID uint
 func (r *tenantMemberRepository) CountFilteredByTenant(
 	ctx context.Context, tenantID uint64, search string,
 ) (int64, error) {
+	return r.countFiltered(ctx, tenantID, search, nil)
+}
+
+// CountFilteredByTenantUsers counts active memberships restricted to userIDs.
+func (r *tenantMemberRepository) CountFilteredByTenantUsers(
+	ctx context.Context,
+	tenantID uint64,
+	search string,
+	userIDs []string,
+) (int64, error) {
+	if len(userIDs) == 0 {
+		return 0, nil
+	}
+	return r.countFiltered(ctx, tenantID, search, userIDs)
+}
+
+func (r *tenantMemberRepository) countFiltered(
+	ctx context.Context,
+	tenantID uint64,
+	search string,
+	userIDs []string,
+) (int64, error) {
 	search = strings.TrimSpace(search)
 	q := r.db.WithContext(ctx).Model(&types.TenantMember{}).
 		Where("tenant_members.tenant_id = ?", tenantID)
+	if len(userIDs) > 0 {
+		q = q.Where("tenant_members.user_id IN ?", userIDs)
+	}
 	var total int64
 	var err error
 	if search == "" {
@@ -119,11 +144,38 @@ func (r *tenantMemberRepository) CountFilteredByTenant(
 func (r *tenantMemberRepository) ListPagedByTenant(
 	ctx context.Context, tenantID uint64, search string, offset, limit int,
 ) ([]*types.TenantMember, error) {
+	return r.listPaged(ctx, tenantID, search, offset, limit, nil)
+}
+
+// ListPagedByTenantUsers lists active memberships restricted to userIDs.
+func (r *tenantMemberRepository) ListPagedByTenantUsers(
+	ctx context.Context,
+	tenantID uint64,
+	search string,
+	offset, limit int,
+	userIDs []string,
+) ([]*types.TenantMember, error) {
+	if len(userIDs) == 0 {
+		return []*types.TenantMember{}, nil
+	}
+	return r.listPaged(ctx, tenantID, search, offset, limit, userIDs)
+}
+
+func (r *tenantMemberRepository) listPaged(
+	ctx context.Context,
+	tenantID uint64,
+	search string,
+	offset, limit int,
+	userIDs []string,
+) ([]*types.TenantMember, error) {
 	search = strings.TrimSpace(search)
 	var members []*types.TenantMember
 	q := r.db.WithContext(ctx).Model(&types.TenantMember{}).
-		Where("tenant_members.tenant_id = ?", tenantID).
-		Order("tenant_members.joined_at ASC, tenant_members.id ASC").
+		Where("tenant_members.tenant_id = ?", tenantID)
+	if len(userIDs) > 0 {
+		q = q.Where("tenant_members.user_id IN ?", userIDs)
+	}
+	q = q.Order("tenant_members.joined_at ASC, tenant_members.id ASC").
 		Offset(offset).
 		Limit(limit)
 

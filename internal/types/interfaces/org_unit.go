@@ -38,6 +38,8 @@ type OrgUnitService interface {
 	// ResolveActiveOrgUnit picks the caller's active unit from an
 	// explicit header value or primary membership. Returns "" when the
 	// tenant has no hierarchy or the user has no membership (legacy mode).
+	// Scoped tenant Admins may only activate home + descendants (never
+	// peers/ancestors). Unscoped browsers may activate any unit.
 	ResolveActiveOrgUnit(ctx context.Context, tenantID uint64, userID string, requestedID string) (string, error)
 
 	// ResolveVisibility returns readable (self+ancestors) and writable
@@ -47,7 +49,9 @@ type OrgUnitService interface {
 	// CanReadKB reports whether the active OrgUnit may read a KB bound
 	// to kbOrgUnitID. Unbound KBs (empty kbOrgUnitID) stay tenant-wide
 	// readable. Ancestor KBs are readable only when shareWithDescendants
-	// is true (下级引用上级需显式勾选「共享给下级机构」).
+	// is true (下级引用上级需显式勾选「共享给下级机构」). Peer and
+	// descendant KBs are never readable. Empty activeOrgUnitID only
+	// allows bound KBs for unscoped browsers / tenant Owners.
 	CanReadKB(
 		ctx context.Context,
 		tenantID uint64,
@@ -66,9 +70,9 @@ type OrgUnitService interface {
 	HasHierarchy(ctx context.Context, tenantID uint64) (bool, error)
 
 	// ListInviteableOrgUnits returns units the actor may assign when
-	// inviting a member. Contributor/viewer: own unit + siblings (平级)
-	// + descendants (下级). Admin/Owner: descendants only — 同级不可
-	// 再任命管理员（或历史所有者）。
+	// inviting a member. Contributor/viewer: own unit + descendants
+	// (本级 + 下级). Admin/Owner: descendants only — 同级不可再任命
+	// 管理员（或历史所有者）。
 	ListInviteableOrgUnits(
 		ctx context.Context,
 		tenantID uint64,
@@ -98,6 +102,16 @@ type OrgUnitService interface {
 		targetRole types.TenantRole,
 		newRole types.TenantRole,
 	) error
+
+	// ResolveMemberListScope returns which tenant members the actor may
+	// see in the members list. restricted=false means no filter (Owner /
+	// system admin / no hierarchy). restricted=true limits the list to
+	// userIDs whose OrgUnit is the actor's home unit or a descendant
+	// (本级 + 下级); ancestors and peer units are excluded.
+	ResolveMemberListScope(
+		ctx context.Context,
+		tenantID uint64,
+	) (userIDs []string, restricted bool, err error)
 }
 
 // OrgUnitRepository persists OrgUnits and memberships.

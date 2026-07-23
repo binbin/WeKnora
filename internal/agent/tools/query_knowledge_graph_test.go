@@ -45,6 +45,12 @@ func (s *stubKnowledgeBaseService) ListKnowledgeBasesByTenantID(context.Context,
 	return nil, nil
 }
 
+func (s *stubKnowledgeBaseService) FilterReadableKnowledgeBaseIDs(
+	_ context.Context, kbIDs []string,
+) ([]string, error) {
+	return kbIDs, nil
+}
+
 func (s *stubKnowledgeBaseService) UpdateKnowledgeBase(
 	context.Context,
 	string,

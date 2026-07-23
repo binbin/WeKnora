@@ -99,13 +99,15 @@ const router = createRouter({
           path: "members",
           name: "tenantMembers",
           component: () => import("../views/members/TenantMembersPage.vue"),
-          meta: { requiresInit: true, requiresAuth: true }
+          // 与侧栏 menu.minRole 对齐：编辑/访客不可进成员管理页。
+          meta: { requiresInit: true, requiresAuth: true, requiresAdmin: true }
         },
         {
           path: "org-units",
           name: "orgUnits",
           component: () => import("../views/org-units/OrgUnitPage.vue"),
-          meta: { requiresInit: true, requiresAuth: true }
+          // 与侧栏 menu.minRole 对齐：编辑/访客不可进组织层级页。
+          meta: { requiresInit: true, requiresAuth: true, requiresAdmin: true }
         },
         {
           path: "knowledge-bases",
@@ -384,6 +386,23 @@ router.beforeEach(async (to, from, next) => {
   // the bounce. This is UI-only; the server enforces the real check.
   if (to.meta.requiresSystemAdmin === true) {
     if (!authStore.isSystemAdmin) {
+      next('/platform/knowledge-bases')
+      return
+    }
+  }
+
+  // Admin+ gate（成员管理 / 组织层级等）：编辑与访客深链也不应进入。
+  // 角色尚未 hydrate 时先放行，避免管理员首屏被误踢；角色已加载且不足
+  // 时再跳回知识库列表。超管 / 跨空间超管 bypass，与 menu.ts 一致。
+  if (to.meta.requiresAdmin === true) {
+    const bypass =
+      authStore.canAccessAllTenants === true ||
+      authStore.isSystemAdmin === true
+    if (
+      !bypass &&
+      authStore.currentTenantRole &&
+      !authStore.hasRole('admin')
+    ) {
       next('/platform/knowledge-bases')
       return
     }

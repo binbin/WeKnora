@@ -36,14 +36,16 @@ export const useMenuStore = defineStore('menuStore', () => {
       titleKey: 'menu.members',
       icon: 'members',
       path: 'members',
-      minRole: 'viewer',
+      // 成员管理：仅管理员/所有者可见；编辑(contributor)/访客(viewer)不露入口。
+      minRole: 'admin',
     },
     {
       title: '',
       titleKey: 'menu.orgUnits',
       icon: 'organization',
       path: 'org-units',
-      minRole: 'viewer',
+      // 组织层级：仅管理员/所有者可见；编辑/访客不露入口。
+      minRole: 'admin',
     },
     { title: '', titleKey: 'menu.settings', icon: 'setting', path: 'settings' },
     { title: '', titleKey: 'menu.logout', icon: 'logout', path: 'logout' }

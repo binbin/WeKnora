@@ -232,6 +232,8 @@ func (s *tenantMemberService) ListByTenant(ctx context.Context, tenantID uint64)
 
 // ListMembersPage returns a slice plus total matching query (handlers parse
 // page/page_size; defensive clamps here mirror list handler limits).
+// When the tenant has an OrgUnit hierarchy, scoped admins only see
+// members in their home unit and descendants (本级 + 下级).
 func (s *tenantMemberService) ListMembersPage(
 	ctx context.Context,
 	tenantID uint64,
@@ -248,11 +250,43 @@ func (s *tenantMemberService) ListMembersPage(
 	if pageSize > listMembersMaxPageSize {
 		pageSize = listMembersMaxPageSize
 	}
+
+	var (
+		visibleUserIDs []string
+		restricted     bool
+	)
+	if s.orgUnitService != nil {
+		ids, scopeRestricted, scopeErr := s.orgUnitService.ResolveMemberListScope(
+			ctx, tenantID,
+		)
+		if scopeErr != nil {
+			return nil, 0, scopeErr
+		}
+		visibleUserIDs = ids
+		restricted = scopeRestricted
+	}
+
+	offset := (page - 1) * pageSize
+	if restricted {
+		total, err := s.repo.CountFilteredByTenantUsers(
+			ctx, tenantID, query, visibleUserIDs,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		members, err := s.repo.ListPagedByTenantUsers(
+			ctx, tenantID, query, offset, pageSize, visibleUserIDs,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		return members, total, nil
+	}
+
 	total, err := s.repo.CountFilteredByTenant(ctx, tenantID, query)
 	if err != nil {
 		return nil, 0, err
 	}
-	offset := (page - 1) * pageSize
 	members, err := s.repo.ListPagedByTenant(ctx, tenantID, query, offset, pageSize)
 	if err != nil {
 		return nil, 0, err

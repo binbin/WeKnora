@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { listKnowledgeBases, getKnowledgeBaseById } from '@/api/knowledge-base'
+import { ensureStoredOrgUnitFromMembership } from '@/api/org-unit'
 import { listAgents, type CustomAgent } from '@/api/agent'
 import { listModels, type ModelConfig } from '@/api/model'
 import { listWebSearchProviders, type WebSearchProviderEntity } from '@/api/web-search-provider'
@@ -70,6 +71,18 @@ export const useChatResourcesStore = defineStore('chatResources', () => {
     params?: { creator?: ListCreatorFilter },
     force = false,
   ): Promise<any[]> {
+    // Bind X-Org-Unit-ID before listing so system admins don't see
+    // subordinate KBs under an accidental unscoped「所有」session.
+    // Also drops stale org IDs left by a previous account in this browser.
+    const beforeOrg = localStorage.getItem('weknora_org_unit_id') || ''
+    await ensureStoredOrgUnitFromMembership()
+    const afterOrg = localStorage.getItem('weknora_org_unit_id') || ''
+    // Org scope changed (e.g. cleared stale subordinate id) → bypass TTL.
+    if (beforeOrg !== afterOrg) {
+      force = true
+      loadedAt.value.knowledgeBases = 0
+    }
+
     const creator = params?.creator ?? 'all'
     // 带 creator 过滤的列表是列表页专用、不进缓存，直接透传请求。
     if (creator !== 'all') {

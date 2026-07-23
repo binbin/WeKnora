@@ -186,6 +186,23 @@ func (r *tenantInvitationRepository) CountByTenantList(
 	return n, err
 }
 
+// CountByTenantListInOrgUnits counts invitations restricted to org units.
+func (r *tenantInvitationRepository) CountByTenantListInOrgUnits(
+	ctx context.Context,
+	tenantID uint64,
+	includeTerminal bool,
+	orgUnitIDs []string,
+) (int64, error) {
+	if len(orgUnitIDs) == 0 {
+		return 0, nil
+	}
+	var n int64
+	err := r.tenantInvitationTenantScope(ctx, tenantID, includeTerminal).
+		Where("org_unit_id IN ?", orgUnitIDs).
+		Count(&n).Error
+	return n, err
+}
+
 // ListByTenantPage returns a page of invitations (id DESC).
 func (r *tenantInvitationRepository) ListByTenantPage(
 	ctx context.Context,
@@ -195,6 +212,29 @@ func (r *tenantInvitationRepository) ListByTenantPage(
 ) ([]*types.TenantInvitation, error) {
 	var rows []*types.TenantInvitation
 	err := r.tenantInvitationTenantScope(ctx, tenantID, includeTerminal).
+		Offset(offset).
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// ListByTenantPageInOrgUnits pages invitations restricted to org units.
+func (r *tenantInvitationRepository) ListByTenantPageInOrgUnits(
+	ctx context.Context,
+	tenantID uint64,
+	includeTerminal bool,
+	offset, limit int,
+	orgUnitIDs []string,
+) ([]*types.TenantInvitation, error) {
+	if len(orgUnitIDs) == 0 {
+		return []*types.TenantInvitation{}, nil
+	}
+	var rows []*types.TenantInvitation
+	err := r.tenantInvitationTenantScope(ctx, tenantID, includeTerminal).
+		Where("org_unit_id IN ?", orgUnitIDs).
 		Offset(offset).
 		Limit(limit).
 		Find(&rows).Error

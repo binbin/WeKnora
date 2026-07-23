@@ -421,6 +421,8 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('weknora_selected_tenant_id')
     localStorage.removeItem('weknora_selected_tenant_name')
     localStorage.removeItem('weknora_memberships')
+    localStorage.removeItem('weknora_org_unit_id')
+    localStorage.removeItem('weknora_org_unit_user_id')
     // 清理历史 Lite 遗留标记（功能已移除）
     localStorage.removeItem('weknora_lite_mode')
     try {

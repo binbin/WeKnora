@@ -241,7 +241,7 @@ func (h *OrgUnitHandler) GetVisibility(c *gin.Context) {
 }
 
 // ListInviteable returns OrgUnits the current actor may assign on an
-// invitation for the given tenant role (contributor/viewer: peer/self +
+// invitation for the given tenant role (contributor/viewer: own +
 // descendants; admin/owner: descendants only).
 func (h *OrgUnitHandler) ListInviteable(c *gin.Context) {
 	ctx := c.Request.Context()
