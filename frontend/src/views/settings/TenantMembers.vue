@@ -434,9 +434,9 @@
 
     </div>
 
-    <!-- Transfer member to another org unit (调岗). Options come from
-         the same listInviteableOrgUnits API as invite, but via a
-         dedicated transferOrgUnitTree so invite forms are untouched. -->
+    <!-- Transfer member to another org unit (调岗). Admin/Owner get the
+         full org tree; others stay on inviteable scope for the *actor*.
+         Uses dedicated transferOrgUnitTree so invite forms are untouched. -->
     <t-dialog
       v-model:visible="transferDialogVisible"
       :header="$t('tenantMember.transferOrgUnitTitle')"
@@ -798,24 +798,6 @@ async function loadOrgUnits(role?: TenantRole) {
   }
 }
 
-/** Load inviteable units for transfer only — no invite form mutation. */
-async function loadTransferOrgUnits(role: TenantRole) {
-  try {
-    await refreshHierarchyFlag()
-    if (!hasOrgHierarchy.value) {
-      transferOrgUnitTree.value = []
-      return
-    }
-    transferOrgUnitTree.value = await listInviteableOrgUnits(role)
-  } catch (error: unknown) {
-    transferOrgUnitTree.value = []
-    MessagePlugin.warning(
-      (error as { message?: string })?.message ||
-        t('tenantInvitation.errors.inviterOrgUnitRequired'),
-    )
-  }
-}
-
 // Role-aware gates. The server enforces every mutation; UI gates here
 // are presentational only, matching the security note in stores/auth.ts.
 const currentRole = computed<TenantRole | ''>(() => (authStore.currentTenantRole || '') as TenantRole | '')
@@ -830,6 +812,33 @@ const canManage = computed(
     authStore.canAccessAllTenants === true ||
     authStore.isSystemAdmin === true,
 )
+
+/** Load transfer targets only — never mutates invite form org trees. */
+async function loadTransferOrgUnits() {
+  try {
+    await refreshHierarchyFlag()
+    if (!hasOrgHierarchy.value) {
+      transferOrgUnitTree.value = []
+      return
+    }
+    // Drive options by the *actor*, not the target member's role.
+    // Admin/Owner (canManage) need the full tree so they can move a
+    // member (including another admin) to sibling org units.
+    if (canManage.value) {
+      transferOrgUnitTree.value = await listOrgUnits(false)
+      return
+    }
+    const actorRole = (currentRole.value || 'contributor') as TenantRole
+    transferOrgUnitTree.value = await listInviteableOrgUnits(actorRole)
+  } catch (error: unknown) {
+    transferOrgUnitTree.value = []
+    MessagePlugin.warning(
+      (error as { message?: string })?.message ||
+        t('tenantInvitation.errors.inviterOrgUnitRequired'),
+    )
+  }
+}
+
 // Admin+ (and cross-tenant superusers) can view the audit log. Mirrors
 // the server's g.Admin() guard on /tenants/:id/audit-log so we don't
 // render a tab that would just 403.
@@ -977,7 +986,7 @@ async function openTransferDialog(row: TenantMember) {
   transferTargetOrgUnitId.value = ''
   transferMemberLabel.value = memberPrimary(row)
   transferDialogVisible.value = true
-  await loadTransferOrgUnits(row.role)
+  await loadTransferOrgUnits()
   const firstOther = transferOrgUnitTree.value.find(
     (unit) => unit.id !== row.org_unit_id,
   )

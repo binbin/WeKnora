@@ -1017,7 +1017,7 @@ export default {
     },
     shareScope: {
       title: 'Share Scope',
-      desc: 'Space members have read-only access to this agent and will use it according to your current configuration; your changes to the agent will sync to shared spaces. To allow space members to edit knowledge base content, share the knowledge base to the space.',
+      desc: 'Space members have read-only access to this agent and will use it according to your current configuration; your changes to the agent will sync to shared spaces. To allow space members to edit knowledge base content, share the knowledge base to the shared space.',
       knowledgeBase: 'Knowledge bases',
       chatModel: 'Chat model',
       rerankModel: 'Rerank model',
