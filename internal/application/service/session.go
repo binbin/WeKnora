@@ -36,6 +36,8 @@ func loadSessionForRead(
 	ownerID, sessionID string,
 ) (*types.Session, error) {
 	isAdmin := types.TenantRoleFromContext(ctx).HasPermission(types.TenantRoleAdmin)
+	principal, hasPrincipal := types.PrincipalFromContext(ctx)
+	isIMRuntime := hasPrincipal && principal.Type == types.PrincipalIMUser
 
 	session, err := repo.Get(ctx, tenantID, ownerID, sessionID)
 	if err == nil {

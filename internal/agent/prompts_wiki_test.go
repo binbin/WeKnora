@@ -124,20 +124,60 @@ func TestWikiChunkCitationPrompt_PreservesPlaceholders(t *testing.T) {
 	}
 }
 
-func TestWikiPageModifyPrompt_HidesInternalChunkAliases(t *testing.T) {
+func TestWikiPageModifyUserPrompt_HidesInternalChunkAliases(t *testing.T) {
+	combined := WikiPageModifySystemPrompt + "\n" + WikiPageModifyUserPrompt
 	for _, guidance := range []string{
 		"永远不要将它们输出到页面正文或摘要中",
 		"来源关联由系统单独存储",
 		"干净的 Markdown，不包含内联文本块 ID",
 	} {
-		if !strings.Contains(WikiPageModifyPrompt, guidance) {
-			t.Errorf("WikiPageModifyPrompt missing chunk-alias guidance %q", guidance)
+		if !strings.Contains(combined, guidance) {
+			t.Errorf("WikiPageModifyUserPrompt missing chunk-alias guidance %q", guidance)
 		}
 	}
 
 	for _, obsolete := range []string{"Preserve Citations", "followed by an inline citation"} {
-		if strings.Contains(WikiPageModifyPrompt, obsolete) {
-			t.Errorf("WikiPageModifyPrompt still contains obsolete inline-citation rule %q", obsolete)
+		if strings.Contains(combined, obsolete) {
+			t.Errorf("WikiPageModifyUserPrompt still contains obsolete inline-citation rule %q", obsolete)
 		}
+	}
+}
+
+func renderWikiPageModify(t *testing.T, sourceContexts, title string) string {
+	t.Helper()
+	tmpl, err := template.New("modify").Parse(WikiPageModifyUserPrompt)
+	if err != nil {
+		t.Fatalf("parse template: %v", err)
+	}
+	var b strings.Builder
+	if err := tmpl.Execute(&b, map[string]string{
+		"HasAdditions":         "1",
+		"SharedSourceContexts": sourceContexts,
+		"PageSlug":             "concept/" + strings.ToLower(title),
+		"PageTitle":            title,
+		"PageType":             "concept",
+		"ExistingContent":      "(New page)",
+		"NewContent":           "page-specific chunks for " + title,
+		"Language":             "English",
+	}); err != nil {
+		t.Fatalf("execute template: %v", err)
+	}
+	return b.String()
+}
+
+func TestWikiPageModifyUserPrompt_SharedSourceContextPrecedesPageVariables(t *testing.T) {
+	const shared = "<document><title>Same Source</title><context>long shared summary</context></document>"
+	a := renderWikiPageModify(t, shared, "Alpha")
+	b := renderWikiPageModify(t, shared, "Beta")
+	marker := "\n<page_metadata>\n"
+	ia, ib := strings.Index(a, marker), strings.Index(b, marker)
+	if ia < 0 || ib < 0 {
+		t.Fatalf("rendered prompt missing page metadata marker")
+	}
+	if a[:ia] != b[:ib] {
+		t.Fatalf("shared source prefix differs across pages\nA: %s\nB: %s", a[:ia], b[:ib])
+	}
+	if !strings.Contains(a[:ia], shared) {
+		t.Fatalf("shared source context is not part of the cacheable prefix: %s", a[:ia])
 	}
 }

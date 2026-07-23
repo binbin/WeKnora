@@ -784,7 +784,8 @@ Passage %d: X.XX
 		// Each score line is ~15 tokens, add buffer for safety
 		maxTokens := len(batch)*20 + 100
 
-		response, err := t.chatModel.Chat(ctx, messages, &chat.ChatOptions{
+		modelCtx := types.WithLLMCallMetadata(ctx, "knowledge_search_rerank", "")
+		response, err := t.chatModel.Chat(modelCtx, messages, &chat.ChatOptions{
 			Temperature: 0.1, // Low temperature for consistent scoring
 			MaxTokens:   maxTokens,
 		})
@@ -1174,7 +1175,7 @@ func (t *KnowledgeSearchTool) formatOutput(
 				_, total, err := t.chunkService.GetRepository().ListPagedChunksByKnowledgeID(ctx,
 					effectiveTenantID, result.KnowledgeID,
 					&types.Pagination{Page: 1, PageSize: 1},
-					[]types.ChunkType{types.ChunkTypeText, types.ChunkTypeFAQ}, "", "", "", "", "",
+					[]types.ChunkType{types.ChunkTypeText, types.ChunkTypeFAQ}, nil, "", "", "", "",
 				)
 				if err != nil {
 					logger.Warnf(ctx, "[Tool][KnowledgeSearch] Failed to get total chunks for knowledge %s: %v", result.KnowledgeID, err)
