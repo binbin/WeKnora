@@ -337,6 +337,7 @@ export default {
     all: "모두",
     allOrgs: "전체 조직",
     workspace: "워크스페이스",
+    currentOrg: "현재 조직",
     mine: "소유",
     spaces: "나와 공유됨",
     favorites: "즐겨찾기",
@@ -3641,6 +3642,7 @@ export default {
       sharedByMe: "내가 공유한",
       sharedEditable: "공유받음 · 편집 가능",
       sharedReadonly: "공유받음 · 읽기 전용",
+      sharedFromOrg: "{name} · 공유",
     },
     detail: {
       title: "공유 지식베이스",

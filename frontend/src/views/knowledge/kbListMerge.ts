@@ -26,6 +26,8 @@ export interface OwnedKnowledgeBase {
   pinned_at?: string;
   created_at?: string;
   creator_id?: string;
+  org_unit_id?: string;
+  org_unit_name?: string;
   [key: string]: unknown;
 }
 
@@ -39,6 +41,7 @@ export interface SharedKnowledgeBaseLike {
   permission: string;
   shared_at: string;
   share_id: string;
+  organization_id?: string;
   org_name?: string;
   [key: string]: unknown;
 }
@@ -50,6 +53,7 @@ export type MergedSharedKnowledgeBase = Record<string, unknown> & {
   permission: string;
   shared_at: string;
   share_id: string;
+  organization_id?: string;
   org_name?: string;
 };
 export type MergedKnowledgeBase =
@@ -67,28 +71,81 @@ export function isSharedKbEditable(perm: string | undefined): boolean {
 
 // Higher rank = more privileged. Unknown permissions rank lowest so they
 // never shadow a real grant when collapsing duplicate shares.
-const PERMISSION_RANK: Record<string, number> = { admin: 3, editor: 2, viewer: 1 };
+const PERMISSION_RANK: Record<string, number> = {
+  admin: 3,
+  editor: 2,
+  viewer: 1,
+};
 
 function permissionRank(perm: string | undefined): number {
   return (perm && PERMISSION_RANK[perm]) || 0;
 }
 
-function isMyKb(kb: { creator_id?: string }, currentUserId: string | undefined): boolean {
-  return !!(kb.creator_id && currentUserId && kb.creator_id === currentUserId);
+function isMyKb(
+  kb: { creator_id?: string },
+  currentUserId: string | undefined,
+): boolean {
+  return !!(
+    kb.creator_id &&
+    currentUserId &&
+    kb.creator_id === currentUserId
+  );
 }
 
 function pinnedTime(kb: OwnedKnowledgeBase): number {
   return kb.pinned_at ? Date.parse(kb.pinned_at) : 0;
 }
 
+/** Stable identity for a shared-from-org (协作空间) section. */
+export function sharedOrgSectionId(
+  entry: { organization_id?: string; org_name?: string },
+): string {
+  const orgId = entry.organization_id?.trim();
+  if (orgId) return orgId;
+  const orgName = entry.org_name?.trim();
+  if (orgName) return `name:${orgName}`;
+  return 'unknown';
+}
+
+function sharedOrgSortKey(
+  entry: { organization_id?: string; org_name?: string },
+): string {
+  return (
+    entry.org_name?.trim() ||
+    entry.organization_id?.trim() ||
+    ''
+  ).toLowerCase();
+}
+
+/**
+ * Stable identity for a same-tenant "other members / ancestor-shared"
+ * section keyed by the KB's OrgUnit. Empty org_unit_id (legacy unbound)
+ * collapses to one bucket so the list can still render a single header.
+ */
+export function tenantOrgSectionId(
+  kb: { org_unit_id?: string },
+): string {
+  const orgUnitId = kb.org_unit_id?.trim();
+  return orgUnitId || 'unbound';
+}
+
+function tenantOrgSortKey(kb: OwnedKnowledgeBase): string {
+  return (kb.org_unit_id?.trim() || '').toLowerCase();
+}
+
+function createdTime(kb: OwnedKnowledgeBase): number {
+  return kb.created_at ? Date.parse(kb.created_at) : 0;
+}
+
 /**
  * Build the de-duplicated, ordered list rendered by the "All" scope.
  *
- * Ordering (unchanged from the previous inline logic):
+ * Ordering:
  *   1. pinned KBs (any creator the caller pinned), newest pin first
  *   2. the caller's own non-pinned KBs
- *   3. teammate non-pinned KBs (own tenant, someone else created)
- *   4. shared KBs, editable grants before view-only
+ *   3. teammate / ancestor-shared non-pinned KBs, grouped by org_unit_id
+ *   4. cross-tenant shared KBs grouped by organization name, editable
+ *      grants first within each organization
  *
  * On top of that, every entry is unique by knowledge-base id: owned rows
  * win over shared duplicates, and repeated shares of one KB collapse to
@@ -111,11 +168,25 @@ export function mergeAllScopeKnowledgeBases(
     else if (isMyKb(kb, currentUserId)) ownMine.push(kb);
     else teammateMine.push(kb);
   }
-  pinned.sort((a, b) => pinnedTime(b) - pinnedTime(a));
+  pinned.sort((left, right) => pinnedTime(right) - pinnedTime(left));
+
+  // Keep KBs from the same OrgUnit contiguous so the list can insert one
+  // section header per organization (ancestor shares vs local teammates).
+  teammateMine.sort((left, right) => {
+    const orgCmp = tenantOrgSortKey(left).localeCompare(
+      tenantOrgSortKey(right),
+      undefined,
+      { sensitivity: 'base' },
+    );
+    if (orgCmp !== 0) return orgCmp;
+    return createdTime(right) - createdTime(left);
+  });
 
   for (const kb of pinned) result.push({ ...kb, isMine: true as const });
   for (const kb of ownMine) result.push({ ...kb, isMine: true as const });
-  for (const kb of teammateMine) result.push({ ...kb, isMine: true as const });
+  for (const kb of teammateMine) {
+    result.push({ ...kb, isMine: true as const });
+  }
 
   // Collapse the shared rows by KB id, keeping the most-privileged grant,
   // and drop any KB the caller already owns. This is what guarantees a
@@ -126,26 +197,38 @@ export function mergeAllScopeKnowledgeBases(
     if (!kb) continue;
     if (ownedIds.has(kb.id)) continue;
     const existing = dedupedShared.get(kb.id);
-    if (!existing || permissionRank(entry.permission) > permissionRank(existing.permission)) {
+    if (
+      !existing ||
+      permissionRank(entry.permission) > permissionRank(existing.permission)
+    ) {
       dedupedShared.set(kb.id, entry);
     }
   }
 
-  const sortedShared = [...dedupedShared.values()].sort((a, b) => {
-    const aE = isSharedKbEditable(a.permission) ? 0 : 1;
-    const bE = isSharedKbEditable(b.permission) ? 0 : 1;
-    return aE - bE;
+  // Group by organization so the list can render one section header per
+  // shared space; within an org keep editable grants ahead of view-only.
+  const sortedShared = [...dedupedShared.values()].sort((left, right) => {
+    const orgCmp = sharedOrgSortKey(left).localeCompare(
+      sharedOrgSortKey(right),
+      undefined,
+      { sensitivity: 'base' },
+    );
+    if (orgCmp !== 0) return orgCmp;
+    const leftEditable = isSharedKbEditable(left.permission) ? 0 : 1;
+    const rightEditable = isSharedKbEditable(right.permission) ? 0 : 1;
+    return leftEditable - rightEditable;
   });
 
-  for (const shared of sortedShared) {
-    const kb = shared.knowledge_base!;
+  for (const sharedEntry of sortedShared) {
+    const kb = sharedEntry.knowledge_base!;
     result.push({
       ...kb,
       isMine: false as const,
-      permission: shared.permission,
-      shared_at: shared.shared_at,
-      share_id: shared.share_id,
-      org_name: shared.org_name,
+      permission: sharedEntry.permission,
+      shared_at: sharedEntry.shared_at,
+      share_id: sharedEntry.share_id,
+      organization_id: sharedEntry.organization_id,
+      org_name: sharedEntry.org_name,
       knowledge_count: kb.knowledge_count,
       chunk_count: kb.chunk_count,
     } as MergedSharedKnowledgeBase);

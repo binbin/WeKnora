@@ -337,6 +337,7 @@ export default {
     all: "全部",
     allOrgs: "所有",
     workspace: "本空间",
+    currentOrg: "本组织",
     mine: "我的",
     spaces: "共享给我",
     favorites: "收藏",
@@ -3662,6 +3663,7 @@ export default {
       sharedByMe: "我共享的",
       sharedEditable: "共享给我 · 可编辑",
       sharedReadonly: "共享给我 · 仅查看",
+      sharedFromOrg: "{name} · 共享",
     },
     detail: {
       title: "共享知识库",

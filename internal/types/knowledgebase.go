@@ -151,6 +151,10 @@ type KnowledgeBase struct {
 	// 仅在列表场景由 handler 批量回填，不落库；为空表示创建者无法解析（用户已删除、
 	// CreatorID 为空的老数据等）。前端用它在卡片来源徽章上做 mine vs workspace 的二分。
 	CreatorName string `yaml:"-"                       json:"creator_name,omitempty"  gorm:"-"`
+	// OrgUnitName 是 OrgUnitID 对应组织节点的展示名，仅列表回填不落库。
+	// 下级看到祖先「共享给下级」的库时，listOrgUnits 往往只返回本级子树，
+	// 无法解析祖先名；由 handler 按 ID 直查补上，避免分段标题回退成当前组织名。
+	OrgUnitName string `yaml:"-"                       json:"org_unit_name,omitempty" gorm:"-"`
 }
 
 // KnowledgeBaseConfig represents the knowledge base configuration

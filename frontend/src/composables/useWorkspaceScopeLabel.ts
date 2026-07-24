@@ -83,9 +83,10 @@ async function loadOrgUnitName(
 }
 
 /**
- * 知识库 / 智能体列表中「本空间」位的展示名：
+ * 知识库 / 智能体列表中「本组织」位的展示名：
  * - 显式未选组织（清空）且可看全林 →「所有」
- * - 其余 → 当前活跃 OrgUnit 名（与 X-Org-Unit-ID 一致）
+ * - 已选 OrgUnit → 该组织名（绝不回退成租户/空间名，避免侧栏把组织显示成空间）
+ * - 无组织树的旧租户 → 租户名 /「本空间」
  */
 export function useWorkspaceScopeLabel() {
   const { t } = useI18n()
@@ -125,8 +126,12 @@ export function useWorkspaceScopeLabel() {
     if (canBrowseAllOrgs.value && !storedId) {
       return t('listSpaceSidebar.allOrgs')
     }
+    // 有活跃组织时只用组织名；名称尚未加载完时用「本组织」占位，
+    // 不要用 currentTenantName（那是空间名，会把侧栏第四项显示成空间）。
+    if (storedId) {
+      return sharedOrgUnitName.value || t('listSpaceSidebar.currentOrg')
+    }
     return (
-      sharedOrgUnitName.value ||
       authStore.currentTenantName ||
       t('listSpaceSidebar.workspace')
     )

@@ -3095,7 +3095,8 @@ export default {
       tenantOthers: '{name} · Другие участники',
       sharedByMe: 'Расшарено мной',
       sharedEditable: 'Доступно мне · Можно редактировать',
-      sharedReadonly: 'Доступно мне · Только просмотр'
+      sharedReadonly: 'Доступно мне · Только просмотр',
+      sharedFromOrg: '{name} · Общий доступ',
     },
     messages: {
       deleted: 'База знаний удалена',
@@ -5713,6 +5714,7 @@ export default {
     all: 'Все',
     allOrgs: 'Все организации',
     workspace: 'Рабочая область',
+    currentOrg: 'Эта организация',
     mine: 'Мои',
     spaces: 'Доступно мне',
     favorites: 'Избранное',

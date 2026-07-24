@@ -123,7 +123,7 @@ test('guarantees unique keys across a mixed owned + shared set', () => {
   assert.deepEqual(new Set(keys(result)), new Set(['a', 'b', 'c', 'd']))
 })
 
-test('orders pinned (newest first) → own → teammate → shared(editable first)', () => {
+test('orders pinned (newest first) → own → teammate → shared(by org, editable first)', () => {
   const result = mergeAllScopeKnowledgeBases(
     [
       owned('mine'),
@@ -141,6 +141,66 @@ test('orders pinned (newest first) → own → teammate → shared(editable firs
     'teammate',
     'editable',
     'view-only',
+  ])
+})
+
+test('groups shared KBs by organization name, editable first within each org', () => {
+  const result = mergeAllScopeKnowledgeBases(
+    [],
+    [
+      shared('b-view', 'viewer', {
+        org_name: 'Org B',
+        organization_id: 'org-b',
+        share_id: 'sbv',
+      }),
+      shared('a-view', 'viewer', {
+        org_name: 'Org A',
+        organization_id: 'org-a',
+        share_id: 'sav',
+      }),
+      shared('b-edit', 'editor', {
+        org_name: 'Org B',
+        organization_id: 'org-b',
+        share_id: 'sbe',
+      }),
+      shared('a-edit', 'editor', {
+        org_name: 'Org A',
+        organization_id: 'org-a',
+        share_id: 'sae',
+      }),
+    ],
+    ME,
+  )
+  assert.deepEqual(keys(result), ['a-edit', 'a-view', 'b-edit', 'b-view'])
+  assert.equal((result[0] as { organization_id?: string }).organization_id, 'org-a')
+  assert.equal((result[2] as { organization_id?: string }).organization_id, 'org-b')
+})
+
+test('groups teammate KBs by org_unit_id so section headers stay contiguous', () => {
+  const result = mergeAllScopeKnowledgeBases(
+    [
+      owned('local-other', {
+        creator_id: 'other',
+        org_unit_id: 'unit-local',
+      }),
+      owned('ancestor-shared', {
+        creator_id: 'boss',
+        org_unit_id: 'unit-parent',
+      }),
+      owned('local-other-2', {
+        creator_id: 'peer',
+        org_unit_id: 'unit-local',
+      }),
+      owned('mine-local', { org_unit_id: 'unit-local' }),
+    ],
+    [],
+    ME,
+  )
+  assert.deepEqual(keys(result), [
+    'mine-local',
+    'local-other',
+    'local-other-2',
+    'ancestor-shared',
   ])
 })
 

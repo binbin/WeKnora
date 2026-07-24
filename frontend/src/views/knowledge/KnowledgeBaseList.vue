@@ -1,7 +1,7 @@
 <template>
   <div class="kb-list-container">
     <ListSpaceSidebar v-model="spaceSelection" :count-all="allKnowledgeBases"
-      :count-mine="kbs.length" :count-by-org="effectiveSharedCountByOrg" :count-favorites="kbFavoritesCount"
+      :count-mine="localOrgKbs.length" :count-by-org="effectiveSharedCountByOrg" :count-favorites="kbFavoritesCount"
       :count-recents="kbRecentsCount" />
     <div class="kb-list-content">
       <div class="header" style="--wails-draggable: drag">
@@ -108,8 +108,7 @@
           </div>
           <!-- 全部：我的知识库 + 共享给我的知识库。
                「已置顶」分组由顶部 header 接管。其余分段（我创建 / 本空间 ·
-               仅查看 / 共享给我）各自打自己的标题；原本的「其他」过渡标题
-               在 per-user 置顶模型下已无意义，删除以免和具体子段标题叠加。 -->
+               其他成员 / 按来源组织的共享）各自打自己的标题。 -->
           <template v-for="(kb, index) in filteredKnowledgeBases" :key="kb.id">
             <!-- 我创建的：第一张「我创建」非置顶卡片前打标题，统一展示
                  不管上方是否存在「已置顶」段。与「本空间 · 仅查看」同样
@@ -130,58 +129,40 @@
               <t-icon class="kb-section-toggle" :name="isKbSectionCollapsed('mine') ? 'chevron-right' : 'chevron-down'"
                 size="14px" />
             </div>
-            <!-- 本空间 · 仅查看：本空间里同事创建、对当前 contributor 不可编辑。
-                 当前卡片必须是非置顶（否则归在「已置顶」），且前一张要么
-                 不存在、要么是「共享给我」、要么是我创建、要么是置顶卡片
-                 （置顶→非置顶的过渡同样要打这个标题）。 -->
+            <!-- 同空间他人 / 上级共享：按知识库所属 OrgUnit 分段。
+                 祖先「共享给下级」的库与本级同事库不再混在同一个
+                 「当前组织 · 其他成员」标题下。 -->
             <div v-if="showShareGroupHeaders
               && kb.isMine
               && !isMyKb(kb as KB)
               && !kb.is_pinned
-              && (index === 0
-                || !filteredKnowledgeBases[index - 1].isMine
-                || isMyKb(filteredKnowledgeBases[index - 1] as KB)
-                || (filteredKnowledgeBases[index - 1] as any).is_pinned)" class="kb-section-header" role="button"
-              tabindex="0" @click="toggleKbSection('tenantOthers')"
-              @keydown.enter.prevent="toggleKbSection('tenantOthers')"
-              @keydown.space.prevent="toggleKbSection('tenantOthers')">
-              <t-icon :name="tenantSectionIconName" size="14px" />
-              <span>{{ tenantSectionLabel }}</span>
-              <span class="kb-section-count">{{ filteredKbSectionCounts.tenantOthers }}</span>
+              && isFirstTenantOrgCard(filteredKnowledgeBases, index)"
+              class="kb-section-header" role="button" tabindex="0"
+              @click="toggleKbSection(kbSectionOf(kb))"
+              @keydown.enter.prevent="toggleKbSection(kbSectionOf(kb))"
+              @keydown.space.prevent="toggleKbSection(kbSectionOf(kb))">
+              <t-icon :name="tenantOrgSectionIconName(kb)" size="14px" />
+              <span>{{ tenantOrgSectionLabel(kb) }}</span>
+              <span class="kb-section-count">{{ filteredKbSectionCounts[kbSectionOf(kb)] || 0 }}</span>
               <t-icon class="kb-section-toggle"
-                :name="isKbSectionCollapsed('tenantOthers') ? 'chevron-right' : 'chevron-down'" size="14px" />
+                :name="isKbSectionCollapsed(kbSectionOf(kb)) ? 'chevron-right' : 'chevron-down'"
+                size="14px" />
             </div>
-            <!-- 共享给我 · 可编辑：从「我的（含同事）」首次过渡到共享 + 可编辑 -->
+            <!-- 共享给我：按来源组织分段。同一组织的多张共享卡共用一个标题，
+                 组织切换（或从「我的」首次进入共享）时再打新标题。 -->
             <div v-if="showShareGroupHeaders
               && !kb.isMine
-              && isSharedKbEditable((kb as any).permission)
-              && (index === 0 || filteredKnowledgeBases[index - 1].isMine)" class="kb-section-header" role="button"
-              tabindex="0" @click="toggleKbSection('sharedEditable')"
-              @keydown.enter.prevent="toggleKbSection('sharedEditable')"
-              @keydown.space.prevent="toggleKbSection('sharedEditable')">
+              && isFirstSharedCardOfOrg(filteredKnowledgeBases, index)"
+              class="kb-section-header" role="button" tabindex="0"
+              @click="toggleKbSection(kbSectionOf(kb))"
+              @keydown.enter.prevent="toggleKbSection(kbSectionOf(kb))"
+              @keydown.space.prevent="toggleKbSection(kbSectionOf(kb))">
               <t-icon name="usergroup-add" size="14px" />
-              <t-icon name="edit-1" size="12px" class="kb-section-subicon" />
-              <span>{{ $t('knowledgeList.sections.sharedEditable') }}</span>
-              <span class="kb-section-count">{{ filteredKbSectionCounts.sharedEditable }}</span>
+              <span>{{ sharedOrgSectionLabel(kb) }}</span>
+              <span class="kb-section-count">{{ filteredKbSectionCounts[kbSectionOf(kb)] || 0 }}</span>
               <t-icon class="kb-section-toggle"
-                :name="isKbSectionCollapsed('sharedEditable') ? 'chevron-right' : 'chevron-down'" size="14px" />
-            </div>
-            <!-- 共享给我 · 仅查看：从「可编辑共享 / 我的」过渡到 viewer 共享 -->
-            <div v-if="showShareGroupHeaders
-              && !kb.isMine
-              && !isSharedKbEditable((kb as any).permission)
-              && (index === 0
-                || filteredKnowledgeBases[index - 1].isMine
-                || isSharedKbEditable((filteredKnowledgeBases[index - 1] as any).permission))"
-              class="kb-section-header" role="button" tabindex="0" @click="toggleKbSection('sharedReadonly')"
-              @keydown.enter.prevent="toggleKbSection('sharedReadonly')"
-              @keydown.space.prevent="toggleKbSection('sharedReadonly')">
-              <t-icon name="usergroup-add" size="14px" />
-              <t-icon name="browse" size="12px" class="kb-section-subicon" />
-              <span>{{ $t('knowledgeList.sections.sharedReadonly') }}</span>
-              <span class="kb-section-count">{{ filteredKbSectionCounts.sharedReadonly }}</span>
-              <t-icon class="kb-section-toggle"
-                :name="isKbSectionCollapsed('sharedReadonly') ? 'chevron-right' : 'chevron-down'" size="14px" />
+                :name="isKbSectionCollapsed(kbSectionOf(kb)) ? 'chevron-right' : 'chevron-down'"
+                size="14px" />
             </div>
             <!-- 我的知识库卡片 -->
             <div v-if="kb.isMine" v-show="!isKbSectionCollapsed(kbSectionOf(kb))" class="kb-card" :class="{
@@ -359,7 +340,7 @@
                     </t-tooltip>
                   </div>
                 </div>
-                <div class="bottom-right">
+                <div v-if="kb.org_name" class="bottom-right">
                   <t-tooltip :content="kb.org_name" placement="top">
                     <div class="org-source">
                       <img src="@/assets/img/organization-green.svg" class="org-source-icon" alt=""
@@ -404,22 +385,21 @@
               <t-icon class="kb-section-toggle" :name="isKbSectionCollapsed('mine') ? 'chevron-right' : 'chevron-down'"
                 size="14px" />
             </div>
-            <!-- 本空间 · 仅查看：当前非置顶的同事 KB，且前一张要么不存在、
-                 要么是我创建、要么是置顶卡片（置顶→非置顶过渡）。 -->
+            <!-- 同空间他人 / 上级共享：按 OrgUnit 分段（与「全部」一致）。 -->
             <div v-if="showShareGroupHeaders
               && !isMyKb(kb)
               && !kb.is_pinned
-              && (index === 0
-                || isMyKb(sortedMineKbs[index - 1])
-                || sortedMineKbs[index - 1].is_pinned)" class="kb-section-header" role="button" tabindex="0"
-              @click="toggleKbSection('tenantOthers')"
-              @keydown.enter.prevent="toggleKbSection('tenantOthers')"
-              @keydown.space.prevent="toggleKbSection('tenantOthers')">
-              <t-icon :name="tenantSectionIconName" size="14px" />
-              <span>{{ tenantSectionLabel }}</span>
-              <span class="kb-section-count">{{ mineKbSectionCounts.tenantOthers }}</span>
+              && isFirstTenantOrgCard(sortedMineKbs, index)"
+              class="kb-section-header" role="button" tabindex="0"
+              @click="toggleKbSection(kbSectionOf(kb))"
+              @keydown.enter.prevent="toggleKbSection(kbSectionOf(kb))"
+              @keydown.space.prevent="toggleKbSection(kbSectionOf(kb))">
+              <t-icon :name="tenantOrgSectionIconName(kb)" size="14px" />
+              <span>{{ tenantOrgSectionLabel(kb) }}</span>
+              <span class="kb-section-count">{{ mineKbSectionCounts[kbSectionOf(kb)] || 0 }}</span>
               <t-icon class="kb-section-toggle"
-                :name="isKbSectionCollapsed('tenantOthers') ? 'chevron-right' : 'chevron-down'" size="14px" />
+                :name="isKbSectionCollapsed(kbSectionOf(kb)) ? 'chevron-right' : 'chevron-down'"
+                size="14px" />
             </div>
             <div v-show="!isKbSectionCollapsed(kbSectionOf(kb))" class="kb-card" :class="{
               'uninitialized': !isInitialized(kb),
@@ -659,7 +639,7 @@
         </div>
 
         <!-- 我的知识库空状态 -->
-        <div v-if="spaceSelection === 'mine' && kbs.length === 0 && !loading" class="empty-state">
+        <div v-if="spaceSelection === 'mine' && localOrgKbs.length === 0 && !loading" class="empty-state">
           <img class="empty-img" src="@/assets/img/upload.svg" alt="">
           <span class="empty-txt">{{ $t('knowledgeList.empty.title') }}</span>
           <span class="empty-desc">{{ $t('knowledgeList.empty.description') }}</span>
@@ -790,7 +770,7 @@ import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationStore } from '@/stores/organization'
 import { listOrganizationSharedKnowledgeBases, type SharedKnowledgeBase, type OrganizationSharedKnowledgeBaseItem, type SourceFromAgentInfo } from '@/api/organization'
-import { mergeAllScopeKnowledgeBases, type OwnedKnowledgeBase, type SharedKnowledgeBaseLike } from './kbListMerge'
+import { mergeAllScopeKnowledgeBases, sharedOrgSectionId, tenantOrgSectionId, type OwnedKnowledgeBase, type SharedKnowledgeBaseLike } from './kbListMerge'
 import KnowledgeBaseEditorModal from './KnowledgeBaseEditorModal.vue'
 import KbWikiBadge from './components/KbWikiBadge.vue'
 import ShareKnowledgeBaseDialog from '@/components/ShareKnowledgeBaseDialog.vue'
@@ -807,6 +787,11 @@ import {
   ORG_UNIT_CHANGED_EVENT,
   useWorkspaceScopeLabel,
 } from '@/composables/useWorkspaceScopeLabel'
+import {
+  getStoredOrgUnitId,
+  listOrgUnits,
+  type OrgUnit,
+} from '@/api/org-unit'
 
 const router = useRouter()
 const route = useRoute()
@@ -871,6 +856,10 @@ interface KB {
   creator_id?: string;
   // creator_name 由后端 list 接口回填，仅用于卡片右下角来源徽章的 tooltip。
   creator_name?: string;
+  // OrgUnit 绑定：用于「其他成员 / 上级共享」按组织分段。
+  org_unit_id?: string;
+  org_unit_name?: string;
+  share_with_descendants?: boolean;
 }
 
 const kbs = ref<KB[]>([])
@@ -920,35 +909,51 @@ const sharedKbsByOrg = computed(() => {
 const spaceKbsList = ref<OrganizationSharedKnowledgeBaseItem[]>([])
 const spaceKbsLoading = ref(false)
 
-// 「工作空间」视图下的稳定排序：本空间内「我创建」在前、「同事创建」在后；
-// 子段内保留服务端的置顶优先顺序。给 contributor 视图把「本空间 · 仅查看」
-// 分组标题正好插在过渡处；其他角色看不到标题，纯排序变化也无害。
-// Ordering for the 「本空间」 tab:
+// 「本组织」视图：只展示当前 OrgUnit 绑定的知识库（不含上级共享下来的）。
+// 与侧栏第四项文案一致——那是组织名，不是空间名。
+function isLocalOrgUnitKb(kb: { org_unit_id?: string }): boolean {
+  const activeUnit = getStoredOrgUnitId().trim()
+  // 未选组织（超管「所有」）时不过滤，保持整树可见。
+  if (!activeUnit) return true
+  return (kb.org_unit_id?.trim() || '') === activeUnit
+}
+
+const localOrgKbs = computed(() => kbs.value.filter(isLocalOrgUnitKb))
+
+// 「本组织」视图下的稳定排序：本组织内「我创建」在前、「同事创建」在后；
+// 子段内保留服务端的置顶优先顺序。
+// Ordering for the 「本组织」 tab:
 //   1. pinned KBs (mine or teammate), newest pin first
 //   2. my non-pinned KBs
-//   3. teammate non-pinned KBs (rendered under the「本空间 · 仅查看」header)
+//   3. teammate non-pinned KBs
 //
 // Pin is per-user as of migration 000050, so a teammate-created KB that
 // the caller has personally pinned must float into the pinned section
-// even though it would otherwise live in the teammate sub-group. The
-// previous version only bucketed by isMyKb and silently demoted these
-// pinned-but-teammate KBs.
+// even though it would otherwise live in the teammate sub-group.
 const sortedMineKbs = computed<KB[]>(() => {
-  return [...kbs.value].sort((a, b) => {
-    const ap = a.is_pinned ? 0 : 1
-    const bp = b.is_pinned ? 0 : 1
-    if (ap !== bp) return ap - bp
-    if (a.is_pinned && b.is_pinned) {
-      const at = a.pinned_at ? Date.parse(a.pinned_at as string) : 0
-      const bt = b.pinned_at ? Date.parse(b.pinned_at as string) : 0
-      if (at !== bt) return bt - at
+  return [...localOrgKbs.value].sort((left, right) => {
+    const leftPinned = left.is_pinned ? 0 : 1
+    const rightPinned = right.is_pinned ? 0 : 1
+    if (leftPinned !== rightPinned) return leftPinned - rightPinned
+    if (left.is_pinned && right.is_pinned) {
+      const leftPinTs = left.pinned_at ? Date.parse(left.pinned_at as string) : 0
+      const rightPinTs = right.pinned_at ? Date.parse(right.pinned_at as string) : 0
+      if (leftPinTs !== rightPinTs) return rightPinTs - leftPinTs
     }
-    const am = isMyKb(a) ? 0 : 1
-    const bm = isMyKb(b) ? 0 : 1
-    if (am !== bm) return am - bm
-    const ac = a.created_at ? Date.parse(a.created_at as string) : 0
-    const bc = b.created_at ? Date.parse(b.created_at as string) : 0
-    return bc - ac
+    const leftMine = isMyKb(left) ? 0 : 1
+    const rightMine = isMyKb(right) ? 0 : 1
+    if (leftMine !== rightMine) return leftMine - rightMine
+    if (!isMyKb(left) && !isMyKb(right)) {
+      const orgCmp = tenantOrgSectionId(left).localeCompare(
+        tenantOrgSectionId(right),
+        undefined,
+        { sensitivity: 'base' },
+      )
+      if (orgCmp !== 0) return orgCmp
+    }
+    const leftCreated = left.created_at ? Date.parse(left.created_at as string) : 0
+    const rightCreated = right.created_at ? Date.parse(right.created_at as string) : 0
+    return rightCreated - leftCreated
   })
 })
 
@@ -1027,6 +1032,7 @@ const favoritesList = computed(() => {
         permission: s.permission,
         shared_at: s.shared_at,
         share_id: s.share_id,
+        organization_id: s.organization_id,
         org_name: s.org_name,
         _pinTs: e.ts,
       } as any
@@ -1050,6 +1056,7 @@ const recentsList = computed(() => {
         permission: s.permission,
         shared_at: s.shared_at,
         share_id: s.share_id,
+        organization_id: s.organization_id,
         org_name: s.org_name,
         _pinTs: e.ts,
       } as any
@@ -1078,28 +1085,84 @@ function isSharedKbEditable(perm: string | undefined): boolean {
 const showShareGroupHeaders = computed(() => true)
 
 // 同空间、非当前用户创建的 KB 分组标题。
-// contributor / viewer 在本空间里对这些 KB 没有写权限，所以打"仅查看"；
-// admin / owner 反而对整个空间都有编辑权限，"仅查看"会反复误导他们以为
-// 自己改不了——这一段实际上是"工作空间里其他成员创建的 KB"，按所有权
-// 而非权限来标注更准确。前缀用所在组织名（超管为「所有」）。
+// 按知识库自身的 org_unit_id 取名——祖先「共享给下级」的库用其来源
+// 组织名，避免全部塞进「当前组织 · 其他成员」。
+// contributor / viewer 对本级同事库无写权限时打「仅查看」；admin/owner
+// 以及来自其他 OrgUnit 的共享库用「其他成员 / 共享」。
 const { workspaceScopeLabel } = useWorkspaceScopeLabel()
-const tenantSectionLabel = computed(() =>
-  authStore.hasRole('admin')
-    ? t('knowledgeList.sections.tenantOthers', { name: workspaceScopeLabel.value })
-    : t('knowledgeList.sections.tenantReadonly', { name: workspaceScopeLabel.value })
-)
 
-// 图标和上面的文案对齐：admin/owner 看到的是"本空间 · 其他成员"，按所有权
-// 划分，配 usergroup（多人）更贴；contributor/viewer 看到的是"仅查看"，
-// 维持 browse（眼睛）传达"只能看不能改"的语义。
-const tenantSectionIconName = computed(() =>
-  authStore.hasRole('admin') ? 'usergroup' : 'browse'
-)
+const orgUnitNameById = ref<Record<string, string>>({})
+
+function flattenOrgUnitNames(
+  units: OrgUnit[],
+  into: Record<string, string> = {},
+): Record<string, string> {
+  for (const unit of units) {
+    if (unit.id) into[unit.id] = unit.name?.trim() || unit.id
+    if (unit.children?.length) flattenOrgUnitNames(unit.children, into)
+  }
+  return into
+}
+
+async function refreshOrgUnitNameMap(): Promise<void> {
+  try {
+    const tree = await listOrgUnits(true)
+    orgUnitNameById.value = flattenOrgUnitNames(tree)
+  } catch {
+    // 名称解析失败时退回 workspaceScopeLabel，不影响列表本身。
+  }
+}
+
+function resolveOrgUnitName(kb: {
+  org_unit_id?: string
+  org_unit_name?: string
+}): string {
+  if (kb.org_unit_name?.trim()) return kb.org_unit_name.trim()
+  const id = kb.org_unit_id?.trim()
+  if (id && orgUnitNameById.value[id]) return orgUnitNameById.value[id]
+  return workspaceScopeLabel.value
+}
+
+function isForeignOrgUnitKb(kb: { org_unit_id?: string }): boolean {
+  const kbUnit = kb.org_unit_id?.trim() || ''
+  const activeUnit = getStoredOrgUnitId().trim()
+  // 无活跃组织（「所有」）时无法区分本级/外来，一律按本级文案。
+  if (!activeUnit || !kbUnit) return false
+  return kbUnit !== activeUnit
+}
+
+function tenantOrgSectionLabel(kb: {
+  org_unit_id?: string
+  org_unit_name?: string
+}): string {
+  const name = resolveOrgUnitName(kb)
+  if (isForeignOrgUnitKb(kb)) {
+    return t('knowledgeList.sections.sharedFromOrg', { name })
+  }
+  return authStore.hasRole('admin')
+    ? t('knowledgeList.sections.tenantOthers', { name })
+    : t('knowledgeList.sections.tenantReadonly', { name })
+}
+
+function tenantOrgSectionIconName(kb: { org_unit_id?: string }): string {
+  if (isForeignOrgUnitKb(kb)) return 'usergroup-add'
+  return authStore.hasRole('admin') ? 'usergroup' : 'browse'
+}
 
 // 分组折叠：ephemeral，只在当前会话里生效，不落 localStorage/服务器。
 // 之所以走"折叠集合"而不是"展开集合"，是因为默认全展开——空 Set
 // 即表示初始的全展开状态，避免每次新加分段还得回头维护默认值。
-type KbSectionKey = 'pinned' | 'mine' | 'tenantOthers' | 'sharedByMe' | 'sharedEditable' | 'sharedReadonly'
+//
+// 固定分段用字面量 key；同空间按 OrgUnit、跨空间共享按来源组织动态生成。
+type KbSectionKey =
+  | 'pinned'
+  | 'mine'
+  | 'tenantOthers'
+  | 'sharedByMe'
+  | 'sharedEditable'
+  | 'sharedReadonly'
+  | `tenantOrg:${string}`
+  | `sharedOrg:${string}`
 const collapsedKbSections = ref<Set<KbSectionKey>>(new Set())
 const isKbSectionCollapsed = (key: KbSectionKey) => collapsedKbSections.value.has(key)
 const toggleKbSection = (key: KbSectionKey) => {
@@ -1111,6 +1174,66 @@ const toggleKbSection = (key: KbSectionKey) => {
   else next.add(key)
   collapsedKbSections.value = next
 }
+
+function sharedOrgSectionKey(kb: {
+  organization_id?: string
+  org_name?: string
+}): KbSectionKey {
+  return `sharedOrg:${sharedOrgSectionId(kb)}`
+}
+
+function tenantOrgSectionKey(kb: { org_unit_id?: string }): KbSectionKey {
+  return `tenantOrg:${tenantOrgSectionId(kb)}`
+}
+
+function sharedOrgSectionLabel(kb: { org_name?: string }): string {
+  const name = kb.org_name?.trim()
+  if (name) return t('knowledgeList.sections.sharedFromOrg', { name })
+  return t('knowledgeList.sharedKnowledgeBases')
+}
+
+/** 共享卡是否是其来源协作空间在当前列表中的首张。 */
+function isFirstSharedCardOfOrg(
+  list: Array<{ isMine?: boolean; organization_id?: string; org_name?: string }>,
+  index: number,
+): boolean {
+  const kb = list[index]
+  if (!kb || kb.isMine) return false
+  if (index === 0) return true
+  const prev = list[index - 1]
+  if (!prev || prev.isMine) return true
+  return sharedOrgSectionId(prev) !== sharedOrgSectionId(kb)
+}
+
+/**
+ * 同空间「他人 / 上级共享」卡是否是其 OrgUnit 分段的首张。
+ * 兼容「全部」视图（带 isMine）与「本空间」视图（纯 KB）。
+ */
+function isFirstTenantOrgCard(
+  list: Array<{
+    isMine?: boolean
+    is_pinned?: boolean
+    creator_id?: string
+    org_unit_id?: string
+    permission?: string
+  }>,
+  index: number,
+): boolean {
+  const kb = list[index]
+  if (!kb || kb.is_pinned) return false
+  const isOwnTenant = kb.isMine === true
+    || (kb.isMine !== false && kb.permission == null)
+  if (!isOwnTenant || isMyKb(kb)) return false
+  if (index === 0) return true
+  const prev = list[index - 1]
+  if (!prev) return true
+  if (prev.is_pinned) return true
+  const prevOwnTenant = prev.isMine === true
+    || (prev.isMine !== false && prev.permission == null)
+  if (!prevOwnTenant || isMyKb(prev)) return true
+  return tenantOrgSectionId(prev) !== tenantOrgSectionId(kb)
+}
+
 // 判断一条 KB 应该归在哪个分组——和模板里几处 v-if 用的是同一套判定，
 // 抽出来是为了 v-show 卡片时复用，避免把 5 个分组的 v-if 重新拼一遍。
 //
@@ -1123,8 +1246,10 @@ const toggleKbSection = (key: KbSectionKey) => {
 const kbSectionOf = (kb: any): KbSectionKey => {
   if (kb?.is_pinned) return 'pinned'
   const isOwnTenant = kb?.isMine === true || (kb?.isMine !== false && kb?.permission == null)
-  if (isOwnTenant) return isMyKb(kb) ? 'mine' : 'tenantOthers'
-  return isSharedKbEditable(kb?.permission) ? 'sharedEditable' : 'sharedReadonly'
+  if (isOwnTenant) {
+    return isMyKb(kb) ? 'mine' : tenantOrgSectionKey(kb)
+  }
+  return sharedOrgSectionKey(kb)
 }
 
 // 空间筛选视图（sortedSpaceKbsList）的条目结构与上面不同：is_mine 直接标识
@@ -1137,23 +1262,32 @@ const isSpaceKbCollapsed = (shared: any): boolean => isKbSectionCollapsed(spaceK
 
 // 每个分组里实际有多少张卡片——直接把分组判定函数复用一遍。组标题上展示
 // "(N)" 让用户一眼知道折叠后会藏掉多少，也方便核对筛选结果。
-const emptyKbCounts = (): Record<KbSectionKey, number> => ({
+const emptyKbCounts = (): Record<string, number> => ({
   pinned: 0, mine: 0, tenantOthers: 0, sharedByMe: 0, sharedEditable: 0, sharedReadonly: 0,
 })
-const filteredKbSectionCounts = computed<Record<KbSectionKey, number>>(() => {
-  const c = emptyKbCounts()
-  filteredKnowledgeBases.value.forEach(kb => { c[kbSectionOf(kb)]++ })
-  return c
+const filteredKbSectionCounts = computed<Record<string, number>>(() => {
+  const counts = emptyKbCounts()
+  filteredKnowledgeBases.value.forEach((kb) => {
+    const key = kbSectionOf(kb)
+    counts[key] = (counts[key] || 0) + 1
+  })
+  return counts
 })
-const mineKbSectionCounts = computed<Record<KbSectionKey, number>>(() => {
-  const c = emptyKbCounts()
-  sortedMineKbs.value.forEach(kb => { c[kbSectionOf(kb)]++ })
-  return c
+const mineKbSectionCounts = computed<Record<string, number>>(() => {
+  const counts = emptyKbCounts()
+  sortedMineKbs.value.forEach((kb) => {
+    const key = kbSectionOf(kb)
+    counts[key] = (counts[key] || 0) + 1
+  })
+  return counts
 })
-const spaceKbSectionCounts = computed<Record<KbSectionKey, number>>(() => {
-  const c = emptyKbCounts()
-  sortedSpaceKbsList.value.forEach(shared => { c[spaceKbSectionOf(shared)]++ })
-  return c
+const spaceKbSectionCounts = computed<Record<string, number>>(() => {
+  const counts = emptyKbCounts()
+  sortedSpaceKbsList.value.forEach((shared) => {
+    const key = spaceKbSectionOf(shared)
+    counts[key] = (counts[key] || 0) + 1
+  })
+  return counts
 })
 
 // Filtered knowledge bases: 全部 = 我的 + 全部共享；我的 = 仅我的
@@ -1170,7 +1304,7 @@ const filteredKnowledgeBases = computed(() => {
     return recentsList.value
   }
   if (spaceSelection.value === 'mine') {
-    return kbs.value.map(kb => ({ ...kb, isMine: true as const }))
+    return localOrgKbs.value.map(kb => ({ ...kb, isMine: true as const }))
   }
   if (spaceSelection.value !== 'all') {
     return []
@@ -1180,8 +1314,8 @@ const filteredKnowledgeBases = computed(() => {
   // back, or shared into the caller's view through two different orgs —
   // produced duplicate `v-for` keys and blanked the list once there were
   // ≥2 entries (#795). mergeAllScopeKnowledgeBases de-duplicates by KB id
-  // (owned wins; most-privileged share kept) while preserving the existing
-  // pinned → mine → teammate → shared(editable-first) ordering.
+  // (owned wins; most-privileged share kept) while preserving
+  // pinned → mine → teammate → shared(by organization, editable-first) ordering.
   return mergeAllScopeKnowledgeBases(
     kbs.value as unknown as OwnedKnowledgeBase[],
     sharedKbs.value as unknown as SharedKnowledgeBaseLike[],
@@ -1193,7 +1327,7 @@ const showKbListEmpty = computed(() => {
   if (loading.value) return false
   if (!authStore.hasRole('contributor')) return false
   if (spaceSelection.value === 'all' && filteredKnowledgeBases.value.length === 0) return true
-  if (spaceSelection.value === 'mine' && kbs.value.length === 0) return true
+  if (spaceSelection.value === 'mine' && localOrgKbs.value.length === 0) return true
   return false
 })
 
@@ -1239,6 +1373,7 @@ const fetchList = (force = false) => {
     chatResources.fetchKnowledgeBasesForList({ creator: creatorFilter.value }, force).then(applyKbListData),
     orgStore.fetchSharedKnowledgeBases({ force }),
     orgStore.fetchOrganizations({ force }),
+    refreshOrgUnitNameMap(),
   ]).finally(() => { loading.value = false }).then(() => {
     // 各空间知识库数量已由 GET /organizations 的 resource_counts 带回，存于 orgStore.resourceCounts
     const counts = orgStore.resourceCounts?.knowledge_bases?.by_organization
@@ -1394,8 +1529,20 @@ function kbOriginVariant(kb: { creator_id?: string }): 'mine' | 'creator' {
 }
 
 function showKbOriginBadge(kb: { creator_id?: string; creator_name?: string }): boolean {
+  const section = kbSectionOf(kb)
+  // 动态分段：tenantOrg / sharedOrg 徽章规则分别对齐「其他成员」「共享给我」。
+  let badgeSection: 'pinned' | 'mine' | 'tenantOthers' | 'sharedEditable' | 'sharedReadonly' | 'sharedByMe' = 'mine'
+  if (section === 'pinned' || section === 'mine' || section === 'sharedByMe'
+    || section === 'sharedEditable' || section === 'sharedReadonly'
+    || section === 'tenantOthers') {
+    badgeSection = section
+  } else if (section.startsWith('tenantOrg:')) {
+    badgeSection = 'tenantOthers'
+  } else if (section.startsWith('sharedOrg:')) {
+    badgeSection = 'sharedEditable'
+  }
   return shouldShowResourceOriginBadge({
-    section: kbSectionOf(kb),
+    section: badgeSection,
     variant: kbOriginVariant(kb),
     creatorName: kb.creator_name,
     showSectionHeaders: showShareGroupHeaders.value,

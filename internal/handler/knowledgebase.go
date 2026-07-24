@@ -35,6 +35,8 @@ type KnowledgeBaseHandler struct {
 	// userService 仅在 list 类接口里用于批量回填 creator_name；
 	// 真正的鉴权由 RBAC 中间件 + Lookup 完成，这里不参与决策。
 	userService interfaces.UserService
+	// orgUnitService 仅用于 list 回填 org_unit_name（祖先共享库分段标题）。
+	orgUnitService interfaces.OrgUnitService
 }
 
 // NewKnowledgeBaseHandler creates a new knowledge base handler instance
@@ -46,6 +48,7 @@ func NewKnowledgeBaseHandler(
 	asynqClient interfaces.TaskEnqueuer,
 	vectorStoreService interfaces.VectorStoreService,
 	userService interfaces.UserService,
+	orgUnitService interfaces.OrgUnitService,
 ) *KnowledgeBaseHandler {
 	return &KnowledgeBaseHandler{
 		service:            service,
@@ -55,6 +58,7 @@ func NewKnowledgeBaseHandler(
 		asynqClient:        asynqClient,
 		vectorStoreService: vectorStoreService,
 		userService:        userService,
+		orgUnitService:     orgUnitService,
 	}
 }
 
@@ -711,6 +715,10 @@ func (h *KnowledgeBaseHandler) ListKnowledgeBases(c *gin.Context) {
 	enrichKBCreatorNames(ctx, h.userService, kbs)
 
 	callerTenantID := c.GetUint64(types.TenantIDContextKey.String())
+	// 回填 org_unit_name：下级 listOrgUnits 看不到祖先节点，分段标题会错误
+	// 回退成当前组织名；按 ID 直查不受子树裁剪影响。
+	enrichKBOrgUnitNames(ctx, h.orgUnitService, callerTenantID, kbs)
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    h.buildKBListResponse(ctx, kbs, callerTenantID),
@@ -765,6 +773,52 @@ func enrichKBCreatorNames(ctx context.Context, userSvc interfaces.UserService, k
 			continue
 		}
 		kb.CreatorName = pickUserDisplayName(u)
+	}
+}
+
+// enrichKBOrgUnitNames 批量把 OrgUnitID 解析成展示名。listOrgUnits 对普通
+// 成员只返回本级子树，祖先「共享给下级」的库会解析失败；这里按 ID Get，
+// 同租户内祖先节点可直接读到。失败只影响分段标题文案，不阻断列表。
+func enrichKBOrgUnitNames(
+	ctx context.Context,
+	orgUnitSvc interfaces.OrgUnitService,
+	tenantID uint64,
+	kbs []*types.KnowledgeBase,
+) {
+	if orgUnitSvc == nil || len(kbs) == 0 || tenantID == 0 {
+		return
+	}
+	idSet := make(map[string]struct{}, len(kbs))
+	for _, kb := range kbs {
+		if kb == nil {
+			continue
+		}
+		id := strings.TrimSpace(kb.OrgUnitID)
+		if id != "" {
+			idSet[id] = struct{}{}
+		}
+	}
+	if len(idSet) == 0 {
+		return
+	}
+	names := make(map[string]string, len(idSet))
+	for id := range idSet {
+		unit, err := orgUnitSvc.Get(ctx, tenantID, id)
+		if err != nil || unit == nil {
+			continue
+		}
+		name := strings.TrimSpace(unit.Name)
+		if name != "" {
+			names[id] = name
+		}
+	}
+	for _, kb := range kbs {
+		if kb == nil {
+			continue
+		}
+		if name, ok := names[strings.TrimSpace(kb.OrgUnitID)]; ok {
+			kb.OrgUnitName = name
+		}
 	}
 }
 

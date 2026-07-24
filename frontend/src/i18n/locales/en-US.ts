@@ -337,6 +337,7 @@ export default {
     all: 'All',
     allOrgs: 'All orgs',
     workspace: 'Workspace',
+    currentOrg: 'This organization',
     mine: 'Mine',
     spaces: 'Shared with me',
     favorites: 'Starred',
@@ -2395,6 +2396,7 @@ export default {
       sharedByMe: 'Shared by me',
       sharedEditable: 'Shared with me · Can edit',
       sharedReadonly: 'Shared with me · View only',
+      sharedFromOrg: '{name} · Shared',
     },
     messages: {
       deleted: 'Knowledge base deleted',
