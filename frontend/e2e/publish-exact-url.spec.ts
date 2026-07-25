@@ -52,6 +52,7 @@ test('exact localhost publish url shows six channel cards', async ({
   await expect(page.getByTestId('publish-channel-type-grid')).toBeVisible()
   await expect(page.locator('.channel-type-card')).toHaveCount(6)
   await expect(page.getByText('免登录窗口').first()).toBeVisible()
+  await expect(page.getByText('网页嵌入').first()).toBeVisible()
   await expect(page.getByText('创建新链接').first()).toBeVisible()
 
   const panelBox = await page.getByTestId('agent-publish-panel').boundingBox()
