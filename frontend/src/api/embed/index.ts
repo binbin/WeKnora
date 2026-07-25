@@ -22,7 +22,6 @@ export interface EmbedChannel {
   webhook_url?: string
   has_webhook_secret?: boolean
   publish_token?: string
-  web_slug?: string
   created_at: string
   updated_at: string
 }

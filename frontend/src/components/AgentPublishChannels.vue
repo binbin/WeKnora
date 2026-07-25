@@ -24,12 +24,25 @@
     </div>
 
     <section class="channel-detail">
-      <!-- 免登录窗口 -->
-      <template v-if="selectedType === 'web'">
+      <!-- 免登录窗口（短链直开） -->
+      <template v-if="selectedType === 'guest'">
         <div class="channel-detail__header">
           <div class="channel-detail__title-wrap">
-            <h3>{{ $t('agentEditor.publish.types.web') }}</h3>
-            <t-tooltip :content="$t('agentEditor.publish.types.webDesc')" placement="top">
+            <h3>{{ $t('agentEditor.publish.types.guest') }}</h3>
+            <t-tooltip :content="$t('agentEditor.publish.types.guestDesc')" placement="top">
+              <t-icon name="help-circle" class="channel-detail__help" />
+            </t-tooltip>
+          </div>
+        </div>
+        <AgentGuestLinkPanel :agent-id="agentId" :can-manage="canManage" />
+      </template>
+
+      <!-- 网页嵌入 -->
+      <template v-else-if="selectedType === 'embed'">
+        <div class="channel-detail__header">
+          <div class="channel-detail__title-wrap">
+            <h3>{{ $t('agentEditor.publish.types.embed') }}</h3>
+            <t-tooltip :content="$t('agentEditor.publish.types.embedDesc')" placement="top">
               <t-icon name="help-circle" class="channel-detail__help" />
             </t-tooltip>
           </div>
@@ -233,6 +246,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MessagePlugin } from 'tdesign-vue-next'
 import AgentEmbedChannelPanel from '@/components/AgentEmbedChannelPanel.vue'
+import AgentGuestLinkPanel from '@/components/AgentGuestLinkPanel.vue'
 import IMChannelPanel from '@/components/IMChannelPanel.vue'
 import { listEmbedChannels, type EmbedChannel } from '@/api/embed'
 import { listIMChannels, type IMChannel } from '@/api/agent'
@@ -247,7 +261,7 @@ import feishuLogo from '@/assets/img/im/feishu.svg'
 import dingtalkLogo from '@/assets/img/im/dingtalk.svg'
 import wechatLogo from '@/assets/img/im/wechat.svg'
 
-type ChannelTypeKey = 'web' | 'api' | 'feishu' | 'dingtalk' | 'wechat' | 'portal'
+type ChannelTypeKey = 'guest' | 'embed' | 'api' | 'feishu' | 'dingtalk' | 'wechat' | 'portal'
 
 const props = defineProps<{
   agentId: string
@@ -261,7 +275,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const authStore = useAuthStore()
 
-const selectedType = ref<ChannelTypeKey>('web')
+const selectedType = ref<ChannelTypeKey>('guest')
 const lockedAgentId = ref(props.agentId)
 const embedPanelRef = ref<InstanceType<typeof AgentEmbedChannelPanel> | null>(null)
 const imPanelRef = ref<InstanceType<typeof IMChannelPanel> | null>(null)
@@ -301,10 +315,16 @@ const canManage = computed(() => props.canManage !== false && authStore.hasRole(
 
 const channelTypes = computed(() => [
   {
-    key: 'web' as const,
-    title: t('agentEditor.publish.types.web'),
-    desc: t('agentEditor.publish.types.webDesc'),
+    key: 'guest' as const,
+    title: t('agentEditor.publish.types.guest'),
+    desc: t('agentEditor.publish.types.guestDesc'),
     icon: 'link',
+  },
+  {
+    key: 'embed' as const,
+    title: t('agentEditor.publish.types.embed'),
+    desc: t('agentEditor.publish.types.embedDesc'),
+    icon: 'code',
   },
   {
     key: 'api' as const,
@@ -391,7 +411,7 @@ const embedMenuOptions = [
   { content: t('common.delete'), value: 'delete' },
 ]
 
-const embedEmpty = computed(() => t('agentEditor.publish.webEmpty'))
+const embedEmpty = computed(() => t('agentEditor.publish.embedEmpty'))
 
 watch(
   () => props.agentId,
@@ -421,7 +441,7 @@ async function refreshAll(): Promise<void> {
 }
 
 async function refreshCurrent(): Promise<void> {
-  if (selectedType.value === 'web') await loadEmbedRows()
+  if (selectedType.value === 'embed') await loadEmbedRows()
   else if (selectedType.value === 'api') await loadApiRows()
   else if (isImType.value) await loadImRows()
 }
