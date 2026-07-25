@@ -291,7 +291,7 @@ func TestInvitationService_Create_APIKeyCannotInviteOwner(t *testing.T) {
 		Capabilities: types.StringArray{string(types.APIKeyCapabilityManageMembers)},
 	})
 
-	_, err := svc.Create(ctx, 1, "u-bob", types.TenantRoleOwner, nil, "")
+	_, err := svc.Create(ctx, 1, "u-bob", types.TenantRoleOwner, nil, "", "")
 	if !errors.Is(err, ErrAPIKeyCannotAssignOwner) {
 		t.Fatalf("want ErrAPIKeyCannotAssignOwner, got %v", err)
 	}
@@ -536,7 +536,7 @@ func TestInvitationService_CreateShareLink_APIKeyCannotAssignOwner(t *testing.T)
 		Capabilities: types.StringArray{string(types.APIKeyCapabilityManageMembers)},
 	})
 
-	_, _, err := svc.CreateShareLink(ctx, 1, types.TenantRoleOwner, nil, "")
+	_, _, err := svc.CreateShareLink(ctx, 1, types.TenantRoleOwner, nil, "", "")
 	if !errors.Is(err, ErrAPIKeyCannotAssignOwner) {
 		t.Fatalf("want ErrAPIKeyCannotAssignOwner, got %v", err)
 	}
