@@ -23,6 +23,9 @@ import {
   type EmbedStoredSessionState,
 } from '@/api/embed'
 import { applyEmbedLocale, readEmbedLocaleFromUrl, syncEmbedLocaleFromUrl } from '@/i18n/embed'
+import { resolveSessionMode, shouldPersistMultiSession, type EmbedSessionMode } from './embedSessionMode'
+
+export type { EmbedSessionMode } from './embedSessionMode'
 
 async function isStoredSessionValid(
   channelId: string,
@@ -43,15 +46,6 @@ function sortSessions(
   return [...sessions].sort((left, right) => right.updatedAt - left.updatedAt)
 }
 
-/**
- * 'multi': /w/:slug web-link chats — sidebar with localStorage-backed session
- * history, restored on refresh.
- * 'single_fresh': /embed/:channelId iframe/widget embeds — no sidebar, no
- * session history; every load starts a brand-new session and nothing is
- * persisted to the shared multi-session localStorage list.
- */
-export type EmbedSessionMode = 'multi' | 'single_fresh'
-
 export function useEmbedBridge(
   channelId: Ref<string>,
   opts?: { webSlug?: Ref<string>; sessionMode?: EmbedSessionMode },
@@ -59,9 +53,11 @@ export function useEmbedBridge(
   const { locale: activeLocale, t } = useI18n()
   const route = useRoute()
   const webSlug = opts?.webSlug
-  const sessionMode: EmbedSessionMode = opts?.sessionMode
-    ?? (route.meta.webLink ? 'multi' : 'single_fresh')
-  const isMultiSession = sessionMode === 'multi'
+  const sessionMode: EmbedSessionMode = resolveSessionMode(
+    Boolean(route.meta.webLink),
+    opts?.sessionMode,
+  )
+  const isMultiSession = shouldPersistMultiSession(sessionMode)
 
   const token = ref('')
   const config = ref<EmbedChannelPublicConfig | null>(null)

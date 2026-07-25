@@ -3,9 +3,11 @@
     <t-loading :loading="loading" size="small" class="channels-loading-wrap">
       <div v-if="!loading && !guestLink" class="channels-empty">
         <t-empty :description="$t('guestLinkPublish.empty')">
-          <t-button v-if="canManage" theme="primary" :loading="creating" @click="handleCreate">
-            {{ $t('guestLinkPublish.create') }}
-          </t-button>
+          <template v-if="canManage" #action>
+            <t-button theme="primary" :loading="creating" @click="handleCreate">
+              {{ $t('guestLinkPublish.create') }}
+            </t-button>
+          </template>
         </t-empty>
       </div>
 

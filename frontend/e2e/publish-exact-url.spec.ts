@@ -50,10 +50,17 @@ test('exact localhost publish url shows six channel cards', async ({
   ).toHaveCount(0)
   await expect(page.getByTestId('agent-publish-channels')).toBeVisible()
   await expect(page.getByTestId('publish-channel-type-grid')).toBeVisible()
-  await expect(page.locator('.channel-type-card')).toHaveCount(6)
-  await expect(page.getByText('免登录窗口').first()).toBeVisible()
-  await expect(page.getByText('网页嵌入').first()).toBeVisible()
-  await expect(page.getByText('创建新链接').first()).toBeVisible()
+  // guest + embed + api + feishu + dingtalk + wechat + portal.
+  await expect(page.locator('.channel-type-card')).toHaveCount(7)
+  await expect(
+    page.locator('.channel-type-card__title', { hasText: '免登录窗口' }),
+  ).toBeVisible()
+  await expect(
+    page.locator('.channel-type-card__title', { hasText: '网页嵌入' }),
+  ).toBeVisible()
+  // Default selection is the guest-link short link; its own create action
+  // reads "创建短链" (distinct from the embed panel's "创建新链接").
+  await expect(page.getByText('创建短链').first()).toBeVisible()
 
   const panelBox = await page.getByTestId('agent-publish-panel').boundingBox()
   expect(panelBox?.width ?? 0).toBeGreaterThan(400)
@@ -99,11 +106,72 @@ test('legacy weknora_lite_mode localStorage no longer blanks publish', async ({
   await expect(page.getByTestId('publish-channel-type-grid')).toBeVisible({
     timeout: 30_000,
   })
-  await expect(page.locator('.channel-type-card')).toHaveCount(6)
+  await expect(page.locator('.channel-type-card')).toHaveCount(7)
   await expect(page.getByTestId('agent-publish-empty')).toHaveCount(0)
 
   const liteFlag = await page.evaluate(
     () => window.localStorage.getItem('weknora_lite_mode'),
   )
   expect(liteFlag).toBeNull()
+})
+
+test('guest-link and web-embed channel type panels show distinct, non-overlapping copy', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    for (const key of [
+      'weknora:new-user-guide-done:v1',
+      'weknora:contextual-guide-agent-list:v1',
+      'weknora:contextual-guide-agent-create:v1',
+      'weknora:contextual-guide-kb-list:v2',
+      'weknora:contextual-guide-kb-create:v3',
+      'weknora:contextual-guide-chat:v1',
+    ]) {
+      window.localStorage.setItem(key, '1')
+    }
+  })
+
+  await page.goto('/login')
+  await page.locator('input[autocomplete="email"]').fill(EMAIL)
+  await page
+    .locator('input[autocomplete="current-password"]')
+    .fill(PASSWORD)
+  await page.getByRole('button', { name: /登录|Log in|Login/i }).click()
+  await page.waitForURL((url) => !url.pathname.includes('/login'), {
+    timeout: 30_000,
+  })
+
+  await page.goto(`/platform/agents/${AGENT}?tab=publish`)
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('.guide__backdrop, .guide[role="dialog"]')
+      .forEach((node) => node.remove())
+  })
+  await expect(page.getByTestId('publish-channel-type-grid')).toBeVisible({
+    timeout: 30_000,
+  })
+
+  const detail = page.locator('.channel-detail')
+
+  // Default selection is the guest-link (免登录窗口) short link: its own
+  // empty-state copy shows, and web-embed-only copy (iframe/widget create
+  // button, embed table empty state) must not leak in.
+  await expect(detail.getByRole('heading', { name: '免登录窗口' })).toBeVisible()
+  await expect(detail.getByText('暂无网页嵌入渠道')).toHaveCount(0)
+  await expect(detail.getByRole('button', { name: '创建新链接' })).toHaveCount(0)
+
+  // Switching to 网页嵌入 flips it: embed-only copy shows, guest-link-only
+  // copy (its empty state / short-link create button) disappears.
+  await page.evaluate(() => {
+    document
+      .querySelectorAll('.guide__backdrop, .guide[role="dialog"]')
+      .forEach((node) => node.remove())
+  })
+  await page.locator('.channel-type-card', { hasText: '网页嵌入' }).click({ force: true })
+
+  await expect(detail.getByRole('heading', { name: '网页嵌入' })).toBeVisible()
+  await expect(detail.getByRole('button', { name: '创建新链接' })).toBeVisible()
+  await expect(detail.getByText('暂无网页嵌入渠道')).toBeVisible()
+  await expect(detail.getByText('暂无免登录窗口链接')).toHaveCount(0)
+  await expect(detail.getByRole('button', { name: '创建短链' })).toHaveCount(0)
 })
