@@ -135,18 +135,22 @@ export default defineConfig({
     port: 5173,
     host: true,
     // 代理配置，用于开发环境
+    // xfwd: 保留浏览器 Host 为 X-Forwarded-Host，供后端同源校验
+    // （guest-link bootstrap 在 Vite changeOrigin 代理下仍能匹配 :5173）
     proxy: {
       '/api': {
         target: DEV_PROXY_TARGET,
         changeOrigin: true,
         secure: false,
+        xfwd: true,
       },
       '/files': {
         target: DEV_PROXY_TARGET,
         changeOrigin: true,
         secure: false,
-      }
-    }
+        xfwd: true,
+      },
+    },
   },
   // `vite preview` 用生产构建产物(dist)本地起服务，是最接近 release 镜像的环境：
   // 同样的压缩 / 拆包 / CSS 加载顺序，可提前暴露只在生产构建出现的问题
@@ -159,12 +163,14 @@ export default defineConfig({
         target: DEV_PROXY_TARGET,
         changeOrigin: true,
         secure: false,
+        xfwd: true,
       },
       '/files': {
         target: DEV_PROXY_TARGET,
         changeOrigin: true,
         secure: false,
-      }
-    }
-  }
+        xfwd: true,
+      },
+    },
+  },
 })

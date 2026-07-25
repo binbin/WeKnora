@@ -21,11 +21,13 @@ type GuestLinkChannelService interface {
 	GetByAgent(ctx context.Context, tenantID uint64, agentID string) (*types.GuestLinkChannel, error)
 	Get(ctx context.Context, tenantID uint64, id string) (*types.GuestLinkChannel, error)
 	Create(ctx context.Context, tenantID uint64, agentID string, req *types.GuestLinkChannel) (*types.GuestLinkChannel, error)
-	// Update full-replaces string fields on req; the bool pointers are
-	// tri-state (nil keeps the stored value).
+	// Update full-replaces string fields on req; the bool and rate-limit
+	// pointers are tri-state (nil keeps the stored value). Rate limit 0
+	// means unlimited.
 	Update(
 		ctx context.Context, tenantID uint64, id string, req *types.GuestLinkChannel,
 		enabled, showSuggested, allowWebSearch, allowFileUpload *bool,
+		rateLimitPerMinute, rateLimitPerDay *int,
 	) (*types.GuestLinkChannel, error)
 	Delete(ctx context.Context, tenantID uint64, id string) error
 	LookupByWebSlug(ctx context.Context, slug string) (*types.GuestLinkChannel, error)

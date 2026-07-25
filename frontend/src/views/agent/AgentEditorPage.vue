@@ -77,7 +77,6 @@ const initialWorkspaceTab = computed<'config' | 'publish' | 'logs'>(() => {
   const raw = route.query.tab
   const tab = Array.isArray(raw) ? raw[0] : raw
   if (tab === 'publish' || tab === 'logs' || tab === 'config') return tab
-  if (route.query.section === 'share') return 'config'
   return 'config'
 })
 

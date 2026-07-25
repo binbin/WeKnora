@@ -90,8 +90,10 @@ type guestLinkChannelRequest struct {
 	Name                   string  `json:"name"`
 	Enabled                *bool   `json:"enabled"`
 	WelcomeMessage         string  `json:"welcome_message"`
-	RateLimitPerMinute     int     `json:"rate_limit_per_minute"`
-	RateLimitPerDay        int     `json:"rate_limit_per_day"`
+	// Rate limits are pointers so Update can distinguish omit vs 0
+	// (0 = unlimited). Create still treats nil/0 via BeforeCreate defaults.
+	RateLimitPerMinute     *int    `json:"rate_limit_per_minute"`
+	RateLimitPerDay        *int    `json:"rate_limit_per_day"`
 	PrimaryColor           string  `json:"primary_color"`
 	PageTitle              string  `json:"page_title"`
 	HeaderTitleMode        string  `json:"header_title_mode"`
@@ -148,8 +150,8 @@ func (h *GuestLinkChannelHandler) CreateGuestLink(c *gin.Context) {
 		Name:                   req.Name,
 		Enabled:                enabled,
 		WelcomeMessage:         req.WelcomeMessage,
-		RateLimitPerMinute:     req.RateLimitPerMinute,
-		RateLimitPerDay:        req.RateLimitPerDay,
+		RateLimitPerMinute:     intOrZero(req.RateLimitPerMinute),
+		RateLimitPerDay:        intOrZero(req.RateLimitPerDay),
 		PrimaryColor:           req.PrimaryColor,
 		PageTitle:              req.PageTitle,
 		HeaderTitleMode:        req.HeaderTitleMode,
@@ -187,18 +189,17 @@ func (h *GuestLinkChannelHandler) UpdateGuestLink(c *gin.Context) {
 		return
 	}
 	update := &types.GuestLinkChannel{
-		Name:               req.Name,
-		WelcomeMessage:     req.WelcomeMessage,
-		RateLimitPerMinute: req.RateLimitPerMinute,
-		RateLimitPerDay:    req.RateLimitPerDay,
-		PrimaryColor:       req.PrimaryColor,
-		PageTitle:          req.PageTitle,
-		HeaderTitleMode:    req.HeaderTitleMode,
-		DefaultLocale:      stringOrEmpty(req.DefaultLocale),
+		Name:            req.Name,
+		WelcomeMessage:  req.WelcomeMessage,
+		PrimaryColor:    req.PrimaryColor,
+		PageTitle:       req.PageTitle,
+		HeaderTitleMode: req.HeaderTitleMode,
+		DefaultLocale:   stringOrEmpty(req.DefaultLocale),
 	}
 	gl, err := h.guestSvc.Update(
 		c.Request.Context(), tenantID, id, update,
 		req.Enabled, req.ShowSuggestedQuestions, req.AllowWebSearch, req.AllowFileUpload,
+		req.RateLimitPerMinute, req.RateLimitPerDay,
 	)
 	if err != nil {
 		writeGuestLinkMgmtError(c, err)
@@ -267,4 +268,11 @@ func writeGuestLinkMgmtError(c *gin.Context, err error) {
 		logger.Error(c.Request.Context(), "guest link management failed", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation failed"})
 	}
+}
+
+func intOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
 }

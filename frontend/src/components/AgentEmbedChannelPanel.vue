@@ -725,13 +725,6 @@ onMounted(() => {
   void load()
 })
 
-defineExpose({
-  openCreate,
-  openDrawer,
-  reload: load,
-  getChannels: () => channels.value,
-})
-
 watch(stepTitles, (titles) => {
   if (wizardStep.value >= titles.length) {
     wizardStep.value = Math.max(0, titles.length - 1)
@@ -887,6 +880,13 @@ const openDrawer = async (ch: EmbedChannel) => {
     MessagePlugin.warning(t('embedPublish.channelKeyLoadFailed'))
   }
 }
+
+defineExpose({
+  openCreate,
+  openDrawer,
+  reload: load,
+  getChannels: () => channels.value,
+})
 
 const closeDrawer = () => {
   showDrawer.value = false

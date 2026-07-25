@@ -1636,11 +1636,6 @@
                   </div>
                 </div>
 
-                <!-- 共享管理（仅编辑模式且非内置智能体） -->
-                <div v-if="editorMode === 'edit' && editorAgent?.id && !editorAgent?.is_builtin"
-                  v-show="currentSection === 'share'" class="section">
-                  <AgentShareSettings :agent-id="editorAgent.id" :agent="editorAgent" />
-                </div>
               </div>
             </div>
 
@@ -1666,8 +1661,8 @@
                 >
                   <AgentPublishChannels
                     :agent-id="debugAgentId"
+                    :agent-name="formData.name"
                     :can-manage="!props.readOnly"
-                    @goto-share="goToShareSection"
                   />
                 </div>
                 <div
@@ -1698,7 +1693,6 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import AgentCreateContextualGuide from '@/components/AgentCreateContextualGuide.vue';
-import AgentShareSettings from '@/components/AgentShareSettings.vue';
 import AgentDebugPreview from '@/components/AgentDebugPreview.vue';
 import AgentConversationLogs from '@/components/AgentConversationLogs.vue';
 import AgentPublishChannels from '@/components/AgentPublishChannels.vue';
@@ -1863,10 +1857,6 @@ const publishEmptyDescription = computed(() => {
   return t('agentEditor.workspace.publishNeedSave');
 });
 
-function goToShareSection() {
-  setWorkspaceTab('config');
-  currentSection.value = 'share';
-}
 const suggestionTab = ref<'starters' | 'followUps'>('starters');
 const contentWrapperRef = ref<HTMLElement | null>(null);
 const highlightedField = ref<AgentNotReadyReasonKey | null>(null);
@@ -2360,10 +2350,6 @@ const navItems = computed(() => {
   if (isAgentMode.value && skillsAvailable.value) {
     items.push({ key: 'skills', icon: 'lightbulb', label: t('agent.editor.skillsConfig') });
   }
-  // 发布渠道走顶栏 Tab；共享留在应用配置左栏
-  if (editorMode.value === 'edit' && editorAgent.value?.id && !editorAgent.value?.is_builtin) {
-    items.push({ key: 'share', icon: 'share', label: t('knowledgeEditor.sidebar.share') });
-  }
   return items;
 });
 
@@ -2427,11 +2413,6 @@ const navGroups = computed(() => {
       key: 'capability',
       label: t('agentEditor.navGroups.capability'),
       items: pickItems(['multimodal', 'tools', 'mcp', 'skills']),
-    },
-    {
-      key: 'integration',
-      label: t('agentEditor.navGroups.integration'),
-      items: pickItems(['share']),
     },
   ].filter((group) => group.items.length > 0);
 });

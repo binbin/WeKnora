@@ -88,26 +88,31 @@ show_help() {
 # 加载 .env 与可选的 .env.local（后者覆盖前者）
 # 读取 .env 时去掉行尾的 \r，兼容 Windows 风格(CRLF)换行符，
 # 否则 bash source 会把残留的 \r 当成命令导致 "...: $'\r': command not found"。
-_clean_env_file() {
-    sed -e 's/\r$//' "$1"
+# 使用临时文件而不是 process substitution（source <(...)），
+# 因为部分环境（如缺少 /dev/fd）下 process substitution 会静默失败，
+# 导致 DB_DRIVER 等变量全部为空。
+_source_cleaned_env_file() {
+    local env_file="$1"
+    local tmp_env
+    tmp_env="$(mktemp)"
+    sed -e 's/\r$//' "$env_file" > "$tmp_env"
+    set -a
+    # shellcheck source=/dev/null
+    source "$tmp_env"
+    set +a
+    rm -f "$tmp_env"
 }
 
 load_env_files() {
     if [ -f ".env" ]; then
-        set -a
-        # shellcheck source=/dev/null
-        source <(_clean_env_file .env)
-        set +a
+        _source_cleaned_env_file .env
     else
         return 1
     fi
 
     if [ -f ".env.local" ]; then
         log_info "加载 .env.local 覆盖配置..."
-        set -a
-        # shellcheck source=/dev/null
-        source <(_clean_env_file .env.local)
-        set +a
+        _source_cleaned_env_file .env.local
     fi
     return 0
 }

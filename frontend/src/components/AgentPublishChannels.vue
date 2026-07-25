@@ -34,7 +34,11 @@
             </t-tooltip>
           </div>
         </div>
-        <AgentGuestLinkPanel :agent-id="agentId" :can-manage="canManage" />
+        <AgentGuestLinkPanel
+          :agent-id="agentId"
+          :agent-name="agentName"
+          :can-manage="canManage"
+        />
       </template>
 
       <!-- 网页嵌入 -->
@@ -210,11 +214,7 @@
           </div>
         </div>
         <div class="portal-empty">
-          <t-empty :description="$t('agentEditor.publish.portalDesc')">
-            <t-button theme="primary" variant="outline" @click="emit('goto-share')">
-              {{ $t('agentEditor.publish.gotoShare') }}
-            </t-button>
-          </t-empty>
+          <t-empty :description="$t('agentEditor.publish.portalDesc')" />
         </div>
       </template>
     </section>
@@ -265,11 +265,8 @@ type ChannelTypeKey = 'guest' | 'embed' | 'api' | 'feishu' | 'dingtalk' | 'wecha
 
 const props = defineProps<{
   agentId: string
+  agentName?: string
   canManage?: boolean
-}>()
-
-const emit = defineEmits<{
-  'goto-share': []
 }>()
 
 const { t } = useI18n()

@@ -87,7 +87,7 @@ func newGuestLinkServiceForTenant(
 	repo interfaces.GuestLinkChannelRepository, tenantID uint64,
 ) interfaces.GuestLinkChannelService {
 	return NewGuestLinkChannelService(repo, &stubAgentForEmbed{
-		agent: &types.CustomAgent{TenantID: tenantID},
+		agent: &types.CustomAgent{TenantID: tenantID, Name: "客服助手"},
 	})
 }
 
@@ -119,6 +119,38 @@ func TestGuestLinkCreateAllocatesSlug(t *testing.T) {
 	}
 	if len(created.WebSlug) > 16 {
 		t.Fatalf("created.WebSlug length = %d, want <= 16", len(created.WebSlug))
+	}
+}
+
+func TestGuestLinkCreateDefaultsTitleToAgentName(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	svc := newGuestLinkServiceForTenant(repo, 1)
+
+	created, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want nil", err)
+	}
+	if created.Name != "客服助手" {
+		t.Fatalf("Name = %q, want agent name", created.Name)
+	}
+	if created.PageTitle != "客服助手" {
+		t.Fatalf("PageTitle = %q, want agent name", created.PageTitle)
+	}
+}
+
+func TestGuestLinkCreateKeepsExplicitTitle(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	svc := newGuestLinkServiceForTenant(repo, 1)
+
+	created, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{
+		Name:      "官网客服",
+		PageTitle: "在线咨询",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want nil", err)
+	}
+	if created.Name != "官网客服" || created.PageTitle != "在线咨询" {
+		t.Fatalf("got name=%q page_title=%q", created.Name, created.PageTitle)
 	}
 }
 
@@ -213,7 +245,7 @@ func TestGuestLinkUpdateKeepsFlagsWhenNil(t *testing.T) {
 
 	updated, err := svc.Update(
 		context.Background(), 1, created.ID,
-		&types.GuestLinkChannel{Name: "Renamed"}, nil, nil, nil, nil,
+		&types.GuestLinkChannel{Name: "Renamed"}, nil, nil, nil, nil, nil, nil,
 	)
 	if err != nil {
 		t.Fatalf("Update() error = %v, want nil", err)
@@ -223,6 +255,50 @@ func TestGuestLinkUpdateKeepsFlagsWhenNil(t *testing.T) {
 	}
 	if !updated.ShowSuggestedQuestions || !updated.AllowWebSearch || !updated.Enabled {
 		t.Fatalf("nil flags must keep stored values, got %#v", updated)
+	}
+}
+
+func TestGuestLinkUpdateAllowsUnlimitedRateLimits(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	svc := newGuestLinkServiceForTenant(repo, 1)
+
+	created, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{
+		Name: "First", RateLimitPerMinute: 30, RateLimitPerDay: 10000,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want nil", err)
+	}
+
+	zero := 0
+	updated, err := svc.Update(
+		context.Background(), 1, created.ID,
+		&types.GuestLinkChannel{Name: created.Name},
+		nil, nil, nil, nil, &zero, &zero,
+	)
+	if err != nil {
+		t.Fatalf("Update() error = %v, want nil", err)
+	}
+	if updated.RateLimitPerMinute != 0 || updated.RateLimitPerDay != 0 {
+		t.Fatalf(
+			"rate limits = %d/%d, want 0/0 (unlimited)",
+			updated.RateLimitPerMinute, updated.RateLimitPerDay,
+		)
+	}
+
+	// Nil rate-limit pointers must keep the unlimited values.
+	kept, err := svc.Update(
+		context.Background(), 1, created.ID,
+		&types.GuestLinkChannel{Name: "Still unlimited"},
+		nil, nil, nil, nil, nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("Update() error = %v, want nil", err)
+	}
+	if kept.RateLimitPerMinute != 0 || kept.RateLimitPerDay != 0 {
+		t.Fatalf(
+			"nil rate limits must keep 0/0, got %d/%d",
+			kept.RateLimitPerMinute, kept.RateLimitPerDay,
+		)
 	}
 }
 

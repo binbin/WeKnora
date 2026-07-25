@@ -235,6 +235,36 @@ func TestOriginAllowed(t *testing.T) {
 	}
 }
 
+func TestHostOriginPrefersForwardedHost(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/embed/web/x/bootstrap", nil)
+	c.Request.Host = "localhost:8080"
+	c.Request.Header.Set("X-Forwarded-Host", "localhost:5173")
+	c.Request.Header.Set("X-Forwarded-Proto", "http")
+
+	got := HostOrigin(c)
+	want := "http://localhost:5173"
+	if got != want {
+		t.Fatalf("HostOrigin() = %q, want %q", got, want)
+	}
+}
+
+func TestHostOriginForwardedHostChainUsesFirst(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.Host = "backend.internal"
+	c.Request.Header.Set("X-Forwarded-Host", "app.example.com, proxy.example.com")
+	c.Request.Header.Set("X-Forwarded-Proto", "https")
+
+	got := HostOrigin(c)
+	want := "https://app.example.com"
+	if got != want {
+		t.Fatalf("HostOrigin() = %q, want %q", got, want)
+	}
+}
+
 func TestExtractEmbedToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

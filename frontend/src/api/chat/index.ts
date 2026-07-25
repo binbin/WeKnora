@@ -80,3 +80,7 @@ export async function stopSession(session_id: string, message_id: string) {
 export async function clearSessionMessages(session_id: string) {
   return del(`/api/v1/sessions/${session_id}/messages`);
 }
+
+export async function deleteMessage(session_id: string, message_id: string) {
+  return del(`/api/v1/messages/${session_id}/${message_id}`);
+}

@@ -84,8 +84,10 @@
             :data="filteredRows"
             :columns="columns"
             hover
+            row-class-name="logs-table-row"
             :selected-row-keys="selectedKeys"
             @select-change="onSelectChange"
+            @row-click="onRowClick"
           >
             <template #empty>
               <div class="logs-empty">
@@ -94,25 +96,38 @@
               </div>
             </template>
             <template #ops="{ row }">
-              <t-button size="small" variant="text" theme="primary" @click="openSession(row)">
-                {{ $t('agentEditor.logs.openChat') }}
+              <t-button
+                size="small"
+                variant="text"
+                theme="danger"
+                @click.stop="confirmDeleteSession(row)"
+              >
+                {{ $t('common.delete') }}
               </t-button>
             </template>
           </t-table>
         </t-loading>
       </template>
     </template>
+
+    <AgentConversationDetailDrawer
+      v-model:visible="detailVisible"
+      :session-id="detailSessionId"
+      :fallback-title="detailTitle"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { getSessionsList } from '@/api/chat'
 import { listEmbedChannels } from '@/api/embed'
+import { removeSession } from '@/components/sessionMutations'
+import { useConfirmDelete } from '@/components/settings/useConfirmDelete'
 import { useAuthStore } from '@/stores/auth'
+import AgentConversationDetailDrawer from '@/components/AgentConversationDetailDrawer.vue'
 
 interface LogRow {
   id: string
@@ -131,13 +146,13 @@ const props = defineProps<{
   agentId: string
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   close: []
 }>()
 
 const { t } = useI18n()
-const router = useRouter()
 const authStore = useAuthStore()
+const confirmDelete = useConfirmDelete()
 
 const loading = ref(false)
 const rows = ref<LogRow[]>([])
@@ -146,6 +161,9 @@ const sourceFilter = ref('')
 const keyword = ref('')
 const dateRange = ref<string[]>([])
 const selectedKeys = ref<string[]>([])
+const detailVisible = ref(false)
+const detailSessionId = ref('')
+const detailTitle = ref('')
 
 const PAGE_SIZE = 50
 const MAX_PAGES = 4
@@ -166,7 +184,7 @@ const columns = computed(() => [
   { colKey: 'feedback', title: t('agentEditor.logs.colFeedback'), width: 110 },
   { colKey: 'sourceLabel', title: t('agentEditor.logs.colSource'), width: 100 },
   { colKey: 'ipLabel', title: t('agentEditor.logs.colIp'), width: 140 },
-  { colKey: 'ops', title: t('common.edit'), cell: 'ops', width: 100 },
+  { colKey: 'ops', title: t('common.edit'), cell: 'ops', width: 88 },
 ])
 
 const filteredRows = computed(() => {
@@ -209,6 +227,14 @@ function formatTime(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
+}
+
+function sortByUpdatedAtDesc(left: LogRow, right: LogRow): number {
+  const leftTime = new Date(left.updatedAtRaw).getTime()
+  const rightTime = new Date(right.updatedAtRaw).getTime()
+  const safeLeft = Number.isNaN(leftTime) ? 0 : leftTime
+  const safeRight = Number.isNaN(rightTime) ? 0 : rightTime
+  return safeRight - safeLeft
 }
 
 function sessionMatchesAgent(session: Record<string, unknown>): boolean {
@@ -295,9 +321,7 @@ async function reload(): Promise<void> {
     for (const row of [...webRows, ...embedRows]) {
       byId.set(row.id, row)
     }
-    rows.value = Array.from(byId.values()).sort((left, right) =>
-      String(right.updatedAtRaw).localeCompare(String(left.updatedAtRaw)),
-    )
+    rows.value = Array.from(byId.values()).sort(sortByUpdatedAtDesc)
   } catch (err) {
     console.error('Failed to load agent conversation logs', err)
     MessagePlugin.error(t('agentEditor.workspace.logsLoadFailed'))
@@ -311,11 +335,41 @@ function onSelectChange(keys: Array<string | number>): void {
   selectedKeys.value = keys.map(String)
 }
 
-function openSession(row: LogRow): void {
-  emit('close')
-  router.push({
-    path: `/platform/chat/${row.id}`,
-    query: { agent_id: props.agentId },
+function onRowClick(context: {
+  row: LogRow
+  e?: MouseEvent
+}): void {
+  const target = context.e?.target as HTMLElement | undefined
+  if (target?.closest('.t-checkbox, .t-button, a, button')) {
+    return
+  }
+  openDetail(context.row)
+}
+
+function openDetail(row: LogRow): void {
+  detailSessionId.value = row.id
+  detailTitle.value = row.title
+  detailVisible.value = true
+}
+
+function confirmDeleteSession(row: LogRow): void {
+  confirmDelete({
+    title: t('chatHeader.deleteConfirmTitle'),
+    body: t('chatHeader.deleteConfirmBody'),
+    onConfirm: async () => {
+      try {
+        await removeSession(row.id)
+        rows.value = rows.value.filter((item) => item.id !== row.id)
+        selectedKeys.value = selectedKeys.value.filter((key) => key !== row.id)
+        if (detailSessionId.value === row.id) {
+          detailVisible.value = false
+        }
+        MessagePlugin.success(t('chatHeader.deleteSuccess'))
+      } catch (err) {
+        console.error('Failed to delete conversation log session', err)
+        MessagePlugin.error(t('chat.deleteSessionFailed'))
+      }
+    },
   })
 }
 
@@ -468,5 +522,11 @@ function csvEscape(value: string): string {
   .logs-dashboard {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+</style>
+
+<style lang="less">
+.logs-table-row {
+  cursor: pointer;
 }
 </style>

@@ -60,18 +60,18 @@ func generateGuestLinkSessionSecret() (string, error) {
 // or mistyped agent id can never get a guest link attached to it.
 func (s *guestLinkChannelService) ensureAgentOwned(
 	ctx context.Context, tenantID uint64, agentID string,
-) error {
+) (*types.CustomAgent, error) {
 	if agentID == "" {
-		return apperrors.NewBadRequestError("agent_id is required")
+		return nil, apperrors.NewBadRequestError("agent_id is required")
 	}
 	agent, err := s.agentService.GetAgentByID(ctx, agentID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if agent == nil || agent.TenantID != tenantID {
-		return apperrors.NewNotFoundError("agent not found")
+		return nil, apperrors.NewNotFoundError("agent not found")
 	}
-	return nil
+	return agent, nil
 }
 
 // allocateWebSlug retries slug generation up to 8 times to dodge collisions,
@@ -98,7 +98,7 @@ func (s *guestLinkChannelService) GetByAgent(
 	ctx context.Context, tenantID uint64, agentID string,
 ) (*types.GuestLinkChannel, error) {
 	agentID = strings.TrimSpace(agentID)
-	if err := s.ensureAgentOwned(ctx, tenantID, agentID); err != nil {
+	if _, err := s.ensureAgentOwned(ctx, tenantID, agentID); err != nil {
 		return nil, err
 	}
 	return s.repo.GetByAgent(ctx, tenantID, agentID)
@@ -119,7 +119,8 @@ func (s *guestLinkChannelService) Create(
 	if types.IsBuiltinAgentID(agentID) {
 		return nil, apperrors.NewBadRequestError("built-in agents cannot be used for guest links")
 	}
-	if err := s.ensureAgentOwned(ctx, tenantID, agentID); err != nil {
+	agent, err := s.ensureAgentOwned(ctx, tenantID, agentID)
+	if err != nil {
 		return nil, err
 	}
 	existing, err := s.repo.GetByAgent(ctx, tenantID, agentID)
@@ -137,10 +138,21 @@ func (s *guestLinkChannelService) Create(
 	if err != nil {
 		return nil, err
 	}
+	name := strings.TrimSpace(req.Name)
+	pageTitle := strings.TrimSpace(req.PageTitle)
+	agentName := strings.TrimSpace(agent.Name)
+	// Empty title falls back to the agent name so visitor chrome and the
+	// admin card always have a meaningful label after create.
+	if name == "" {
+		name = agentName
+	}
+	if pageTitle == "" {
+		pageTitle = name
+	}
 	ch := &types.GuestLinkChannel{
 		TenantID:               tenantID,
 		AgentID:                agentID,
-		Name:                   strings.TrimSpace(req.Name),
+		Name:                   name,
 		Enabled:                req.Enabled,
 		WebSlug:                slug,
 		SessionSecret:          secret,
@@ -148,7 +160,7 @@ func (s *guestLinkChannelService) Create(
 		RateLimitPerMinute:     req.RateLimitPerMinute,
 		RateLimitPerDay:        req.RateLimitPerDay,
 		PrimaryColor:           strings.TrimSpace(req.PrimaryColor),
-		PageTitle:              strings.TrimSpace(req.PageTitle),
+		PageTitle:              pageTitle,
 		HeaderTitleMode:        types.NormalizeEmbedHeaderTitleMode(req.HeaderTitleMode),
 		ShowSuggestedQuestions: req.ShowSuggestedQuestions,
 		AllowWebSearch:         req.AllowWebSearch,
@@ -163,12 +175,13 @@ func (s *guestLinkChannelService) Create(
 
 // Update replaces every string field on req (the admin form always submits the
 // whole configuration, so an omitted string means "clear it"), while the
-// booleans are tri-state pointers — nil keeps the stored value, matching
-// embedChannelService.Update. Rate limits keep their stored value when
-// non-positive, since 0 is not a usable limit.
+// booleans and rate-limit pointers are tri-state — nil keeps the stored
+// value. Rate limit 0 means unlimited (embed_auth's limiter treats max<=0
+// as allow-all).
 func (s *guestLinkChannelService) Update(
 	ctx context.Context, tenantID uint64, id string, req *types.GuestLinkChannel,
 	enabled, showSuggested, allowWebSearch, allowFileUpload *bool,
+	rateLimitPerMinute, rateLimitPerDay *int,
 ) (*types.GuestLinkChannel, error) {
 	ch, err := s.getOwned(ctx, tenantID, id)
 	if err != nil {
@@ -192,11 +205,21 @@ func (s *guestLinkChannelService) Update(
 	if enabled != nil {
 		ch.Enabled = *enabled
 	}
-	if req.RateLimitPerMinute > 0 {
-		ch.RateLimitPerMinute = req.RateLimitPerMinute
+	if rateLimitPerMinute != nil {
+		if *rateLimitPerMinute < 0 {
+			return nil, apperrors.NewBadRequestError(
+				"rate_limit_per_minute must be >= 0",
+			)
+		}
+		ch.RateLimitPerMinute = *rateLimitPerMinute
 	}
-	if req.RateLimitPerDay > 0 {
-		ch.RateLimitPerDay = req.RateLimitPerDay
+	if rateLimitPerDay != nil {
+		if *rateLimitPerDay < 0 {
+			return nil, apperrors.NewBadRequestError(
+				"rate_limit_per_day must be >= 0",
+			)
+		}
+		ch.RateLimitPerDay = *rateLimitPerDay
 	}
 	if err := s.repo.Update(ctx, ch); err != nil {
 		return nil, err

@@ -258,12 +258,21 @@ func OriginAllowed(origin string, allowed []string) bool {
 }
 
 // HostOrigin builds scheme://host from the incoming request.
+// Prefer X-Forwarded-* so reverse proxies (and Vite's changeOrigin proxy)
+// still report the browser-facing origin used for same-host checks.
 func HostOrigin(c *gin.Context) string {
 	scheme := "http"
 	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
 		scheme = "https"
 	}
-	host := strings.TrimSpace(c.Request.Host)
+	host := strings.TrimSpace(c.GetHeader("X-Forwarded-Host"))
+	if host == "" {
+		host = strings.TrimSpace(c.Request.Host)
+	}
+	// Some proxies send a comma-separated chain; the first hop is the client view.
+	if comma := strings.IndexByte(host, ','); comma >= 0 {
+		host = strings.TrimSpace(host[:comma])
+	}
 	if host == "" {
 		return ""
 	}
