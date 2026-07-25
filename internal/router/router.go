@@ -272,6 +272,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterOrgUnitRoutes(v1, params.OrgUnitHandler, rbacGuards)
 		RegisterIMChannelRoutes(v1, params.IMHandler, rbacGuards)
 		RegisterEmbedChannelRoutes(v1, params.EmbedChannelHandler, rbacGuards)
+		RegisterGuestLinkChannelRoutes(v1, params.GuestLinkChannelHandler, rbacGuards)
 		RegisterDataSourceRoutes(v1, params.DataSourceHandler, params.DataSourceCredentialsHandler, rbacGuards)
 		RegisterWeKnoraCloudRoutes(v1, params.WeKnoraCloudHandler, rbacGuards)
 		RegisterWikiPageRoutes(v1, params.WikiPageHandler, rbacGuards)
@@ -1443,6 +1444,27 @@ func RegisterEmbedChannelRoutes(r *gin.RouterGroup, embedHandler *handler.EmbedC
 		channels.POST("/:channel_id/rotate-token", g.OwnerOrSystemAdmin(), embedHandler.RotateEmbedToken)
 		channels.POST("/:channel_id/preview-session", g.Viewer(), embedHandler.IssuePreviewSession)
 		channels.GET("/:channel_id/stats", g.Viewer(), embedHandler.GetEmbedChannelStats)
+	}
+}
+
+// RegisterGuestLinkChannelRoutes registers authenticated guest link
+// management routes. Guest links carry no publish-token/allowed-origins
+// surface (see GuestLinkChannelHandler doc comment), so they get their own
+// admin routes alongside — not merged into — the embed channel ones.
+func RegisterGuestLinkChannelRoutes(r *gin.RouterGroup, guestLinkHandler *handler.GuestLinkChannelHandler, g *rbacGuards) {
+	if guestLinkHandler == nil {
+		return
+	}
+	agentGuestLinks := g.apiKeyGroup(r.Group("/agents/:id/guest-links"), apiKeyManageChannels(apiKeyFullAccess()))
+	{
+		agentGuestLinks.GET("", g.Viewer(), guestLinkHandler.GetGuestLinkByAgent)
+		agentGuestLinks.POST("", g.OwnerOrSystemAdmin(), guestLinkHandler.CreateGuestLink)
+	}
+	guestLinks := g.apiKeyGroup(r.Group("/guest-links"), apiKeyManageChannels(apiKeyFullAccess()))
+	{
+		guestLinks.GET("/:id", g.Viewer(), guestLinkHandler.GetGuestLink)
+		guestLinks.PUT("/:id", g.OwnerOrSystemAdmin(), guestLinkHandler.UpdateGuestLink)
+		guestLinks.DELETE("/:id", g.OwnerOrSystemAdmin(), guestLinkHandler.DeleteGuestLink)
 	}
 }
 

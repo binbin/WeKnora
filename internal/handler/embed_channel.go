@@ -801,7 +801,6 @@ func embedChannelResponse(ch *types.EmbedChannel, publishToken string) gin.H {
 		"default_locale":           ch.DefaultLocale,
 		"webhook_url":              ch.WebhookURL,
 		"has_webhook_secret":       ch.WebhookSecret != "",
-		"web_slug":                 ch.WebSlug,
 		"created_at":               ch.CreatedAt,
 		"updated_at":               ch.UpdatedAt,
 	}

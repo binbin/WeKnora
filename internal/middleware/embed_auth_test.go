@@ -91,12 +91,6 @@ func (f *fakeEmbedChannelService) LookupEnabledChannel(
 	return ch, nil
 }
 
-func (f *fakeEmbedChannelService) LookupByWebSlug(
-	ctx context.Context, slug string,
-) (*types.EmbedChannel, error) {
-	return nil, service.ErrEmbedChannelNotFound
-}
-
 func (f *fakeEmbedChannelService) IssueSessionToken(
 	ctx context.Context, channelID string,
 ) (string, int, error) {

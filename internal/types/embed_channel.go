@@ -18,8 +18,6 @@ type EmbedChannel struct {
 	Name                   string         `json:"name"                gorm:"type:varchar(255);not null;default:''"`
 	Enabled                bool           `json:"enabled"             gorm:"not null;default:true"`
 	PublishToken           string         `json:"-"                   gorm:"type:varchar(64);not null;default:''"`
-	// WebSlug is a short public code for direct-open chat URLs (/w/:slug).
-	WebSlug string `json:"web_slug" gorm:"type:varchar(16);not null;default:''"`
 	AllowedOrigins         JSON           `json:"allowed_origins"     gorm:"type:jsonb;not null;default:'[]'"`
 	WelcomeMessage         string         `json:"welcome_message"      gorm:"type:text;not null;default:''"`
 	RateLimitPerMinute     int            `json:"rate_limit_per_minute" gorm:"not null;default:30"`

@@ -68,6 +68,14 @@ func (s *guestLinkChannelService) GetByAgent(
 	return s.repo.GetByAgent(ctx, tenantID, strings.TrimSpace(agentID))
 }
 
+// Get returns a tenant-owned guest link by ID for admin management, without
+// the Enabled check LookupEnabled applies for the public bootstrap flow.
+func (s *guestLinkChannelService) Get(
+	ctx context.Context, tenantID uint64, id string,
+) (*types.GuestLinkChannel, error) {
+	return s.getOwned(ctx, tenantID, id)
+}
+
 func (s *guestLinkChannelService) Create(
 	ctx context.Context, tenantID uint64, agentID string, req *types.GuestLinkChannel,
 ) (*types.GuestLinkChannel, error) {

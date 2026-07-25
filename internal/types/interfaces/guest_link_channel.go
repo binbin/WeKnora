@@ -19,6 +19,7 @@ type GuestLinkChannelRepository interface {
 // GuestLinkChannelService manages guest link channel lifecycle.
 type GuestLinkChannelService interface {
 	GetByAgent(ctx context.Context, tenantID uint64, agentID string) (*types.GuestLinkChannel, error)
+	Get(ctx context.Context, tenantID uint64, id string) (*types.GuestLinkChannel, error)
 	Create(ctx context.Context, tenantID uint64, agentID string, req *types.GuestLinkChannel) (*types.GuestLinkChannel, error)
 	Update(ctx context.Context, tenantID uint64, id string, req *types.GuestLinkChannel, enabled *bool) (*types.GuestLinkChannel, error)
 	Delete(ctx context.Context, tenantID uint64, id string) error
