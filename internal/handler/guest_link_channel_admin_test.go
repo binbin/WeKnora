@@ -66,7 +66,8 @@ func (f *adminGuestLinkSvc) Get(
 }
 
 func (f *adminGuestLinkSvc) Update(
-	_ context.Context, tenantID uint64, id string, req *types.GuestLinkChannel, enabled *bool,
+	_ context.Context, tenantID uint64, id string, req *types.GuestLinkChannel,
+	enabled, showSuggested, allowWebSearch, allowFileUpload *bool,
 ) (*types.GuestLinkChannel, error) {
 	gl, ok := f.byID[id]
 	if !ok || gl.TenantID != tenantID {
@@ -76,6 +77,15 @@ func (f *adminGuestLinkSvc) Update(
 	gl.WelcomeMessage = req.WelcomeMessage
 	if enabled != nil {
 		gl.Enabled = *enabled
+	}
+	if showSuggested != nil {
+		gl.ShowSuggestedQuestions = *showSuggested
+	}
+	if allowWebSearch != nil {
+		gl.AllowWebSearch = *allowWebSearch
+	}
+	if allowFileUpload != nil {
+		gl.AllowFileUpload = *allowFileUpload
 	}
 	return gl, nil
 }

@@ -17,6 +17,10 @@ import (
 // enough for /w/:slug links.
 const guestLinkWebSlugBytes = 6
 
+// guestLinkSessionSecretBytes matches embedTokenBytes: the secret keys the
+// HMAC binding chat sessions to the channel (see SignEmbedSessionHandle).
+const guestLinkSessionSecretBytes = 32
+
 var (
 	ErrGuestLinkExists   = errors.New("guest link already exists for agent")
 	ErrGuestLinkDisabled = errors.New("guest link is disabled")
@@ -24,14 +28,16 @@ var (
 )
 
 type guestLinkChannelService struct {
-	repo interfaces.GuestLinkChannelRepository
+	repo         interfaces.GuestLinkChannelRepository
+	agentService interfaces.CustomAgentService
 }
 
 // NewGuestLinkChannelService constructs the guest link channel service.
 func NewGuestLinkChannelService(
 	repo interfaces.GuestLinkChannelRepository,
+	agentService interfaces.CustomAgentService,
 ) interfaces.GuestLinkChannelService {
-	return &guestLinkChannelService{repo: repo}
+	return &guestLinkChannelService{repo: repo, agentService: agentService}
 }
 
 func generateGuestLinkWebSlug() (string, error) {
@@ -40,6 +46,32 @@ func generateGuestLinkWebSlug() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func generateGuestLinkSessionSecret() (string, error) {
+	buf := make([]byte, guestLinkSessionSecretBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return "gls_" + base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// ensureAgentOwned mirrors embedChannelService.ensureAgentOwned so a foreign
+// or mistyped agent id can never get a guest link attached to it.
+func (s *guestLinkChannelService) ensureAgentOwned(
+	ctx context.Context, tenantID uint64, agentID string,
+) error {
+	if agentID == "" {
+		return apperrors.NewBadRequestError("agent_id is required")
+	}
+	agent, err := s.agentService.GetAgentByID(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	if agent == nil || agent.TenantID != tenantID {
+		return apperrors.NewNotFoundError("agent not found")
+	}
+	return nil
 }
 
 // allocateWebSlug retries slug generation up to 8 times to dodge collisions,
@@ -65,7 +97,11 @@ func (s *guestLinkChannelService) allocateWebSlug(ctx context.Context) (string, 
 func (s *guestLinkChannelService) GetByAgent(
 	ctx context.Context, tenantID uint64, agentID string,
 ) (*types.GuestLinkChannel, error) {
-	return s.repo.GetByAgent(ctx, tenantID, strings.TrimSpace(agentID))
+	agentID = strings.TrimSpace(agentID)
+	if err := s.ensureAgentOwned(ctx, tenantID, agentID); err != nil {
+		return nil, err
+	}
+	return s.repo.GetByAgent(ctx, tenantID, agentID)
 }
 
 // Get returns a tenant-owned guest link by ID for admin management, without
@@ -80,11 +116,11 @@ func (s *guestLinkChannelService) Create(
 	ctx context.Context, tenantID uint64, agentID string, req *types.GuestLinkChannel,
 ) (*types.GuestLinkChannel, error) {
 	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		return nil, apperrors.NewBadRequestError("agent_id is required")
-	}
 	if types.IsBuiltinAgentID(agentID) {
 		return nil, apperrors.NewBadRequestError("built-in agents cannot be used for guest links")
+	}
+	if err := s.ensureAgentOwned(ctx, tenantID, agentID); err != nil {
+		return nil, err
 	}
 	existing, err := s.repo.GetByAgent(ctx, tenantID, agentID)
 	if err != nil {
@@ -97,12 +133,17 @@ func (s *guestLinkChannelService) Create(
 	if err != nil {
 		return nil, err
 	}
+	secret, err := generateGuestLinkSessionSecret()
+	if err != nil {
+		return nil, err
+	}
 	ch := &types.GuestLinkChannel{
 		TenantID:               tenantID,
 		AgentID:                agentID,
 		Name:                   strings.TrimSpace(req.Name),
 		Enabled:                req.Enabled,
 		WebSlug:                slug,
+		SessionSecret:          secret,
 		WelcomeMessage:         req.WelcomeMessage,
 		RateLimitPerMinute:     req.RateLimitPerMinute,
 		RateLimitPerDay:        req.RateLimitPerDay,
@@ -120,24 +161,34 @@ func (s *guestLinkChannelService) Create(
 	return ch, nil
 }
 
+// Update replaces every string field on req (the admin form always submits the
+// whole configuration, so an omitted string means "clear it"), while the
+// booleans are tri-state pointers — nil keeps the stored value, matching
+// embedChannelService.Update. Rate limits keep their stored value when
+// non-positive, since 0 is not a usable limit.
 func (s *guestLinkChannelService) Update(
-	ctx context.Context, tenantID uint64, id string, req *types.GuestLinkChannel, enabled *bool,
+	ctx context.Context, tenantID uint64, id string, req *types.GuestLinkChannel,
+	enabled, showSuggested, allowWebSearch, allowFileUpload *bool,
 ) (*types.GuestLinkChannel, error) {
 	ch, err := s.getOwned(ctx, tenantID, id)
 	if err != nil {
 		return nil, err
 	}
-	if req.Name != "" {
-		ch.Name = strings.TrimSpace(req.Name)
-	}
+	ch.Name = strings.TrimSpace(req.Name)
 	ch.WelcomeMessage = req.WelcomeMessage
 	ch.PrimaryColor = strings.TrimSpace(req.PrimaryColor)
 	ch.PageTitle = strings.TrimSpace(req.PageTitle)
 	ch.HeaderTitleMode = types.NormalizeEmbedHeaderTitleMode(req.HeaderTitleMode)
-	ch.ShowSuggestedQuestions = req.ShowSuggestedQuestions
-	ch.AllowWebSearch = req.AllowWebSearch
-	ch.AllowFileUpload = req.AllowFileUpload
 	ch.DefaultLocale = types.NormalizeEmbedDefaultLocale(req.DefaultLocale)
+	if showSuggested != nil {
+		ch.ShowSuggestedQuestions = *showSuggested
+	}
+	if allowWebSearch != nil {
+		ch.AllowWebSearch = *allowWebSearch
+	}
+	if allowFileUpload != nil {
+		ch.AllowFileUpload = *allowFileUpload
+	}
 	if enabled != nil {
 		ch.Enabled = *enabled
 	}

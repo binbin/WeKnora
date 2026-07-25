@@ -50,7 +50,7 @@
   → existing handlers keep using *types.EmbedChannel
 ```
 
-`AsEmbedChannel()` fills AgentID/TenantID/rate limits/appearance; sets `AllowedOrigins` empty and relies on same-host for `/w` bootstrap; `PublishToken` empty (session token only).
+`AsEmbedChannel()` fills AgentID/TenantID/rate limits/appearance; sets `AllowedOrigins` empty and relies on same-host for `/w` bootstrap; `PublishToken` carries the guest link's server-only `session_secret`, which keys the session-handle HMAC (guest links are never resolvable through the publish-token lookup).
 
 Out of scope: webhook on GuestLink, data migration, dual-read of old embed slugs.
 

@@ -21,7 +21,12 @@ type GuestLinkChannelService interface {
 	GetByAgent(ctx context.Context, tenantID uint64, agentID string) (*types.GuestLinkChannel, error)
 	Get(ctx context.Context, tenantID uint64, id string) (*types.GuestLinkChannel, error)
 	Create(ctx context.Context, tenantID uint64, agentID string, req *types.GuestLinkChannel) (*types.GuestLinkChannel, error)
-	Update(ctx context.Context, tenantID uint64, id string, req *types.GuestLinkChannel, enabled *bool) (*types.GuestLinkChannel, error)
+	// Update full-replaces string fields on req; the bool pointers are
+	// tri-state (nil keeps the stored value).
+	Update(
+		ctx context.Context, tenantID uint64, id string, req *types.GuestLinkChannel,
+		enabled, showSuggested, allowWebSearch, allowFileUpload *bool,
+	) (*types.GuestLinkChannel, error)
 	Delete(ctx context.Context, tenantID uint64, id string) error
 	LookupByWebSlug(ctx context.Context, slug string) (*types.GuestLinkChannel, error)
 	LookupEnabled(ctx context.Context, id string) (*types.GuestLinkChannel, error)

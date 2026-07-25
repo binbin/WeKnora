@@ -196,16 +196,10 @@ func (h *GuestLinkChannelHandler) UpdateGuestLink(c *gin.Context) {
 		HeaderTitleMode:    req.HeaderTitleMode,
 		DefaultLocale:      stringOrEmpty(req.DefaultLocale),
 	}
-	if req.ShowSuggestedQuestions != nil {
-		update.ShowSuggestedQuestions = *req.ShowSuggestedQuestions
-	}
-	if req.AllowWebSearch != nil {
-		update.AllowWebSearch = *req.AllowWebSearch
-	}
-	if req.AllowFileUpload != nil {
-		update.AllowFileUpload = *req.AllowFileUpload
-	}
-	gl, err := h.guestSvc.Update(c.Request.Context(), tenantID, id, update, req.Enabled)
+	gl, err := h.guestSvc.Update(
+		c.Request.Context(), tenantID, id, update,
+		req.Enabled, req.ShowSuggestedQuestions, req.AllowWebSearch, req.AllowFileUpload,
+	)
 	if err != nil {
 		writeGuestLinkMgmtError(c, err)
 		return

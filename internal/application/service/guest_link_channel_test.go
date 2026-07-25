@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
+	apperrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -67,13 +69,31 @@ func (r *stubGuestLinkChannelRepo) GetByAgent(
 	return &cp, nil
 }
 
+func (r *stubGuestLinkChannelRepo) Update(_ context.Context, ch *types.GuestLinkChannel) error {
+	cp := *ch
+	r.byAgent[agentKey(ch.TenantID, ch.AgentID)] = &cp
+	r.bySlug[ch.WebSlug] = &cp
+	r.byID[ch.ID] = &cp
+	return nil
+}
+
 func agentKey(tenantID uint64, agentID string) string {
 	return fmt.Sprintf("%d:%s", tenantID, agentID)
 }
 
+// newGuestLinkServiceForTenant builds the service with an agent service that
+// only owns agents of tenantID, so ownership checks behave like production.
+func newGuestLinkServiceForTenant(
+	repo interfaces.GuestLinkChannelRepository, tenantID uint64,
+) interfaces.GuestLinkChannelService {
+	return NewGuestLinkChannelService(repo, &stubAgentForEmbed{
+		agent: &types.CustomAgent{TenantID: tenantID},
+	})
+}
+
 func TestGuestLinkCreateRejectsSecondForSameAgent(t *testing.T) {
 	repo := newStubGuestLinkChannelRepo()
-	svc := NewGuestLinkChannelService(repo)
+	svc := newGuestLinkServiceForTenant(repo, 1)
 
 	_, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{Name: "First"})
 	if err != nil {
@@ -88,7 +108,7 @@ func TestGuestLinkCreateRejectsSecondForSameAgent(t *testing.T) {
 
 func TestGuestLinkCreateAllocatesSlug(t *testing.T) {
 	repo := newStubGuestLinkChannelRepo()
-	svc := NewGuestLinkChannelService(repo)
+	svc := newGuestLinkServiceForTenant(repo, 1)
 
 	created, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{Name: "First"})
 	if err != nil {
@@ -102,9 +122,113 @@ func TestGuestLinkCreateAllocatesSlug(t *testing.T) {
 	}
 }
 
+// TestGuestLinkCreateSignsSessionHandles guards the forgeable-handle
+// regression: without a per-channel secret the HMAC key was "", so anyone
+// knowing channel id + session id could mint a valid handle.
+func TestGuestLinkCreateSignsSessionHandles(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	svc := newGuestLinkServiceForTenant(repo, 1)
+
+	created, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{Name: "First"})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want nil", err)
+	}
+	if created.SessionSecret == "" {
+		t.Fatal("created.SessionSecret is empty, want a generated secret")
+	}
+
+	const sessionID = "11111111-2222-3333-4444-555555555555"
+	ch := created.AsEmbedChannel()
+	sig := SignEmbedSessionHandle(ch, sessionID)
+	if sig == "" {
+		t.Fatal("guest link handles must be signable")
+	}
+	if !VerifyEmbedSessionHandle(ch, sessionID, sig) {
+		t.Fatal("guest link handle should verify against its own channel")
+	}
+
+	// A forger who knows channel id + session id but not the secret (the
+	// pre-fix state: empty HMAC key) must not produce a valid handle.
+	unkeyed := created.AsEmbedChannel()
+	unkeyed.PublishToken = ""
+	if forged := SignEmbedSessionHandle(unkeyed, sessionID); forged != "" {
+		t.Fatalf("signing with an empty key must fail closed, got %q", forged)
+	}
+	if VerifyEmbedSessionHandle(unkeyed, sessionID, sig) {
+		t.Fatal("handle must not verify without the channel secret")
+	}
+}
+
+func TestGuestLinkCreateSecretsAreUniquePerChannel(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	svc := newGuestLinkServiceForTenant(repo, 1)
+
+	first, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{})
+	if err != nil {
+		t.Fatalf("Create(agent-1) error = %v, want nil", err)
+	}
+	second, err := svc.Create(context.Background(), 1, "agent-2", &types.GuestLinkChannel{})
+	if err != nil {
+		t.Fatalf("Create(agent-2) error = %v, want nil", err)
+	}
+	if first.SessionSecret == second.SessionSecret {
+		t.Fatal("each guest link must get its own session secret")
+	}
+}
+
+func TestGuestLinkCreateRejectsForeignAgent(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	// The agent service only ever resolves agents owned by tenant 1.
+	svc := newGuestLinkServiceForTenant(repo, 1)
+
+	_, err := svc.Create(context.Background(), 2, "agent-1", &types.GuestLinkChannel{})
+	if err == nil {
+		t.Fatal("Create() with an agent from another tenant must fail")
+	}
+	var appErr *apperrors.AppError
+	if !errors.As(err, &appErr) || appErr.HTTPCode != http.StatusNotFound {
+		t.Fatalf("Create() error = %v, want a 404 AppError", err)
+	}
+}
+
+func TestGuestLinkCreateRejectsUnknownAgent(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	svc := NewGuestLinkChannelService(repo, &stubAgentForEmbed{agent: nil})
+
+	if _, err := svc.Create(context.Background(), 1, "missing-agent", &types.GuestLinkChannel{}); err == nil {
+		t.Fatal("Create() with an unknown agent must fail")
+	}
+}
+
+func TestGuestLinkUpdateKeepsFlagsWhenNil(t *testing.T) {
+	repo := newStubGuestLinkChannelRepo()
+	svc := newGuestLinkServiceForTenant(repo, 1)
+
+	created, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{
+		Name: "First", Enabled: true, ShowSuggestedQuestions: true, AllowWebSearch: true,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want nil", err)
+	}
+
+	updated, err := svc.Update(
+		context.Background(), 1, created.ID,
+		&types.GuestLinkChannel{Name: "Renamed"}, nil, nil, nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("Update() error = %v, want nil", err)
+	}
+	if updated.Name != "Renamed" {
+		t.Fatalf("updated.Name = %q, want Renamed", updated.Name)
+	}
+	if !updated.ShowSuggestedQuestions || !updated.AllowWebSearch || !updated.Enabled {
+		t.Fatalf("nil flags must keep stored values, got %#v", updated)
+	}
+}
+
 func TestGuestLinkLookupByWebSlugNotFound(t *testing.T) {
 	repo := newStubGuestLinkChannelRepo()
-	svc := NewGuestLinkChannelService(repo)
+	svc := newGuestLinkServiceForTenant(repo, 1)
 
 	_, err := svc.LookupByWebSlug(context.Background(), "missing")
 	if !errors.Is(err, ErrGuestLinkNotFound) {
@@ -114,7 +238,7 @@ func TestGuestLinkLookupByWebSlugNotFound(t *testing.T) {
 
 func TestGuestLinkLookupByWebSlugDisabled(t *testing.T) {
 	repo := newStubGuestLinkChannelRepo()
-	svc := NewGuestLinkChannelService(repo)
+	svc := newGuestLinkServiceForTenant(repo, 1)
 
 	created, err := svc.Create(context.Background(), 1, "agent-1", &types.GuestLinkChannel{
 		Name: "First", Enabled: false,

@@ -48,6 +48,22 @@ func TestEmbedSessionHandleSignVerify(t *testing.T) {
 	}
 }
 
+// TestEmbedSessionHandleRequiresKey pins the fail-closed behavior for channels
+// without a secret: signing with an empty HMAC key would make handles
+// forgeable from public data (channel id + session id) alone.
+func TestEmbedSessionHandleRequiresKey(t *testing.T) {
+	unkeyed := &types.EmbedChannel{ID: "ch-1"}
+	const sessionID = "11111111-2222-3333-4444-555555555555"
+
+	if sig := SignEmbedSessionHandle(unkeyed, sessionID); sig != "" {
+		t.Fatalf("signing without a key must return empty, got %q", sig)
+	}
+	forged := SignEmbedSessionHandle(&types.EmbedChannel{ID: "ch-1", PublishToken: "x"}, sessionID)
+	if VerifyEmbedSessionHandle(unkeyed, sessionID, forged) {
+		t.Fatal("an unkeyed channel must never verify a handle")
+	}
+}
+
 func TestIsEmbedSessionToken(t *testing.T) {
 	if !IsEmbedSessionToken("ems_abc123") {
 		t.Fatal("expected ems_ prefix to be session token")

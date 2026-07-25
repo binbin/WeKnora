@@ -119,8 +119,14 @@ func IsEmbedSessionToken(token string) bool {
 // land in access logs), this signature — sent in a header, never logged — is the
 // real authorization secret: a leaked session id is useless without it. Rotating
 // the channel token invalidates outstanding handles, which is acceptable.
+// An empty key yields an empty handle rather than an HMAC over "": every
+// channel surface must supply its own secret, and failing closed here keeps a
+// silently unkeyed channel from producing forgeable handles.
 func SignEmbedSessionHandle(ch *types.EmbedChannel, sessionID string) string {
 	if ch == nil || strings.TrimSpace(sessionID) == "" {
+		return ""
+	}
+	if ch.PublishToken == "" {
 		return ""
 	}
 	mac := hmac.New(sha256.New, []byte(ch.PublishToken))
