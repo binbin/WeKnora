@@ -6,7 +6,7 @@ const AGENT =
   process.env.WEKNORA_E2E_AGENT_ID ||
   'bea03e6d-9dc5-4d39-ad3a-4147e97cba12'
 
-test('exact localhost publish url shows six channel cards', async ({
+test('exact localhost publish url shows seven channel cards', async ({
   page,
 }) => {
   await page.addInitScript(() => {

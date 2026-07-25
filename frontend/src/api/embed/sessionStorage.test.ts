@@ -45,17 +45,9 @@ test('upsertEmbedStoredSession persists a session and makes it current (multi-se
   assert.equal(state?.sessions.length, 1)
 })
 
-test('a single_fresh embed never calls the persistence helper, so nothing is written', () => {
+test('reading a channel that was never persisted yields no state', () => {
   const store = installMockLocalStorage()
   const channelId = 'chan-2'
-
-  // This mirrors useEmbedBridge's applyActiveSession: single_fresh sessions
-  // update in-memory refs only and skip the upsertEmbedStoredSession call
-  // entirely, so the shared multi-session localStorage list stays untouched.
-  const sessionMode: 'multi' | 'single_fresh' = 'single_fresh'
-  if (sessionMode === 'multi') {
-    upsertEmbedStoredSession(channelId, entry('s2'))
-  }
 
   assert.equal(store[embedChatSessionStorageKey(channelId)], undefined)
   assert.equal(readEmbedStoredSessionState(channelId), null)

@@ -56,11 +56,18 @@ export async function deleteGuestLink(id: string) {
   return del(`/api/v1/guest-links/${id}`)
 }
 
-/** Resolves the direct-open chat URL for a guest link, preferring the server-built `web_url`. */
+/**
+ * Resolves the direct-open chat URL for a guest link.
+ *
+ * The frontend builder wins because it honours the configured public embed
+ * origin (EMBED_BASE_URL), while the server's `web_url` is built from whatever
+ * host the admin request arrived on. The server value is only a fallback for
+ * links whose slug is missing from the payload.
+ */
 export function resolveGuestLinkURL(
   channel: Pick<GuestLinkChannel, 'web_url' | 'web_slug'>,
   opts?: { locale?: string },
 ): string {
-  if (channel.web_url) return channel.web_url
-  return buildWebChannelURL(channel.web_slug, opts)
+  if (channel.web_slug) return buildWebChannelURL(channel.web_slug, opts)
+  return channel.web_url ?? ''
 }
