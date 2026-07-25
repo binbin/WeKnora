@@ -32,6 +32,12 @@ type embedChannelService struct {
 	agentService interfaces.CustomAgentService
 	chunkService interfaces.ChunkService
 	redis        *redis.Client
+	// guestLinkRepo backs the dual lookup in LookupEnabledChannel: guest
+	// links and embed channels share the /api/v1/embed/{id}/... surface, so
+	// an id that misses embed_channels falls back to guest_link_channels.
+	// May be nil (e.g. older test fakes), in which case the fallback is
+	// skipped and behavior matches the pre-guest-link lookup.
+	guestLinkRepo interfaces.GuestLinkChannelRepository
 }
 
 func NewEmbedChannelService(
@@ -39,12 +45,14 @@ func NewEmbedChannelService(
 	agentService interfaces.CustomAgentService,
 	chunkService interfaces.ChunkService,
 	redisClient *redis.Client,
+	guestLinkRepo interfaces.GuestLinkChannelRepository,
 ) interfaces.EmbedChannelService {
 	return &embedChannelService{
-		repo:         repo,
-		agentService: agentService,
-		chunkService: chunkService,
-		redis:        redisClient,
+		repo:          repo,
+		agentService:  agentService,
+		chunkService:  chunkService,
+		redis:         redisClient,
+		guestLinkRepo: guestLinkRepo,
 	}
 }
 

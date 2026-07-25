@@ -75,6 +75,10 @@ func (s *embedChannelService) ResolveSessionToken(ctx context.Context, token str
 }
 
 // LookupEnabledChannel loads an embed channel and verifies it is enabled.
+// It resolves against embed_channels first; on a miss it falls back to
+// guest_link_channels (mapped via AsEmbedChannel), since both surfaces share
+// the same /api/v1/embed/{id}/... routes and EmbedAuth. See the architecture
+// note in the guest-link-vs-web-embed design doc.
 func (s *embedChannelService) LookupEnabledChannel(ctx context.Context, channelID string) (*types.EmbedChannel, error) {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
@@ -84,13 +88,23 @@ func (s *embedChannelService) LookupEnabledChannel(ctx context.Context, channelI
 	if err != nil {
 		return nil, err
 	}
-	if ch == nil {
+	if ch != nil {
+		if !ch.Enabled {
+			return nil, ErrEmbedChannelDisabled
+		}
+		return ch, nil
+	}
+	if s.guestLinkRepo == nil {
 		return nil, ErrEmbedTokenInvalid
 	}
-	if !ch.Enabled {
+	gl, err := s.guestLinkRepo.GetByID(ctx, channelID)
+	if err != nil || gl == nil {
+		return nil, ErrEmbedTokenInvalid
+	}
+	if !gl.Enabled {
 		return nil, ErrEmbedChannelDisabled
 	}
-	return ch, nil
+	return gl.AsEmbedChannel(), nil
 }
 
 // LookupByWebSlug resolves a short web link slug to an enabled embed channel.

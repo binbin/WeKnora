@@ -88,6 +88,7 @@ type RouterParams struct {
 	IMHandler                    *handler.IMHandler
 	EmbedChannelHandler          *handler.EmbedChannelHandler
 	EmbedChannelService          interfaces.EmbedChannelService
+	GuestLinkChannelHandler      *handler.GuestLinkChannelHandler
 	RedisClient                  *redis.Client
 	DataSourceHandler            *handler.DataSourceHandler
 	DataSourceCredentialsHandler *handler.DataSourceCredentialsHandler
@@ -164,6 +165,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 	RegisterEmbedPublicRoutes(
 		r,
 		params.EmbedChannelHandler,
+		params.GuestLinkChannelHandler,
 		params.EmbedChannelService,
 		params.TenantService,
 		params.RedisClient,
@@ -1378,6 +1380,7 @@ func RegisterOrganizationRoutes(r *gin.RouterGroup, orgHandler *handler.Organiza
 func RegisterEmbedPublicRoutes(
 	r *gin.Engine,
 	embedHandler *handler.EmbedChannelHandler,
+	guestLinkHandler *handler.GuestLinkChannelHandler,
 	embedService interfaces.EmbedChannelService,
 	tenantService interfaces.TenantService,
 	redisClient *redis.Client,
@@ -1388,8 +1391,11 @@ func RegisterEmbedPublicRoutes(
 	if embedHandler == nil || embedService == nil {
 		return
 	}
-	// Short web link bootstrap (no publish token in URL).
-	r.POST("/api/v1/embed/web/:slug/bootstrap", embedHandler.BootstrapWebLink)
+	// Short web link bootstrap (no publish token in URL). Owned by the guest
+	// link handler: guest links are the only surface reachable via /w/:slug.
+	if guestLinkHandler != nil {
+		r.POST("/api/v1/embed/web/:slug/bootstrap", guestLinkHandler.BootstrapWebLink)
+	}
 
 	embed := r.Group("/api/v1/embed/:channel_id", middleware.EmbedAuth(embedService, tenantService, redisClient))
 	{
