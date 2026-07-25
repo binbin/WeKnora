@@ -3,24 +3,27 @@
     <div v-if="loadError" class="embed-error">{{ loadError }}</div>
     <template v-else-if="config">
       <div v-if="sessionId" class="embed-shell">
-        <div
-          v-if="sidebarOpen"
-          class="embed-sidebar-mask"
-          @click="sidebarOpen = false"
-        />
-        <EmbedSessionSidebar
-          :sessions="sessions"
-          :current-id="sessionId"
-          :open="sidebarOpen"
-          :can-create="chatHasMessages"
-          @new-chat="handleNewChat"
-          @select="handleSelectSession"
-          @delete="handleDeleteSession"
-        />
+        <template v-if="isMultiSession">
+          <div
+            v-if="sidebarOpen"
+            class="embed-sidebar-mask"
+            @click="sidebarOpen = false"
+          />
+          <EmbedSessionSidebar
+            :sessions="sessions"
+            :current-id="sessionId"
+            :open="sidebarOpen"
+            :can-create="chatHasMessages"
+            @new-chat="handleNewChat"
+            @select="handleSelectSession"
+            @delete="handleDeleteSession"
+          />
+        </template>
 
         <div class="embed-main">
           <header class="embed-header">
             <t-button
+              v-if="isMultiSession"
               variant="text"
               shape="square"
               size="small"
@@ -40,6 +43,7 @@
               <p v-if="headerSubtitle" class="embed-header__subtitle">{{ headerSubtitle }}</p>
             </div>
             <t-button
+              v-if="isMultiSession"
               variant="text"
               shape="square"
               size="small"
@@ -98,6 +102,7 @@ const chatHasMessages = ref(false)
 const sidebarOpen = ref(typeof window !== 'undefined' ? window.innerWidth > 768 : true)
 
 const {
+  sessionMode,
   token,
   config,
   sessionId,
@@ -114,6 +119,8 @@ const {
   removeSession,
   touchCurrentSession,
 } = useEmbedBridge(channelId, { webSlug })
+
+const isMultiSession = sessionMode === 'multi'
 
 const handleNewChat = async () => {
   if (!chatHasMessages.value) return

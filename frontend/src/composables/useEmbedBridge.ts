@@ -43,13 +43,25 @@ function sortSessions(
   return [...sessions].sort((left, right) => right.updatedAt - left.updatedAt)
 }
 
+/**
+ * 'multi': /w/:slug web-link chats — sidebar with localStorage-backed session
+ * history, restored on refresh.
+ * 'single_fresh': /embed/:channelId iframe/widget embeds — no sidebar, no
+ * session history; every load starts a brand-new session and nothing is
+ * persisted to the shared multi-session localStorage list.
+ */
+export type EmbedSessionMode = 'multi' | 'single_fresh'
+
 export function useEmbedBridge(
   channelId: Ref<string>,
-  opts?: { webSlug?: Ref<string> },
+  opts?: { webSlug?: Ref<string>; sessionMode?: EmbedSessionMode },
 ) {
   const { locale: activeLocale, t } = useI18n()
   const route = useRoute()
   const webSlug = opts?.webSlug
+  const sessionMode: EmbedSessionMode = opts?.sessionMode
+    ?? (route.meta.webLink ? 'multi' : 'single_fresh')
+  const isMultiSession = sessionMode === 'multi'
 
   const token = ref('')
   const config = ref<EmbedChannelPublicConfig | null>(null)
@@ -88,9 +100,10 @@ export function useEmbedBridge(
       ...entry,
       updatedAt: opts?.touch === false ? entry.updatedAt : Date.now(),
     }
-    const state = upsertEmbedStoredSession(channel, next, { makeCurrent: true })
     sessionId.value = next.id
     sessionSig.value = next.sig
+    if (!isMultiSession) return
+    const state = upsertEmbedStoredSession(channel, next, { makeCurrent: true })
     sessionHistory.value = sortSessions(state.sessions)
   }
 
@@ -110,7 +123,7 @@ export function useEmbedBridge(
     }
 
     const configAgentId = String(publicConfig.agent_id || '').trim()
-    const storedState = readEmbedStoredSessionState(id)
+    const storedState = isMultiSession ? readEmbedStoredSessionState(id) : null
     let resolved: EmbedStoredSessionEntry | null = null
 
     if (storedState) {
@@ -271,6 +284,7 @@ export function useEmbedBridge(
   }
 
   const startNewSession = async () => {
+    if (!isMultiSession) return
     const id = channelId.value
     const apiToken = token.value
     if (!id || !apiToken) return
@@ -295,6 +309,7 @@ export function useEmbedBridge(
     title: string,
     opts?: { onlyIfEmpty?: boolean },
   ) => {
+    if (!isMultiSession) return
     const id = channelId.value
     const trimmed = title.trim()
     if (!id || !targetId || !trimmed) return
@@ -310,6 +325,7 @@ export function useEmbedBridge(
   }
 
   const removeSession = async (targetId: string) => {
+    if (!isMultiSession) return
     const id = channelId.value
     if (!id || !targetId) return
     const remaining = sessionHistory.value.filter((item) => item.id !== targetId)
@@ -331,6 +347,7 @@ export function useEmbedBridge(
   }
 
   const switchSession = async (targetId: string) => {
+    if (!isMultiSession) return
     const id = channelId.value
     const apiToken = token.value
     if (!id || !apiToken || !targetId || targetId === sessionId.value) return
@@ -369,7 +386,9 @@ export function useEmbedBridge(
       return
     }
 
-    syncHistoryFromStorage(channelId.value)
+    if (isMultiSession) {
+      syncHistoryFromStorage(channelId.value)
+    }
 
     const initialToken = String(route.query.token || '') || parseEmbedTokenFromLocation()
     if (initialToken) {
@@ -397,6 +416,7 @@ export function useEmbedBridge(
   })
 
   const touchCurrentSession = () => {
+    if (!isMultiSession) return
     const id = channelId.value
     const entry = sessionHistory.value.find((item) => item.id === sessionId.value)
     if (!id || !entry) return
@@ -406,6 +426,7 @@ export function useEmbedBridge(
   const sessions = computed(() => sessionHistory.value)
 
   return {
+    sessionMode,
     token,
     config,
     sessionId,
