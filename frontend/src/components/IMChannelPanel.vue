@@ -564,6 +564,10 @@
                     <template v-else>
                       {{ $t('agentEditor.im.wechatScanning') }}
                     </template>
+                  </p>
+                </div>
+              </div>
+            </template>
 
             <!-- WeChat OA credentials (Cloud QR bind) -->
             <template v-if="formData.platform === 'wechat_oa'">
@@ -594,11 +598,6 @@
                     <template v-if="wechatOaQRStatus === 'scaned' || wechatOaQRStatus === 'wait'">
                       {{ wechatOaQRStatus === 'scaned' ? $t('agentEditor.im.wechatOaBinding') : $t('agentEditor.im.wechatOaScanning') }}
                     </template>
-                  </p>
-                </div>
-              </div>
-            </template>
-
                   </p>
                 </div>
               </div>
@@ -778,13 +777,23 @@ const wechatLoading = ref(false);
 let wechatPollActive = false;
 let wechatPollTimer: ReturnType<typeof setTimeout> | null = null;
 
+// WeChat OA Cloud preauth QR binding state
+const wechatOaQRImgUrl = ref('');
+const wechatOaPreauthId = ref('');
+const wechatOaQRStatus = ref<string>('');
+const wechatOaLoading = ref(false);
+let wechatOaPollActive = false;
+let wechatOaPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+const WECHAT_OA_POLL_INTERVAL_MS = 2000;
+
 const defaultCredentials = (): Record<string, any> => ({});
 
 const formData = ref({
   target_agent_id: '',
   platform: 'wecom' as IMPlatform,
   name: '',
-  mode: 'websocket' as 'webhook' | 'websocket' | 'longpoll',
+  mode: 'websocket' as 'webhook' | 'websocket' | 'longpoll' | 'cloud_relay',
   output_mode: 'stream' as 'stream' | 'full',
   session_mode: 'user' as 'user' | 'thread',
   knowledge_base_id: '',
@@ -862,6 +871,10 @@ const wechatBound = computed(() => {
     formData.value.credentials.ilink_bot_id;
 });
 
+const wechatOaBound = computed(() => {
+  return formData.value.platform === 'wechat_oa' &&
+    !!formData.value.credentials.authorizer_appid;
+});
 
 function onPlatformChange(val: string | number | boolean) {
   if (editingChannel.value) return;
@@ -878,6 +891,9 @@ function onPlatformChange(val: string | number | boolean) {
   // WeChat uses fixed mode/output
   if (val === 'wechat') {
     formData.value.mode = 'longpoll';
+    formData.value.output_mode = 'full';
+  } else if (val === 'wechat_oa') {
+    formData.value.mode = 'cloud_relay';
     formData.value.output_mode = 'full';
   } else if (val === 'mattermost' || val === 'yunzhijia') {
     formData.value.mode = 'webhook';
@@ -975,6 +991,91 @@ function stopWeChatPolling() {
   if (wechatPollTimer) {
     clearTimeout(wechatPollTimer);
     wechatPollTimer = null;
+  }
+}
+
+async function startWeChatOABinding() {
+  const agentId = formData.value.target_agent_id;
+  if (!agentId) {
+    MessagePlugin.warning(t('integrations.selectAgentHint'));
+    return;
+  }
+  stopWeChatOAPolling();
+  wechatOaLoading.value = true;
+  wechatOaQRImgUrl.value = '';
+  wechatOaPreauthId.value = '';
+  wechatOaQRStatus.value = '';
+
+  try {
+    const res = await createWeChatOAPreauth(agentId);
+    wechatOaPreauthId.value = res.data.preauth_id;
+    // Cloud returns an image URL directly (not raw QR payload text)
+    wechatOaQRImgUrl.value = res.data.qrcode_url;
+    wechatOaQRStatus.value = res.data.status || 'wait';
+    startWeChatOAPolling();
+  } catch (err: any) {
+    const message = err?.response?.data?.error || err?.message || '';
+    if (
+      message === 'weknoracloud_credentials_required' ||
+      message === 'callback_base_url_required'
+    ) {
+      MessagePlugin.error(t('agentEditor.im.wechatOaNeedCloud'));
+    } else {
+      MessagePlugin.error(message || t('common.operationFailed'));
+    }
+  } finally {
+    wechatOaLoading.value = false;
+  }
+}
+
+function startWeChatOAPolling() {
+  wechatOaPollActive = true;
+  pollWeChatOAOnce();
+}
+
+async function pollWeChatOAOnce() {
+  if (!wechatOaPollActive || !wechatOaPreauthId.value) return;
+  try {
+    const statusRes = await getWeChatOAPreauthStatus(wechatOaPreauthId.value);
+    if (!wechatOaPollActive) return;
+    wechatOaQRStatus.value = statusRes.data.status;
+
+    if (statusRes.data.status === 'bound') {
+      stopWeChatOAPolling();
+      wechatOaQRImgUrl.value = '';
+      wechatOaPreauthId.value = '';
+      MessagePlugin.success(t('agentEditor.im.wechatOaBindSuccess'));
+      showCreateDialog.value = false;
+      resetForm();
+      await loadChannels();
+      return;
+    }
+    if (
+      statusRes.data.status === 'expired' ||
+      statusRes.data.status === 'failed'
+    ) {
+      stopWeChatOAPolling();
+      if (statusRes.data.status === 'failed' && statusRes.data.error_message) {
+        MessagePlugin.error(statusRes.data.error_message);
+      }
+      return;
+    }
+  } catch {
+    // transient error — keep polling
+  }
+  if (wechatOaPollActive) {
+    wechatOaPollTimer = setTimeout(
+      pollWeChatOAOnce,
+      WECHAT_OA_POLL_INTERVAL_MS,
+    );
+  }
+}
+
+function stopWeChatOAPolling() {
+  wechatOaPollActive = false;
+  if (wechatOaPollTimer) {
+    clearTimeout(wechatOaPollTimer);
+    wechatOaPollTimer = null;
   }
 }
 
@@ -1203,6 +1304,7 @@ watch(filterAgentId, (id) => {
 
 onUnmounted(() => {
   stopWeChatPolling();
+  stopWeChatOAPolling();
 });
 </script>
 
