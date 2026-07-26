@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -17,13 +18,15 @@ import (
 )
 
 const (
-	openAPIChatChannel           = "api"
-	openAPIAgentCompleteWait     = 2 * time.Second
-	openAPIChatCompletionObject  = "chat.completion"
-	openAPIErrTypeInvalidRequest = "invalid_request_error"
-	openAPIErrTypePermission     = "permission_error"
-	openAPIErrTypeServer         = "server_error"
-	openAPIErrTypeAuth           = "authentication_error"
+	openAPIChatChannel               = "api"
+	openAPIAgentCompleteWait         = 2 * time.Second
+	openAPIChatCompletionObject      = "chat.completion"
+	openAPIChatCompletionChunkObject = "chat.completion.chunk"
+	openAPISSEDonePayload            = "[DONE]"
+	openAPIErrTypeInvalidRequest     = "invalid_request_error"
+	openAPIErrTypePermission         = "permission_error"
+	openAPIErrTypeServer             = "server_error"
+	openAPIErrTypeAuth               = "authentication_error"
 )
 
 // OpenAPIChatHandler serves OpenAI-compatible chat completions for publish keys.
@@ -56,18 +59,18 @@ type openAIChatCompletionRequest struct {
 }
 
 type openAIChatCompletionResponse struct {
-	ID        string                         `json:"id"`
-	Object    string                         `json:"object"`
-	Model     string                         `json:"model"`
-	Choices   []openAIChatCompletionChoice   `json:"choices"`
-	Usage     openAIChatCompletionUsage      `json:"usage"`
-	SessionID string                         `json:"session_id"`
+	ID        string                       `json:"id"`
+	Object    string                       `json:"object"`
+	Model     string                       `json:"model"`
+	Choices   []openAIChatCompletionChoice `json:"choices"`
+	Usage     openAIChatCompletionUsage    `json:"usage"`
+	SessionID string                       `json:"session_id"`
 }
 
 type openAIChatCompletionChoice struct {
-	Index        int                    `json:"index"`
-	Message      openAIChatResponseMsg  `json:"message"`
-	FinishReason string                 `json:"finish_reason"`
+	Index        int                   `json:"index"`
+	Message      openAIChatResponseMsg `json:"message"`
+	FinishReason string                `json:"finish_reason"`
 }
 
 type openAIChatResponseMsg struct {
@@ -79,6 +82,33 @@ type openAIChatCompletionUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+// openAIChatCompletionChunk is an OpenAI-compatible SSE chunk. session_id is a
+// WeKnora extension present on every chunk for client correlation.
+type openAIChatCompletionChunk struct {
+	ID        string                            `json:"id"`
+	Object    string                            `json:"object"`
+	Model     string                            `json:"model"`
+	Choices   []openAIChatCompletionChunkChoice `json:"choices"`
+	SessionID string                            `json:"session_id"`
+}
+
+type openAIChatCompletionChunkChoice struct {
+	Index        int             `json:"index"`
+	Delta        openAIChatDelta `json:"delta"`
+	FinishReason *string         `json:"finish_reason"`
+}
+
+type openAIChatDelta struct {
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+}
+
+type openAPIStreamPiece struct {
+	content string
+	done    bool
+	err     error
 }
 
 // ChatCompletions handles POST /api/v1/chat/completions (non-stream P0).
@@ -215,23 +245,379 @@ func (h *OpenAPIChatHandler) ChatCompletions(c *gin.Context) {
 	})
 }
 
-// chatCompletionsStream is a Task 7 placeholder. Non-stream must not be
-// returned when stream=true.
+// chatCompletionsStream writes OpenAI-compatible SSE chunks for stream=true.
 func (h *OpenAPIChatHandler) chatCompletionsStream(
 	c *gin.Context,
-	_ *openAIChatCompletionRequest,
+	req *openAIChatCompletionRequest,
 	_ types.AgentPublishAPIKeyContext,
-	_ *types.Session,
-	_ *types.CustomAgent,
-	_ string,
+	session *types.Session,
+	agent *types.CustomAgent,
+	query string,
 ) {
-	writeOpenAPIError(
-		c,
-		http.StatusBadRequest,
-		openAPIErrTypeInvalidRequest,
-		"streaming_not_implemented",
-		"streaming is not implemented yet",
+	ctx := c.Request.Context()
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		writeOpenAPIError(
+			c,
+			http.StatusInternalServerError,
+			openAPIErrTypeServer,
+			"server_error",
+			"streaming is not supported",
+		)
+		return
+	}
+
+	modelName := strings.TrimSpace(req.Model)
+	if modelName == "" {
+		modelName = agent.Name
+	}
+	completionID := "chatcmpl-" + uuid.New().String()
+
+	setOpenAPISSEHeaders(c)
+	c.Status(http.StatusOK)
+	c.Writer.WriteHeaderNow()
+
+	answer, err := h.runStreamQA(
+		ctx, c, flusher, session, agent, query, completionID, modelName,
 	)
+	if err != nil {
+		logger.ErrorWithFields(ctx, err, map[string]interface{}{
+			"session_id": session.ID,
+			"agent_id":   agent.ID,
+		})
+		// Headers already sent; best-effort error notice then terminate.
+		_ = writeOpenAPISSEData(c, flusher, map[string]any{
+			"error": map[string]string{
+				"message": "failed to generate completion",
+				"type":    openAPIErrTypeServer,
+				"code":    "server_error",
+			},
+		})
+		_ = writeOpenAPISSEDone(c, flusher)
+		return
+	}
+	logger.Infof(
+		ctx,
+		"openapi chat stream completed: session=%s answer_len=%d",
+		session.ID,
+		len(answer),
+	)
+}
+
+func setOpenAPISSEHeaders(c *gin.Context) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+}
+
+func writeOpenAPISSEData(
+	c *gin.Context, flusher http.Flusher, payload any,
+) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	flusher.Flush()
+	return nil
+}
+
+func writeOpenAPISSEDone(c *gin.Context, flusher http.Flusher) error {
+	if _, err := fmt.Fprintf(
+		c.Writer, "data: %s\n\n", openAPISSEDonePayload,
+	); err != nil {
+		return err
+	}
+	flusher.Flush()
+	return nil
+}
+
+func (h *OpenAPIChatHandler) writeOpenAPIChunk(
+	c *gin.Context,
+	flusher http.Flusher,
+	completionID, modelName, sessionID string,
+	delta openAIChatDelta,
+	finishReason *string,
+) error {
+	return writeOpenAPISSEData(c, flusher, openAIChatCompletionChunk{
+		ID:     completionID,
+		Object: openAPIChatCompletionChunkObject,
+		Model:  modelName,
+		Choices: []openAIChatCompletionChunkChoice{
+			{
+				Index:        0,
+				Delta:        delta,
+				FinishReason: finishReason,
+			},
+		},
+		SessionID: sessionID,
+	})
+}
+
+func (h *OpenAPIChatHandler) runStreamQA(
+	ctx context.Context,
+	c *gin.Context,
+	flusher http.Flusher,
+	session *types.Session,
+	agent *types.CustomAgent,
+	query, completionID, modelName string,
+) (string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	pieces := make(chan openAPIStreamPiece, 64)
+	eventBus := event.NewEventBus()
+	var answerMu sync.Mutex
+	var answerBuilder strings.Builder
+	completeDone := make(chan struct{})
+	var completeOnce sync.Once
+	closeComplete := func() {
+		completeOnce.Do(func() { close(completeDone) })
+	}
+
+	sendPiece := func(piece openAPIStreamPiece) {
+		select {
+		case pieces <- piece:
+		case <-ctx.Done():
+		}
+	}
+
+	h.registerOpenAPIStreamHandlers(
+		eventBus, &answerMu, &answerBuilder, sendPiece, closeComplete,
+	)
+
+	useAgent := agent != nil && agent.IsAgentMode()
+	userMsg, assistantMsg, err := h.createOpenAPIQAMessages(
+		ctx, session.ID, query,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	go h.runOpenAPIQA(
+		ctx, session, agent, query, userMsg.ID, assistantMsg.ID,
+		useAgent, eventBus, sendPiece, closeComplete,
+	)
+
+	if err := h.writeOpenAPIChunk(
+		c, flusher, completionID, modelName, session.ID,
+		openAIChatDelta{Role: "assistant"}, nil,
+	); err != nil {
+		return "", err
+	}
+
+	streamErr, err := h.consumeOpenAPIStreamPieces(
+		ctx, c, flusher, pieces, completionID, modelName, session.ID,
+	)
+	if err != nil {
+		assistantMsg.Content = "抱歉，回答已被取消。"
+		assistantMsg.IsCompleted = true
+		_ = h.messages.UpdateMessage(
+			context.WithoutCancel(ctx), assistantMsg,
+		)
+		return "", err
+	}
+
+	if useAgent {
+		waitForOpenAPIAgentComplete(ctx, completeDone, session.ID)
+	}
+
+	answerMu.Lock()
+	answer := answerBuilder.String()
+	answerMu.Unlock()
+
+	if answer == "" && streamErr != nil {
+		return "", streamErr
+	}
+	if answer == "" {
+		answer = "抱歉，我暂时无法回答这个问题。"
+		_ = h.writeOpenAPIChunk(
+			c, flusher, completionID, modelName, session.ID,
+			openAIChatDelta{Content: answer}, nil,
+		)
+	}
+
+	finishReasonStop := "stop"
+	if err := h.writeOpenAPIChunk(
+		c, flusher, completionID, modelName, session.ID,
+		openAIChatDelta{}, &finishReasonStop,
+	); err != nil {
+		return answer, err
+	}
+	if err := writeOpenAPISSEDone(c, flusher); err != nil {
+		return answer, err
+	}
+
+	assistantMsg.Content = answer
+	assistantMsg.IsCompleted = true
+	if err := h.messages.UpdateMessage(ctx, assistantMsg); err != nil {
+		logger.Warnf(
+			ctx,
+			"openapi chat: failed to update assistant message: %v",
+			err,
+		)
+	}
+	return answer, nil
+}
+
+func (h *OpenAPIChatHandler) registerOpenAPIStreamHandlers(
+	eventBus *event.EventBus,
+	answerMu *sync.Mutex,
+	answerBuilder *strings.Builder,
+	sendPiece func(openAPIStreamPiece),
+	closeComplete func(),
+) {
+	eventBus.On(event.EventAgentFinalAnswer, func(
+		_ context.Context, evt event.Event,
+	) error {
+		data, ok := evt.Data.(event.AgentFinalAnswerData)
+		if !ok {
+			return nil
+		}
+		if data.Content != "" {
+			answerMu.Lock()
+			answerBuilder.WriteString(data.Content)
+			answerMu.Unlock()
+			sendPiece(openAPIStreamPiece{content: data.Content})
+		}
+		if data.Done {
+			sendPiece(openAPIStreamPiece{done: true})
+		}
+		return nil
+	})
+
+	eventBus.On(event.EventError, func(
+		_ context.Context, evt event.Event,
+	) error {
+		data, ok := evt.Data.(event.ErrorData)
+		if !ok {
+			return nil
+		}
+		sendPiece(openAPIStreamPiece{
+			err: fmt.Errorf("QA pipeline error: %s", data.Error),
+		})
+		closeComplete()
+		return nil
+	})
+
+	eventBus.On(event.EventAgentComplete, func(
+		_ context.Context, evt event.Event,
+	) error {
+		data, ok := evt.Data.(event.AgentCompleteData)
+		if !ok {
+			return nil
+		}
+		answerMu.Lock()
+		needsFallback := answerBuilder.Len() == 0 &&
+			strings.TrimSpace(data.FinalAnswer) != ""
+		fallback := data.FinalAnswer
+		answerMu.Unlock()
+		if needsFallback {
+			answerMu.Lock()
+			answerBuilder.WriteString(fallback)
+			answerMu.Unlock()
+			sendPiece(openAPIStreamPiece{content: fallback})
+		}
+		sendPiece(openAPIStreamPiece{done: true})
+		closeComplete()
+		return nil
+	})
+}
+
+func (h *OpenAPIChatHandler) createOpenAPIQAMessages(
+	ctx context.Context, sessionID, query string,
+) (*types.Message, *types.Message, error) {
+	requestID := uuid.New().String()
+	userMsg, err := h.messages.CreateMessage(ctx, &types.Message{
+		SessionID:   sessionID,
+		Role:        "user",
+		Content:     query,
+		RequestID:   requestID,
+		CreatedAt:   time.Now(),
+		IsCompleted: true,
+		Channel:     openAPIChatChannel,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("create user message: %w", err)
+	}
+	assistantMsg, err := h.messages.CreateMessage(ctx, &types.Message{
+		SessionID:   sessionID,
+		Role:        "assistant",
+		RequestID:   requestID,
+		CreatedAt:   time.Now(),
+		IsCompleted: false,
+		Channel:     openAPIChatChannel,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("create assistant message: %w", err)
+	}
+	return userMsg, assistantMsg, nil
+}
+
+func (h *OpenAPIChatHandler) runOpenAPIQA(
+	ctx context.Context,
+	session *types.Session,
+	agent *types.CustomAgent,
+	query, userMsgID, assistantMsgID string,
+	useAgent bool,
+	eventBus *event.EventBus,
+	sendPiece func(openAPIStreamPiece),
+	closeComplete func(),
+) {
+	qaReq := &types.QARequest{
+		Session:            session,
+		Query:              query,
+		AssistantMessageID: assistantMsgID,
+		CustomAgent:        agent,
+		UserMessageID:      userMsgID,
+		WebSearchEnabled: agent != nil &&
+			agent.Config.WebSearchEnabled,
+	}
+	var runErr error
+	if useAgent {
+		runErr = h.sessions.AgentQA(ctx, qaReq, eventBus)
+	} else {
+		runErr = h.sessions.KnowledgeQA(ctx, qaReq, eventBus)
+	}
+	if runErr != nil {
+		sendPiece(openAPIStreamPiece{
+			err: fmt.Errorf("QA execution error: %w", runErr),
+		})
+		closeComplete()
+	}
+}
+
+func (h *OpenAPIChatHandler) consumeOpenAPIStreamPieces(
+	ctx context.Context,
+	c *gin.Context,
+	flusher http.Flusher,
+	pieces <-chan openAPIStreamPiece,
+	completionID, modelName, sessionID string,
+) (error, error) {
+	for {
+		select {
+		case piece := <-pieces:
+			if piece.err != nil {
+				return piece.err, nil
+			}
+			if piece.content != "" {
+				if err := h.writeOpenAPIChunk(
+					c, flusher, completionID, modelName, sessionID,
+					openAIChatDelta{Content: piece.content}, nil,
+				); err != nil {
+					return nil, err
+				}
+			}
+			if piece.done {
+				return nil, nil
+			}
+		case <-ctx.Done():
+			return nil, fmt.Errorf("QA cancelled: %w", ctx.Err())
+		}
+	}
 }
 
 func (h *OpenAPIChatHandler) resolveOpenAPISession(

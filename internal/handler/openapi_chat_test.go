@@ -19,11 +19,11 @@ import (
 )
 
 const (
-	testOpenAPITenantID  = uint64(7)
-	testOpenAPIAgentID   = "agent-publish-1"
-	testOpenAPIKeyID     = uint64(99)
-	testOpenAPIToken     = "wkpub_test_token_abcdefghijklmnopqrst"
-	testOpenAPIAnswer    = "openapi assistant reply"
+	testOpenAPITenantID = uint64(7)
+	testOpenAPIAgentID  = "agent-publish-1"
+	testOpenAPIKeyID    = uint64(99)
+	testOpenAPIToken    = "wkpub_test_token_abcdefghijklmnopqrst"
+	testOpenAPIAnswer   = "openapi assistant reply"
 )
 
 type openAPIFakePublishKeyService struct {
@@ -348,6 +348,45 @@ func TestOpenAPIChatCompletionsNonStreamOK(t *testing.T) {
 		testOpenAPIAgentID,
 		sessions.created.LastRequestState.AgentID,
 	)
+}
+
+func TestOpenAPIChatCompletionsStreamOK(t *testing.T) {
+	sessions := &openAPIFakeSessionService{answer: testOpenAPIAnswer}
+	handler := NewOpenAPIChatHandler(
+		sessions,
+		&openAPIFakeMessageService{},
+		&openAPIFakeAgentService{agent: openAPITestAgent()},
+	)
+	router := newOpenAPITestRouter(
+		t,
+		&openAPIFakePublishKeyService{key: openAPIValidKey()},
+		&openAPIFakeTenantService{
+			tenant: &types.Tenant{ID: testOpenAPITenantID},
+		},
+		handler,
+	)
+
+	recorder := postOpenAPIChat(router, testOpenAPIToken, map[string]any{
+		"model":  "echo-model",
+		"stream": true,
+		"messages": []map[string]any{
+			{"role": "user", "content": "hello stream"},
+		},
+	})
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Contains(
+		t,
+		recorder.Header().Get("Content-Type"),
+		"text/event-stream",
+	)
+
+	body := recorder.Body.String()
+	require.Contains(t, body, openAPIChatCompletionChunkObject)
+	require.Contains(t, body, "data: [DONE]")
+	require.Contains(t, body, testOpenAPIAnswer)
+	require.Contains(t, body, `"finish_reason":"stop"`)
+	require.Contains(t, body, `"session_id"`)
+	require.NotNil(t, sessions.created)
 }
 
 func assertOpenAPIChatError(t *testing.T, body []byte, code string) {
