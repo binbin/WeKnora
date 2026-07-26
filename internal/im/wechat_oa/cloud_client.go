@@ -59,13 +59,13 @@ type HTTPCloudClient struct {
 	httpClient *http.Client
 }
 
-// NewHTTPCloudClient builds a client. Empty baseURL uses TreeRAGCloudBaseURL.
+// NewHTTPCloudClient builds a client. Empty baseURL uses WeKnoraCloudBaseURL.
 func NewHTTPCloudClient(
 	baseURL, appID, appSecret string,
 	httpClient *http.Client,
 ) *HTTPCloudClient {
 	if strings.TrimSpace(baseURL) == "" {
-		baseURL = provider.TreeRAGCloudBaseURL
+		baseURL = provider.WeKnoraCloudBaseURL
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
