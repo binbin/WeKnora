@@ -207,7 +207,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useI18n } from 'vue-i18n'
-import { saveWeKnoraCloudCredentials, getWeKnoraCloudStatus, createModel, listModels } from '@/api/model'
+import { saveTreeRAGCloudCredentials, getTreeRAGCloudStatus, createModel, listModels } from '@/api/model'
 import { testEmbeddingModel } from '@/api/initialization'
 import {
   WKC_MODEL_KINDS,
@@ -299,7 +299,7 @@ const addModels = async (kinds: WkcModelKind[]) => {
         existingKinds.value = new Set([...existingKinds.value, kind])
         success += 1
       } catch (err: any) {
-        console.error(`Failed to create WeKnoraCloud ${kind} model:`, err)
+        console.error(`Failed to create TreeRAGCloud ${kind} model:`, err)
         failed += 1
       }
     }
@@ -324,7 +324,7 @@ const handleSave = async () => {
   }
   saving.value = true
   try {
-    await saveWeKnoraCloudCredentials({
+    await saveTreeRAGCloudCredentials({
       app_id: form.value.appId,
       app_secret: form.value.appSecret,
     })
@@ -345,7 +345,7 @@ const handleSave = async () => {
 
 const checkStatus = async () => {
   try {
-    const status = await getWeKnoraCloudStatus()
+    const status = await getTreeRAGCloudStatus()
     needsReinit.value = status.needs_reinit
     reinitReason.value = status.reason || ''
     hasCredentials.value = status.has_models && !status.needs_reinit

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 该脚本用于从源码构建WeKnora的所有Docker镜像
+# 该脚本用于从源码构建TreeRAG的所有Docker镜像
 
 # 设置颜色
 GREEN='\033[0;32m'
@@ -18,7 +18,7 @@ SCRIPT_NAME=$(basename "$0")
 
 # 显示帮助信息
 show_help() {
-    echo -e "${GREEN}WeKnora 镜像构建脚本 v${VERSION}${NC}"
+    echo -e "${GREEN}TreeRAG 镜像构建脚本 v${VERSION}${NC}"
     echo -e "${GREEN}用法:${NC} $0 [选项]"
     echo "选项:"
     echo "  -h, --help     显示帮助信息"
@@ -34,7 +34,7 @@ show_help() {
 
 # 显示版本信息
 show_version() {
-    echo -e "${GREEN}WeKnora 镜像构建脚本 v${VERSION}${NC}"
+    echo -e "${GREEN}TreeRAG 镜像构建脚本 v${VERSION}${NC}"
     exit 0
 }
 
@@ -290,7 +290,7 @@ build_all_images() {
 
 # 清理本地镜像
 clean_images() {
-    log_info "清理本地WeKnora镜像..."
+    log_info "清理本地TreeRAG镜像..."
     
     # 停止相关容器
     log_info "停止相关容器..."

@@ -1,6 +1,6 @@
-# WeKnora HTTP Client
+# TreeRAG HTTP Client
 
-This package provides a client library for interacting with WeKnora services, supporting all HTTP-based interface calls, making it easier for other modules to integrate with WeKnora services without having to write HTTP request code directly.
+This package provides a client library for interacting with TreeRAG services, supporting all HTTP-based interface calls, making it easier for other modules to integrate with TreeRAG services without having to write HTTP request code directly.
 
 ## Main Features
 

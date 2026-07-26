@@ -5,5 +5,10 @@ declare module '*.vue' {
     import { Component } from 'vue'; const component: Component; export default component;
 }
 
+declare module '*.md?raw' {
+  const content: string
+  export default content
+}
+
 declare const __FRONTEND_VERSION__: string;
 declare const __FRONTEND_COMMIT__: string;

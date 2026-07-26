@@ -7,7 +7,7 @@ source: api/README.md
 
 # API 文档概览
 
-WeKnora 提供了一系列 RESTful API，用于创建和管理知识库、检索知识，以及进行基于知识的问答。
+TreeRAG 提供了一系列 RESTful API，用于创建和管理知识库、检索知识，以及进行基于知识的问答。
 
 ## 基础信息
 
@@ -15,7 +15,7 @@ WeKnora 提供了一系列 RESTful API，用于创建和管理知识库、检索
 - **响应格式**: JSON
 - **认证方式**: API Key
 
-> API 认证使用 WeKnora 本地 JWT，OIDC 认证流程参见 [OIDC认证调用流程](../安全认证/OIDC认证调用流程.md)
+> API 认证使用 TreeRAG 本地 JWT，OIDC 认证流程参见 [OIDC认证调用流程](../安全认证/OIDC认证调用流程.md)
 
 ## 认证机制
 
@@ -57,6 +57,7 @@ API Key 在 Web 页面完成账户注册后，前往账户信息页面获取。
 | 会话管理 | 创建和管理对话会话 | [session.md](../../api/session.md) |
 | 知识搜索 | 在知识库中搜索内容 | [knowledge-search.md](../../api/knowledge-search.md) |
 | 聊天功能 | 基于知识库和 Agent 进行问答 | [chat.md](../../api/chat.md) |
+| 发布渠道 OpenAPI | 发布渠道 API Key 的 OpenAI 兼容对话 | [openapi-chat.md](../../api/openapi-chat.md) · [发布渠道API访问](./发布渠道API访问.md) |
 | 消息管理 | 获取和管理对话消息 | [message.md](../../api/message.md) |
 | 评估功能 | 评估模型性能 | [evaluation.md](../../api/evaluation.md) |
 | 初始化管理 | 知识库模型配置与 Ollama 管理 | [initialization.md](../../api/initialization.md) |

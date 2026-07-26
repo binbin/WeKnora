@@ -1,13 +1,13 @@
 ---
 name: weknora-shared
-description: Use when driving a WeKnora RAG server through the `weknora` CLI as an agent — authenticating, managing knowledge bases / documents / sessions / agents, running search or chat, or interpreting the CLI's JSON envelopes and exit codes. Read this before any other weknora-* skill.
+description: Use when driving a TreeRAG RAG server through the `weknora` CLI as an agent — authenticating, managing knowledge bases / documents / sessions / agents, running search or chat, or interpreting the CLI's JSON envelopes and exit codes. Read this before any other weknora-* skill.
 metadata:
   tested_against: v0.10
 ---
 
-# WeKnora CLI — shared base
+# TreeRAG CLI — shared base
 
-`weknora` is the agent-first CLI for a WeKnora RAG server. Every command prints
+`weknora` is the agent-first CLI for a TreeRAG RAG server. Every command prints
 a JSON envelope and uses a typed exit code, so you branch on machine-readable
 output, not prose. Read this skill before any task-specific `weknora-*` skill.
 

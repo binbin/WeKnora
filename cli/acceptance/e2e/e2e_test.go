@@ -1,6 +1,6 @@
 //go:build acceptance_e2e
 
-// Package e2e_test drives the WeKnora CLI binary against a real running
+// Package e2e_test drives the TreeRAG CLI binary against a real running
 // server to validate the RAG closing loop end-to-end.
 //
 // Build tag isolation: //go:build acceptance_e2e excludes this file from
@@ -191,13 +191,13 @@ func buildBinary(t *testing.T) string {
 // window.
 func writeSampleDoc(t *testing.T) string {
 	t.Helper()
-	content := `WeKnora E2E Sample Document
+	content := `TreeRAG E2E Sample Document
 
-This sample document is used by the WeKnora CLI acceptance test suite to
+This sample document is used by the TreeRAG CLI acceptance test suite to
 validate the end-to-end retrieval-augmented generation pipeline.
 
 向量检索的核心思想是把文本通过 embedding 模型映射到高维向量空间,然后通过余弦相似度
-等度量找出语义最接近的内容片段。WeKnora 支持 vector + keyword 的混合检索模式。
+等度量找出语义最接近的内容片段。TreeRAG 支持 vector + keyword 的混合检索模式。
 
 The hybrid search mode combines vector similarity (semantic) with keyword
 matching (lexical) to balance recall and precision.
@@ -211,7 +211,7 @@ matching (lexical) to balance recall and precision.
 }
 
 // waitDocReady polls `doc list` until the uploaded document's status indicates
-// indexing is complete. WeKnora server uses a few status values across versions
+// indexing is complete. TreeRAG server uses a few status values across versions
 // ("ready", "completed", "ok") - accept any non-pending/non-processing/non-failed
 // state so we don't break on a server-side rename. Failed status fails the test
 // fast.

@@ -89,12 +89,12 @@ func NewRemoteAPIChat(chatConfig *ChatConfig) (*RemoteAPIChat, error) {
 			modelName = override
 		}
 	}
-	if providerName == provider.ProviderWeKnoraCloud {
+	if providerName == provider.ProviderTreeRAGCloud {
 		if chatConfig.AppID == "" {
-			return nil, fmt.Errorf("WeKnoraCloud provider: AppID is required")
+			return nil, fmt.Errorf("TreeRAGCloud provider: AppID is required")
 		}
 		if chatConfig.AppSecret == "" {
-			return nil, fmt.Errorf("WeKnoraCloud provider: AppSecret is required")
+			return nil, fmt.Errorf("TreeRAGCloud provider: AppSecret is required")
 		}
 	}
 

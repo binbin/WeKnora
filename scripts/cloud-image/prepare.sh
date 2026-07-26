@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# prepare.sh - 在干净的 Linux 实例上部署 WeKnora 运行时, 用于制作云镜像模板。
-# 不需要 clone 整个 WeKnora 仓库, 只下载 4 个运行时文件 (~100KB)。
+# prepare.sh - 在干净的 Linux 实例上部署 TreeRAG 运行时, 用于制作云镜像模板。
+# 不需要 clone 整个 TreeRAG 仓库, 只下载 4 个运行时文件 (~100KB)。
 # 兼容: Ubuntu / Debian / CentOS / Rocky / TencentOS 等带 systemd + Docker 的发行版。
 # 使用方式:  sudo bash prepare.sh
 # 可调环境变量:
 #   WEKNORA_REF              要拉取的 git ref (tag / branch / commit), 默认 main
-#   WEKNORA_DIR              部署目录, 默认 /opt/WeKnora
+#   WEKNORA_DIR              部署目录, 默认 /opt/TreeRAG
 #   WEKNORA_REPO             仓库地址, 默认 https://github.com/Tencent/WeKnora
 #   WEKNORA_GH_PROXY         GitHub 加速前缀, 默认空。中国大陆机器可设
 #                            https://gh-proxy.com/ 或 https://ghfast.top/
@@ -28,7 +28,7 @@
 set -euo pipefail
 
 WEKNORA_REF="${WEKNORA_REF:-main}"
-WEKNORA_DIR="${WEKNORA_DIR:-/opt/WeKnora}"
+WEKNORA_DIR="${WEKNORA_DIR:-/opt/TreeRAG}"
 WEKNORA_REPO="${WEKNORA_REPO:-https://github.com/Tencent/WeKnora}"
 WEKNORA_GH_PROXY="${WEKNORA_GH_PROXY:-}"
 DOCKER_INSTALL_MIRROR="${DOCKER_INSTALL_MIRROR:-}"
@@ -120,7 +120,7 @@ EOF
   done
 fi
 
-echo "[prepare] 2/6 拉取 WeKnora 运行时文件 (ref=${WEKNORA_REF})"
+echo "[prepare] 2/6 拉取 TreeRAG 运行时文件 (ref=${WEKNORA_REF})"
 # 只下载实际需要的 4 个文件, 不 clone 整个仓库 (~MB 级 -> ~KB 级)
 mkdir -p "${WEKNORA_DIR}/config" "${WEKNORA_DIR}/skills"
 
@@ -137,9 +137,9 @@ tar -xzf "${tmp}/repo.tar.gz" -C "${tmp}" \
   '*/.env.example' \
   '*/config/config.yaml' \
   '*/skills/preloaded'
-src=$(find "${tmp}" -maxdepth 1 -mindepth 1 -type d -name 'WeKnora-*' | head -1)
+src=$(find "${tmp}" -maxdepth 1 -mindepth 1 -type d -name 'TreeRAG-*' | head -1)
 if [[ -z "${src}" ]]; then
-  echo "[prepare] 解压失败, 未找到 WeKnora-* 目录" >&2
+  echo "[prepare] 解压失败, 未找到 TreeRAG-* 目录" >&2
   exit 1
 fi
 
@@ -184,7 +184,7 @@ docker compose --profile full pull sandbox || true
 
 # 其他向量库 / 可观测组件 (qdrant, milvus, weaviate, doris, neo4j, langfuse-*, minio, dex)
 # 不预拉, 体积可省 5-15GB. 用户如需启用:
-#   cd /opt/WeKnora && docker compose --profile <name> up -d
+#   cd /opt/TreeRAG && docker compose --profile <name> up -d
 
 # 升级场景: 清理旧版本 tag 的 wechatopenai/weknora-* 镜像。
 # 默认关闭, 保留回滚路径; 制作镜像前显式打开以减小体积。
@@ -225,7 +225,7 @@ systemctl enable weknora-firstboot.service
 
 echo "[prepare] 6/6 完成"
 echo
-echo "  WeKnora 运行时已部署到 ${WEKNORA_DIR}"
+echo "  TreeRAG 运行时已部署到 ${WEKNORA_DIR}"
 echo "    docker-compose.yml / config/config.yaml / skills/preloaded / .env"
 echo "  版本: ${WEKNORA_REF}  (见 ${WEKNORA_DIR}/.cloud-image-meta)"
 echo

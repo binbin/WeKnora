@@ -346,7 +346,7 @@ func TestTenantInfrastructureRoutesDeclareSpecificCapabilities(t *testing.T) {
 	RegisterGuestLinkChannelRoutes(v1, &handler.GuestLinkChannelHandler{}, g)
 	RegisterIMChannelRoutes(v1, &handler.IMHandler{}, nil, g)
 	RegisterDataSourceRoutes(v1, &handler.DataSourceHandler{}, &handler.DataSourceCredentialsHandler{}, g)
-	RegisterWeKnoraCloudRoutes(v1, &handler.WeKnoraCloudHandler{}, g)
+	RegisterTreeRAGCloudRoutes(v1, &handler.TreeRAGCloudHandler{}, g)
 
 	cases := []struct {
 		method string

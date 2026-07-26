@@ -28,7 +28,8 @@ temp/
 logs/
 *.pid
 
-WeKnora
+TreeRAG
+TreeRAG-lite
 WeKnora-lite
 cmd/desktop/build/bin/
 /models/
@@ -46,7 +47,7 @@ web/
 /server
 frontend/.vite
 frontend/chrome-extension/
-WeKnora-Chrome-Extension
+TreeRAG-Chrome-Extension
 packages/protoc-3.19.4-linux-x86_64.zip
 
 Claude.md

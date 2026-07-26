@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// CloudClient talks to WeKnora Cloud OA APIs for bind/unbind/send.
+// CloudClient talks to TreeRAG Cloud OA APIs for bind/unbind/send.
 type CloudClient interface {
 	CreatePreAuth(ctx context.Context, req PreAuthRequest) (*PreAuthResponse, error)
 	GetPreAuth(ctx context.Context, cloudPreAuthID string) (*PreAuthStatus, error)
@@ -59,13 +59,13 @@ type HTTPCloudClient struct {
 	httpClient *http.Client
 }
 
-// NewHTTPCloudClient builds a client. Empty baseURL uses WeKnoraCloudBaseURL.
+// NewHTTPCloudClient builds a client. Empty baseURL uses TreeRAGCloudBaseURL.
 func NewHTTPCloudClient(
 	baseURL, appID, appSecret string,
 	httpClient *http.Client,
 ) *HTTPCloudClient {
 	if strings.TrimSpace(baseURL) == "" {
-		baseURL = provider.WeKnoraCloudBaseURL
+		baseURL = provider.TreeRAGCloudBaseURL
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}

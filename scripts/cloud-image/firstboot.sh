@@ -11,7 +11,7 @@
 #      凭证仍可在 ${ENV_FILE} 中查到。
 set -euo pipefail
 
-WEKNORA_DIR="${WEKNORA_DIR:-/opt/WeKnora}"
+WEKNORA_DIR="${WEKNORA_DIR:-/opt/TreeRAG}"
 ENV_FILE="${WEKNORA_DIR}/.env"
 ENV_TEMPLATE="${WEKNORA_DIR}/.env.example"
 CRED_FILE="/root/weknora-credentials.txt"
@@ -107,7 +107,7 @@ PUB_IP=$(curl -fsS --max-time 5 https://ifconfig.me 2>/dev/null \
 
 cat >"${CRED_FILE}" <<INFO
 ========================================
-  WeKnora 实例初始化完成
+  TreeRAG 实例初始化完成
   生成时间: $(date -Iseconds)
 ========================================
 

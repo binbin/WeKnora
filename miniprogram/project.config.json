@@ -1,5 +1,5 @@
 {
-  "description": "WeKnora Mini Program plugin",
+  "description": "TreeRAG Mini Program plugin",
   "setting": {
     "urlCheck": true,
     "es6": true,
@@ -9,6 +9,6 @@
   },
   "compileType": "miniprogram",
   "libVersion": "latest",
-  "projectname": "WeKnora Mini Program",
+  "projectname": "TreeRAG Mini Program",
   "condition": {}
 }

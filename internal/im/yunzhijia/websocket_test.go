@@ -18,12 +18,12 @@ import (
 const testBusinessMessage = `{
   "type": 2,
   "robotId": "bot-1",
-  "robotName": "WeKnora",
+  "robotName": "TreeRAG",
   "operatorOpenid": "user-1",
   "operatorName": "User",
   "time": 1719648000000,
   "msgId": "msg-1",
-  "content": "@WeKnora hello",
+  "content": "@TreeRAG hello",
   "groupType": 1
 }`
 

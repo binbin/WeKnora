@@ -1,16 +1,16 @@
 ---
 name: weknora-rag-search
-description: Use when retrieving from or asking questions against a WeKnora knowledge base via the `weknora` CLI — and especially when unsure whether to use `chat`, `session ask`, or `search chunks` for a given goal.
+description: Use when retrieving from or asking questions against a TreeRAG knowledge base via the `weknora` CLI — and especially when unsure whether to use `chat`, `session ask`, or `search chunks` for a given goal.
 metadata:
   tested_against: v0.10
 ---
 
-# WeKnora — retrieval & RAG queries
+# TreeRAG — retrieval & RAG queries
 
 **REQUIRED BACKGROUND:** read the `weknora-shared` skill first (auth, `--kb`
 resolution, the JSON envelope, exit codes, streaming/NDJSON output).
 
-WeKnora gives you several ways to "ask about a knowledge base." Picking the wrong
+TreeRAG gives you several ways to "ask about a knowledge base." Picking the wrong
 one wastes turns or returns the wrong shape. Use the decision table.
 
 ## Pick the command by your goal

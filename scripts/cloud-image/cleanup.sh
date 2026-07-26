@@ -4,7 +4,7 @@
 # 执行后请直接在云控制台「制作镜像 / 创建快照 / 创建 AMI」，不要再 SSH 进来。
 set -euo pipefail
 
-WEKNORA_DIR="${WEKNORA_DIR:-/opt/WeKnora}"
+WEKNORA_DIR="${WEKNORA_DIR:-/opt/TreeRAG}"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "[cleanup] 请使用 sudo 或 root 运行" >&2
@@ -17,7 +17,7 @@ if [[ "${ans}" != "YES" ]]; then
   exit 0
 fi
 
-echo "[cleanup] 1/8 停止 WeKnora 容器"
+echo "[cleanup] 1/8 停止 TreeRAG 容器"
 COMPOSE_PROJECT=""
 if [[ -d "${WEKNORA_DIR}" ]]; then
   cd "${WEKNORA_DIR}"
@@ -27,7 +27,7 @@ if [[ -d "${WEKNORA_DIR}" ]]; then
   docker compose down -v --remove-orphans || true
 fi
 
-echo "[cleanup] 2/8 清空 WeKnora 业务数据 + 首启 marker / 日志"
+echo "[cleanup] 2/8 清空 TreeRAG 业务数据 + 首启 marker / 日志"
 if [[ -d "${WEKNORA_DIR}" ]]; then
   rm -rf "${WEKNORA_DIR}/data"/* "${WEKNORA_DIR}/logs"/* 2>/dev/null || true
   # 故意不在这里重建 .env: 让镜像里 .env 缺失, 任何在 firstboot 之前

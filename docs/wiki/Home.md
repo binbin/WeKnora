@@ -1,12 +1,12 @@
 ---
-title: WeKnora Wiki 首页
+title: TreeRAG Wiki 首页
 tags: [首页, 导航, MOC]
 aliases: [Home, Index, wiki首页]
 ---
 
-# WeKnora Wiki
+# TreeRAG Wiki
 
-欢迎使用 WeKnora 知识库 wiki！这里是 WeKnora 项目文档的互联知识网络，所有页面通过双向链接关联，帮助你从任意入口探索整个知识体系。
+欢迎使用 TreeRAG 知识库 wiki！这里是 TreeRAG 项目文档的互联知识网络，所有页面通过双向链接关联，帮助你从任意入口探索整个知识体系。
 
 ---
 
@@ -63,6 +63,7 @@ aliases: [Home, Index, wiki首页]
 | 页面 | 简介 |
 |------|------|
 | [API文档概览](API参考/API文档概览.md) | RESTful API 基础信息与分类索引 |
+| [发布渠道API访问](API参考/发布渠道API访问.md) | 发布渠道 `wkpub_` 密钥与 OpenAI 兼容对话 |
 
 ---
 
@@ -70,7 +71,7 @@ aliases: [Home, Index, wiki首页]
 
 ```mermaid
 graph TB
-    Home[WeKnora Wiki]
+    Home[TreeRAG Wiki]
     Home --> 项目概述
     Home --> 核心功能
     Home --> 集成扩展

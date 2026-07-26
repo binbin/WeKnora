@@ -21,15 +21,15 @@ export const WKC_MODEL_NAME_BY_KIND: Record<WkcModelKind, string> = {
 
 export const WKC_MODEL_KINDS: WkcModelKind[] = ['chat', 'embedding', 'rerank', 'vllm']
 
-export function isWeKnoraCloudModel(model: ModelConfig): boolean {
+export function isTreeRAGCloudModel(model: ModelConfig): boolean {
   return model.parameters?.provider === WEKNORA_CLOUD_PROVIDER
 }
 
-/** Returns kinds that already have a WeKnoraCloud model of the matching backend type. */
+/** Returns kinds that already have a TreeRAGCloud model of the matching backend type. */
 export function existingWkcKinds(models: ModelConfig[]): Set<WkcModelKind> {
   const found = new Set<WkcModelKind>()
   for (const model of models) {
-    if (!isWeKnoraCloudModel(model)) continue
+    if (!isTreeRAGCloudModel(model)) continue
     for (const kind of WKC_MODEL_KINDS) {
       if (model.type === BACKEND_TYPE_BY_KIND[kind]) {
         found.add(kind)

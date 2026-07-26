@@ -1,7 +1,7 @@
 # 微信公众号扫码绑定（Cloud 中转）设计
 
 日期：2026-07-26  
-状态：待实现评审
+状态：P0 已实现（实例侧）；Cloud 第三方平台能力依赖 Cloud 仓库
 
 ## 背景与决策
 
@@ -10,9 +10,9 @@
 - `platform=wechat`：腾讯 iLink 个人微信扫码长轮询
 - 发布入口还与 `wecom`（企业微信）混在同一卡片，且「创建机器人」默认 wecom
 
-产品目标：由**公众号管理员扫码授权**，让 WeKnora 接管该公众号的粉丝聊天互动；每个智能体可绑定不同公众号；Cloud 托管租户与自托管实例均可用。
+产品目标：由**公众号管理员扫码授权**，让 TreeRAG 接管该公众号的粉丝聊天互动；每个智能体可绑定不同公众号；Cloud 托管租户与自托管实例均可用。
 
-**结论：采用「WeKnora Cloud 统一第三方平台 + 实例 Webhook 中转」**。
+**结论：采用「TreeRAG Cloud 统一第三方平台 + 实例 Webhook 中转」**。
 
 | 决策 | 选择 |
 |------|------|
@@ -98,7 +98,7 @@
 ## 扫码绑定流
 
 1. 用户在发布渠道点击「绑定公众号」。
-2. 实例校验：已配置 WeKnora Cloud 凭证 + 可达回调基址（`PUBLIC_BASE_URL` 或 `WECHAT_OA_CALLBACK_BASE_URL`）；否则禁用并提示。
+2. 实例校验：已配置 TreeRAG Cloud 凭证 + 可达回调基址（`PUBLIC_BASE_URL` 或 `WECHAT_OA_CALLBACK_BASE_URL`）；否则禁用并提示。
 3. 实例 `POST` Cloud 预授权（租户、智能体、实例回调基址、一次性 `state`，TTL 约 30 分钟）。
 4. Cloud 调微信 `create_preauthcode`，返回授权二维码/链接给前端。
 5. 公众号管理员扫码确认权限集（消息、客服、素材等）。
@@ -176,7 +176,7 @@ Cloud 侧（概念）：第三方回调 URL、预授权、发消息、素材代�
 - `AgentPublishChannels`：
   - 「微信公众号」卡片只滤 `wechat_oa`，主操作「绑定公众号」走扫码（不再默认 wecom）。
   - 新增「企业微信」卡片只滤 `wecom`。
-  - 「个人微信」若进入发布渠道，单独卡片只滤 iLink `wechat`；否则仅留在 IM 集成页（实现计划选定其一，默认：发布渠道增加个人微信卡片以保持发现性）。
+  - 新增「个人微信」卡片只滤 iLink `wechat`（保留发现性；与公众号文案分离）。
 - 绑定弹层：二维码、状态、过期刷新。
 - 已绑定行：头像、昵称、主体、开关、重新授权、解绑；设置项含欢迎语、语音转写开关等（随分期露出）。
 - i18n：公众号 / 个人微信 / 企业微信文案拆分（zh/en/ko/ru）。
@@ -185,7 +185,7 @@ Cloud 侧（概念）：第三方回调 URL、预授权、发消息、素材代�
 
 | 位置 | 项 | 用途 |
 |------|-----|------|
-| 实例 | 已有 WeKnora Cloud 凭证 | 调 Cloud OA API |
+| 实例 | 已有 TreeRAG Cloud 凭证 | 调 Cloud OA API |
 | 实例 | `PUBLIC_BASE_URL` 或 `WECHAT_OA_CALLBACK_BASE_URL` | Cloud 回实例基址 |
 | Cloud | `component_appid` / secret / Token / AESKey | 第三方平台 |
 | Cloud | 权限集、重试与死信策略 | 运维 |

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WeKnora MCP Server 安装脚本
+TreeRAG MCP Server 安装脚本
 """
 
 from setuptools import setup
@@ -12,7 +12,7 @@ def read_readme():
         with open("README.md", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return "WeKnora MCP Server - Model Context Protocol server for WeKnora API"
+        return "TreeRAG MCP Server - Model Context Protocol server for TreeRAG API"
 
 
 # 读取依赖
@@ -29,12 +29,12 @@ def read_requirements():
 setup(
     name="weknora-mcp-server",
     version="1.0.0",
-    author="WeKnora Team",
+    author="TreeRAG Team",
     author_email="support@weknora.com",
-    description="WeKnora MCP Server - Model Context Protocol server for WeKnora API",
+    description="TreeRAG MCP Server - Model Context Protocol server for TreeRAG API",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://github.com/NannaOlympicBroadcast/WeKnoraMCP",
+    url="https://github.com/NannaOlympicBroadcast/TreeRAGMCP",
     py_modules=["weknora_mcp_server", "main", "run_server", "run", "test_module"],
     classifiers=[
         "Development Status :: 4 - Beta",

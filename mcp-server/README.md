@@ -1,6 +1,6 @@
-# WeKnora MCP Server
+# TreeRAG MCP Server
 
-这是一个 Model Context Protocol (MCP) 服务器，提供对 WeKnora 知识管理 API 的访问。
+这是一个 Model Context Protocol (MCP) 服务器，提供对 TreeRAG 知识管理 API 的访问。
 
 ## 快速开始
 

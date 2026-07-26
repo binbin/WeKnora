@@ -14,7 +14,7 @@ import (
 
 // authCreds carries the credentials a providerAdapter needs to authenticate a
 // raw HTTP request. APIKey covers the common Bearer / api-key cases; AppID and
-// AppSecret are only used by signing providers (WeKnoraCloud).
+// AppSecret are only used by signing providers (TreeRAGCloud).
 type authCreds struct {
 	APIKey    string
 	AppID     string
@@ -78,19 +78,19 @@ func (baseProvider) ExtractToolCallMetadata(json.RawMessage) types.ToolCallMetad
 }
 func (baseProvider) InjectToolCallMetadata(map[string]any, types.ToolCallMetadata) {}
 
-// --- WeKnoraCloud: custom endpoint + request signing + multi-content downgrade ---
+// --- TreeRAGCloud: custom endpoint + request signing + multi-content downgrade ---
 
-type weKnoraCloudProvider struct{ baseProvider }
+type treeRAGCloudProvider struct{ baseProvider }
 
-func (weKnoraCloudProvider) Name() provider.ProviderName { return provider.ProviderWeKnoraCloud }
+func (treeRAGCloudProvider) Name() provider.ProviderName { return provider.ProviderTreeRAGCloud }
 
-func (weKnoraCloudProvider) Endpoint(baseURL, _ string, _ bool) string {
+func (treeRAGCloudProvider) Endpoint(baseURL, _ string, _ bool) string {
 	return strings.TrimRight(baseURL, "/") + "/api/v1/chat/completions"
 }
 
-func (weKnoraCloudProvider) ForceRawHTTP() bool { return true }
+func (treeRAGCloudProvider) ForceRawHTTP() bool { return true }
 
-func (weKnoraCloudProvider) Auth(req *http.Request, creds authCreds, body []byte) {
+func (treeRAGCloudProvider) Auth(req *http.Request, creds authCreds, body []byte) {
 	requestID := uuid.NewString()
 	headers := modelutils.Sign(creds.AppID, creds.AppSecret, requestID, string(body))
 	for k, v := range headers {
@@ -100,7 +100,7 @@ func (weKnoraCloudProvider) Auth(req *http.Request, creds authCreds, body []byte
 
 // TransformMessages downgrades MultiContent to plain text while preserving
 // tool_calls / tool_call_id / name so the function-calling protocol keeps working.
-func (weKnoraCloudProvider) TransformMessages(messages []openai.ChatCompletionMessage) []openai.ChatCompletionMessage {
+func (treeRAGCloudProvider) TransformMessages(messages []openai.ChatCompletionMessage) []openai.ChatCompletionMessage {
 	result := make([]openai.ChatCompletionMessage, 0, len(messages))
 	for _, m := range messages {
 		msg := m
@@ -272,7 +272,7 @@ func shapeOpenAIReasoning(req *openai.ChatCompletionRequest) {
 // providerRegistry is ordered: more specific adapters (those with a real
 // Matches predicate) must precede the generic catch-all for the same provider.
 var providerRegistry = []providerAdapter{
-	weKnoraCloudProvider{},
+	treeRAGCloudProvider{},
 	qwenThinkingProvider{},
 	lkeapProvider{},
 	deepseekProvider{},

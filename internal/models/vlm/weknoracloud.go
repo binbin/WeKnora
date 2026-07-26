@@ -15,10 +15,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const weKnoraCloudVLMPath = "/api/v1/chat/completions"
+const treeRAGCloudVLMPath = "/api/v1/chat/completions"
 
-// WeKnoraCloudVLM implements VLM via the WeKnoraCloud API.
-type WeKnoraCloudVLM struct {
+// TreeRAGCloudVLM implements VLM via the TreeRAGCloud API.
+type TreeRAGCloudVLM struct {
 	modelName       string
 	remoteModelName string
 	modelID         string
@@ -28,13 +28,13 @@ type WeKnoraCloudVLM struct {
 	client          *http.Client
 }
 
-// NewWeKnoraCloudVLM creates a WeKnoraCloud-backed VLM instance.
-func NewWeKnoraCloudVLM(config *Config) (*WeKnoraCloudVLM, error) {
+// NewTreeRAGCloudVLM creates a TreeRAGCloud-backed VLM instance.
+func NewTreeRAGCloudVLM(config *Config) (*TreeRAGCloudVLM, error) {
 	if config.AppID == "" {
-		return nil, fmt.Errorf("WeKnoraCloud VLM: AppID is required")
+		return nil, fmt.Errorf("TreeRAGCloud VLM: AppID is required")
 	}
 	if config.AppSecret == "" {
-		return nil, fmt.Errorf("WeKnoraCloud VLM: AppSecret is required")
+		return nil, fmt.Errorf("TreeRAGCloud VLM: AppSecret is required")
 	}
 	baseURL := strings.TrimRight(config.BaseURL, "/")
 	if err := validateVLMBaseURL(baseURL); err != nil {
@@ -48,7 +48,7 @@ func NewWeKnoraCloudVLM(config *Config) (*WeKnoraCloudVLM, error) {
 			}
 		}
 	}
-	return &WeKnoraCloudVLM{
+	return &TreeRAGCloudVLM{
 		modelName:       config.ModelName,
 		remoteModelName: remoteModelName,
 		modelID:         config.ModelID,
@@ -59,30 +59,30 @@ func NewWeKnoraCloudVLM(config *Config) (*WeKnoraCloudVLM, error) {
 	}, nil
 }
 
-type weKnoraCloudVLMContentPart struct {
+type treeRAGCloudVLMContentPart struct {
 	Type     string                   `json:"type"`
 	Text     string                   `json:"text,omitempty"`
-	ImageURL *weKnoraCloudVLMImageURL `json:"image_url,omitempty"`
+	ImageURL *treeRAGCloudVLMImageURL `json:"image_url,omitempty"`
 }
 
-type weKnoraCloudVLMImageURL struct {
+type treeRAGCloudVLMImageURL struct {
 	URL string `json:"url"`
 }
 
-type weKnoraCloudVLMMessage struct {
+type treeRAGCloudVLMMessage struct {
 	Role    string      `json:"role"`
 	Content interface{} `json:"content"`
 }
 
-type weKnoraCloudVLMRequest struct {
+type treeRAGCloudVLMRequest struct {
 	Model       string                   `json:"model"`
-	Messages    []weKnoraCloudVLMMessage `json:"messages"`
+	Messages    []treeRAGCloudVLMMessage `json:"messages"`
 	MaxTokens   int                      `json:"max_tokens,omitempty"`
 	Temperature float64                  `json:"temperature,omitempty"`
 	Stream      bool                     `json:"stream"`
 }
 
-type weKnoraCloudVLMResponse struct {
+type treeRAGCloudVLMResponse struct {
 	Choices []struct {
 		Message struct {
 			Content string `json:"content"`
@@ -90,11 +90,11 @@ type weKnoraCloudVLMResponse struct {
 	} `json:"choices"`
 }
 
-// Predict sends images with a text prompt to the WeKnoraCloud API.
-func (v *WeKnoraCloudVLM) Predict(ctx context.Context, imgBytesList [][]byte, prompt string) (string, error) {
-	var parts []weKnoraCloudVLMContentPart
+// Predict sends images with a text prompt to the TreeRAGCloud API.
+func (v *TreeRAGCloudVLM) Predict(ctx context.Context, imgBytesList [][]byte, prompt string) (string, error) {
+	var parts []treeRAGCloudVLMContentPart
 
-	parts = append(parts, weKnoraCloudVLMContentPart{
+	parts = append(parts, treeRAGCloudVLMContentPart{
 		Type: "text",
 		Text: prompt,
 	})
@@ -104,18 +104,18 @@ func (v *WeKnoraCloudVLM) Predict(ctx context.Context, imgBytesList [][]byte, pr
 			mimeType := detectImageMIME(imgBytes)
 			b64 := base64.StdEncoding.EncodeToString(imgBytes)
 			dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, b64)
-			parts = append(parts, weKnoraCloudVLMContentPart{
+			parts = append(parts, treeRAGCloudVLMContentPart{
 				Type: "image_url",
-				ImageURL: &weKnoraCloudVLMImageURL{
+				ImageURL: &treeRAGCloudVLMImageURL{
 					URL: dataURI,
 				},
 			})
 		}
 	}
 
-	reqBody := weKnoraCloudVLMRequest{
+	reqBody := treeRAGCloudVLMRequest{
 		Model: v.effectiveModelName(),
-		Messages: []weKnoraCloudVLMMessage{
+		Messages: []treeRAGCloudVLMMessage{
 			{
 				Role:    "user",
 				Content: parts,
@@ -134,7 +134,7 @@ func (v *WeKnoraCloudVLM) Predict(ctx context.Context, imgBytesList [][]byte, pr
 	requestID := uuid.New().String()
 	headers := utils.Sign(v.appID, v.apiKey, requestID, string(bodyBytes))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.baseURL+weKnoraCloudVLMPath, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.baseURL+treeRAGCloudVLMPath, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("weknoracloud VLM: create request: %w", err)
 	}
@@ -147,7 +147,7 @@ func (v *WeKnoraCloudVLM) Predict(ctx context.Context, imgBytesList [][]byte, pr
 	for _, img := range imgBytesList {
 		totalImageSize += len(img)
 	}
-	logger.Infof(ctx, "[VLM] Calling WeKnoraCloud API, model=%s, baseURL=%s, numImages=%d, totalImageSize=%d",
+	logger.Infof(ctx, "[VLM] Calling TreeRAGCloud API, model=%s, baseURL=%s, numImages=%d, totalImageSize=%d",
 		v.effectiveModelName(), v.baseURL, len(imgBytesList), totalImageSize)
 
 	resp, err := v.client.Do(req)
@@ -164,7 +164,7 @@ func (v *WeKnoraCloudVLM) Predict(ctx context.Context, imgBytesList [][]byte, pr
 		return "", fmt.Errorf("weknoracloud VLM: status %d: %s", resp.StatusCode, string(respBytes))
 	}
 
-	var vlmResp weKnoraCloudVLMResponse
+	var vlmResp treeRAGCloudVLMResponse
 	if err := json.Unmarshal(respBytes, &vlmResp); err != nil {
 		return "", fmt.Errorf("weknoracloud VLM: unmarshal: %w", err)
 	}
@@ -173,16 +173,16 @@ func (v *WeKnoraCloudVLM) Predict(ctx context.Context, imgBytesList [][]byte, pr
 	}
 
 	content := vlmResp.Choices[0].Message.Content
-	logger.Infof(ctx, "[VLM] WeKnoraCloud response received, len=%d", len(content))
+	logger.Infof(ctx, "[VLM] TreeRAGCloud response received, len=%d", len(content))
 	return content, nil
 }
 
-func (v *WeKnoraCloudVLM) effectiveModelName() string {
+func (v *TreeRAGCloudVLM) effectiveModelName() string {
 	if v.remoteModelName != "" {
 		return v.remoteModelName
 	}
 	return v.modelName
 }
 
-func (v *WeKnoraCloudVLM) GetModelName() string { return v.modelName }
-func (v *WeKnoraCloudVLM) GetModelID() string   { return v.modelID }
+func (v *TreeRAGCloudVLM) GetModelName() string { return v.modelName }
+func (v *TreeRAGCloudVLM) GetModelID() string   { return v.modelID }

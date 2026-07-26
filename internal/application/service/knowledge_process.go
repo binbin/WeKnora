@@ -3295,15 +3295,15 @@ func (s *knowledgeService) resolveDocReader(ctx context.Context, engine, fileTyp
 	switch engine {
 	case docparser.SimpleEngineName:
 		return &docparser.SimpleFormatReader{}
-	case docparser.WeKnoraCloudEngineName:
-		creds := s.tenantService.GetWeKnoraCloudCredentials(ctx)
+	case docparser.TreeRAGCloudEngineName:
+		creds := s.tenantService.GetTreeRAGCloudCredentials(ctx)
 		if creds == nil {
-			logger.Warnf(ctx, "[resolveDocReader] WeKnoraCloud: no tenant credentials (fileType=%s)", fileType)
+			logger.Warnf(ctx, "[resolveDocReader] TreeRAGCloud: no tenant credentials (fileType=%s)", fileType)
 			return nil
 		}
-		reader, err := docparser.NewWeKnoraCloudSignedDocumentReader(creds.AppID, creds.AppSecret)
+		reader, err := docparser.NewTreeRAGCloudSignedDocumentReader(creds.AppID, creds.AppSecret)
 		if err != nil {
-			logger.Errorf(ctx, "[resolveDocReader] WeKnoraCloud reader init failed: %v", err)
+			logger.Errorf(ctx, "[resolveDocReader] TreeRAGCloud reader init failed: %v", err)
 			return nil
 		}
 		return reader

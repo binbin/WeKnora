@@ -1,7 +1,7 @@
 # Copyright 2025 Tencent
 # SPDX-License-Identifier: MIT
 #
-# WeKnora Helm Chart Values
+# TreeRAG Helm Chart Values
 #
 # Best Practices References:
 # - https://helm.sh/docs/chart_best_practices/values/
@@ -393,7 +393,7 @@ secrets:
   jwtSecret: ""
   # -- System AES-256 key for database field encryption (must be exactly 32 bytes).
   # Encrypts: tenants.api_key, model API keys, vector store credentials,
-  # web search provider keys, WeKnoraCloud.AppSecret.
+  # web search provider keys, TreeRAGCloud.AppSecret.
   # STRONGLY RECOMMENDED to set this explicitly in production. If left empty, a
   # random 32-char value is generated on first install and reused on subsequent
   # `helm upgrade` via Secret lookup. However, if the Secret is ever

@@ -1,14 +1,14 @@
 # 发布渠道 API 访问（独立凭证 + OpenAI 兼容）设计
 
 日期：2026-07-26  
-状态：待实现评审  
+状态：P0 已实现  
 参考：[FastGPT OpenAPI 介绍](https://doc.fastgpt.io/zh-CN/openapi/intro)、[通过 API 访问应用](https://doc.fastgpt.io/zh-CN/guide/build/publish/openapi)
 
 ## 背景与决策
 
-发布渠道已有「API」页签，但当前实现直接复用空间级 `tenant_api_keys`（`listTenantAPIKeys` / `createTenantAPIKey`），文档链到 GitHub 首页，且对话入口仍是内部 `agent-chat` + `X-API-Key`，难以对接 OpenAI SDK / 第三方客户端。
+发布渠道「API」页签原先复用空间级 `tenant_api_keys`，文档链到 GitHub，对话入口是内部 `agent-chat` + `X-API-Key`，难以对接 OpenAI SDK / 第三方客户端。
 
-产品目标：对齐 FastGPT「应用 → 发布渠道 → API 访问」体验，并提供 OpenAI 风格 `chat/completions` 调用路径。
+产品目标：对齐 FastGPT「应用 → 发布渠道 → API 访问」体验，并提供 OpenAI 风格 `chat/completions` 调用路径（`wkpub_` 独立密钥 + 控制台说明页）。
 
 | 决策 | 选择 |
 |------|------|

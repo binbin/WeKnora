@@ -85,7 +85,7 @@ type openAIChatCompletionUsage struct {
 }
 
 // openAIChatCompletionChunk is an OpenAI-compatible SSE chunk. session_id is a
-// WeKnora extension present on every chunk for client correlation.
+// TreeRAG extension present on every chunk for client correlation.
 type openAIChatCompletionChunk struct {
 	ID        string                            `json:"id"`
 	Object    string                            `json:"object"`

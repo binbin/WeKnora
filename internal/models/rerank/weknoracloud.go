@@ -14,10 +14,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const weKnoraCloudRerankPath = "/api/v1/rerank"
+const treeRAGCloudRerankPath = "/api/v1/rerank"
 
-// WeKnoraCloudReranker 实现 rerank.Reranker 接口，对接 WeKnoraCloud /api/v1/rerank
-type WeKnoraCloudReranker struct {
+// TreeRAGCloudReranker 实现 rerank.Reranker 接口，对接 TreeRAGCloud /api/v1/rerank
+type TreeRAGCloudReranker struct {
 	modelName       string
 	remoteModelName string
 	modelID         string
@@ -27,13 +27,13 @@ type WeKnoraCloudReranker struct {
 	client          *http.Client
 }
 
-// NewWeKnoraCloudReranker 构造 WeKnoraCloudReranker
-func NewWeKnoraCloudReranker(config *RerankerConfig) (*WeKnoraCloudReranker, error) {
+// NewTreeRAGCloudReranker 构造 TreeRAGCloudReranker
+func NewTreeRAGCloudReranker(config *RerankerConfig) (*TreeRAGCloudReranker, error) {
 	if config.AppID == "" {
-		return nil, fmt.Errorf("WeKnoraCloud reranker: AppID is required")
+		return nil, fmt.Errorf("TreeRAGCloud reranker: AppID is required")
 	}
 	if config.AppSecret == "" {
-		return nil, fmt.Errorf("WeKnoraCloud reranker: AppSecret is required")
+		return nil, fmt.Errorf("TreeRAGCloud reranker: AppSecret is required")
 	}
 	baseURL := strings.TrimRight(config.BaseURL, "/")
 	if err := validateRerankBaseURL(baseURL); err != nil {
@@ -43,7 +43,7 @@ func NewWeKnoraCloudReranker(config *RerankerConfig) (*WeKnoraCloudReranker, err
 	if config.ExtraConfig != nil {
 		remoteModelName = strings.TrimSpace(config.ExtraConfig["remote_model_name"])
 	}
-	return &WeKnoraCloudReranker{
+	return &TreeRAGCloudReranker{
 		modelName:       config.ModelName,
 		remoteModelName: remoteModelName,
 		modelID:         config.ModelID,
@@ -54,13 +54,13 @@ func NewWeKnoraCloudReranker(config *RerankerConfig) (*WeKnoraCloudReranker, err
 	}, nil
 }
 
-type weKnoraCloudRerankRequest struct {
+type treeRAGCloudRerankRequest struct {
 	Model     string   `json:"model"`
 	Query     string   `json:"query"`
 	Documents []string `json:"documents"`
 }
 
-type weKnoraCloudRerankResponse struct {
+type treeRAGCloudRerankResponse struct {
 	Results []struct {
 		Index          int     `json:"index"`
 		RelevanceScore float64 `json:"relevance_score"`
@@ -70,8 +70,8 @@ type weKnoraCloudRerankResponse struct {
 	} `json:"results"`
 }
 
-func (r *WeKnoraCloudReranker) Rerank(ctx context.Context, query string, documents []string) ([]RankResult, error) {
-	reqBody := weKnoraCloudRerankRequest{
+func (r *TreeRAGCloudReranker) Rerank(ctx context.Context, query string, documents []string) ([]RankResult, error) {
+	reqBody := treeRAGCloudRerankRequest{
 		Model:     r.effectiveModelName(),
 		Query:     query,
 		Documents: documents,
@@ -84,7 +84,7 @@ func (r *WeKnoraCloudReranker) Rerank(ctx context.Context, query string, documen
 	requestID := uuid.New().String()
 	headers := utils.Sign(r.appID, r.apiKey, requestID, string(bodyBytes))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.baseURL+weKnoraCloudRerankPath, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.baseURL+treeRAGCloudRerankPath, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("weknoracloud reranker: create request: %w", err)
 	}
@@ -107,7 +107,7 @@ func (r *WeKnoraCloudReranker) Rerank(ctx context.Context, query string, documen
 		return nil, fmt.Errorf("weknoracloud reranker: status %d: %s", resp.StatusCode, string(respBytes))
 	}
 
-	var rerankResp weKnoraCloudRerankResponse
+	var rerankResp treeRAGCloudRerankResponse
 	if err := json.Unmarshal(respBytes, &rerankResp); err != nil {
 		return nil, fmt.Errorf("weknoracloud reranker: unmarshal: %w", err)
 	}
@@ -123,12 +123,12 @@ func (r *WeKnoraCloudReranker) Rerank(ctx context.Context, query string, documen
 	return results, nil
 }
 
-func (r *WeKnoraCloudReranker) effectiveModelName() string {
+func (r *TreeRAGCloudReranker) effectiveModelName() string {
 	if r.remoteModelName != "" {
 		return r.remoteModelName
 	}
 	return r.modelName
 }
 
-func (r *WeKnoraCloudReranker) GetModelName() string { return r.modelName }
-func (r *WeKnoraCloudReranker) GetModelID() string   { return r.modelID }
+func (r *TreeRAGCloudReranker) GetModelName() string { return r.modelName }
+func (r *TreeRAGCloudReranker) GetModelID() string   { return r.modelID }

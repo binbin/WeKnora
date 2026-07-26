@@ -739,7 +739,7 @@ function formatApiKeyAccessModeLabel(key: TenantAPIKey): string {
 
 type PlaygroundStatus = '' | 'running' | 'success' | 'failed' | 'stopped'
 
-type WeKnoraDesktopWindow = Window & {
+type TreeRAGDesktopWindow = Window & {
   __WEKNORA_API_BASE__?: string
   __WEKNORA_API_LAN_BASE__?: string
   go?: {
@@ -911,7 +911,7 @@ func signExternalUserToken(hmacSecret, externalUserID string, tenantID uint64) (
 		SignedString([]byte(hmacSecret))
 }
 
-// Send on each WeKnora API request:
+// Send on each TreeRAG API request:
 //   ${headerName}: <JWT from signExternalUserToken>
 // Tenant ID for this workspace: ${tid}`
 })
@@ -1164,7 +1164,7 @@ async function copy(text: string) {
 }
 
 async function tryLoadWailsApiBaseURL() {
-  const win = window as WeKnoraDesktopWindow
+  const win = window as TreeRAGDesktopWindow
   for (let i = 0; i < 40; i++) {
     const injected = win.__WEKNORA_API_BASE__
     if (typeof injected === 'string' && injected.trim()) {
@@ -1190,7 +1190,7 @@ async function tryLoadWailsApiBaseURL() {
   await tryLoadWailsLanHints(win)
 }
 
-async function tryLoadWailsLanHints(win: WeKnoraDesktopWindow) {
+async function tryLoadWailsLanHints(win: TreeRAGDesktopWindow) {
   const injectedLan = win.__WEKNORA_API_LAN_BASE__
   if (typeof injectedLan === 'string' && injectedLan.trim()) {
     wailsApiLanBaseURL.value = injectedLan.trim().replace(/\/$/, '')
@@ -1216,12 +1216,12 @@ async function tryLoadWailsLanHints(win: WeKnoraDesktopWindow) {
   }
 }
 
-function desktopPortBindingsAvailable(win: WeKnoraDesktopWindow) {
+function desktopPortBindingsAvailable(win: TreeRAGDesktopWindow) {
   const app = win.go?.main?.App
   return typeof app?.GetDesktopHTTPPortSetting === 'function' && typeof app?.SetDesktopHTTPPortSetting === 'function'
 }
 
-function desktopBindPublicBindingsAvailable(win: WeKnoraDesktopWindow) {
+function desktopBindPublicBindingsAvailable(win: TreeRAGDesktopWindow) {
   const app = win.go?.main?.App
   return (
     typeof app?.GetDesktopHTTPBindPublicSetting === 'function' &&
@@ -1230,7 +1230,7 @@ function desktopBindPublicBindingsAvailable(win: WeKnoraDesktopWindow) {
 }
 
 async function loadDesktopApiPrefs() {
-  const win = window as WeKnoraDesktopWindow
+  const win = window as TreeRAGDesktopWindow
   if (desktopPortBindingsAvailable(win)) {
     showDesktopPortSetting.value = true
     try {
@@ -1253,7 +1253,7 @@ async function loadDesktopApiPrefs() {
 
 const onDesktopBindPublicChange = async (value: boolean) => {
   const next = value === true
-  const fn = (window as WeKnoraDesktopWindow).go?.main?.App?.SetDesktopHTTPBindPublicSetting
+  const fn = (window as TreeRAGDesktopWindow).go?.main?.App?.SetDesktopHTTPBindPublicSetting
   if (typeof fn !== 'function') return
   try {
     await Promise.resolve(fn(next))
@@ -1271,7 +1271,7 @@ const saveDesktopPort = async () => {
     MessagePlugin.warning(t('tenant.api.desktopPortInvalid'))
     return
   }
-  const fn = (window as WeKnoraDesktopWindow).go?.main?.App?.SetDesktopHTTPPortSetting
+  const fn = (window as TreeRAGDesktopWindow).go?.main?.App?.SetDesktopHTTPPortSetting
   if (typeof fn !== 'function') return
   try {
     await Promise.resolve(fn(port))

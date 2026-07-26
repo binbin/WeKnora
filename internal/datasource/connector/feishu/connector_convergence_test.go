@@ -155,7 +155,7 @@ func lastCheckpointCursor(h *convergenceHandler, t *testing.T) *types.SyncCursor
 }
 
 // TestFetchStream_ResumeConvergesAfterTimeoutAndTransientFailure is the
-// end-to-end proof for Tencent/WeKnora#2136: a large-ish wiki that (a) hits a
+// end-to-end proof for Tencent/TreeRAG#2136: a large-ish wiki that (a) hits a
 // transient per-node export failure and (b) is killed by the 2h task timeout
 // mid-traversal must, on the asynq retry, resume from the last checkpoint,
 // re-fetch only what is outstanding, retry the transiently-failed node, and end

@@ -48,7 +48,7 @@ func NewWeChatOAHandler(
 			if tenant.Credentials == nil {
 				return nil, fmt.Errorf("weknoracloud_credentials_required")
 			}
-			creds := tenant.Credentials.GetWeKnoraCloud()
+			creds := tenant.Credentials.GetTreeRAGCloud()
 			if creds == nil {
 				return nil, fmt.Errorf("weknoracloud_credentials_required")
 			}

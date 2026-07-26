@@ -181,7 +181,7 @@ func (f *fakeTenantService) GetTenantByIDForUser(
 	return f.tenant, nil
 }
 
-func (f *fakeTenantService) GetWeKnoraCloudCredentials(ctx context.Context) *types.WeKnoraCloudCredentials {
+func (f *fakeTenantService) GetTreeRAGCloudCredentials(ctx context.Context) *types.TreeRAGCloudCredentials {
 	return nil
 }
 

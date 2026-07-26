@@ -66,7 +66,7 @@ func (s *stubTenantService) GetTenantByIDForUser(context.Context, uint64, string
 	panic("unexpected")
 }
 
-func (s *stubTenantService) GetWeKnoraCloudCredentials(context.Context) *types.WeKnoraCloudCredentials {
+func (s *stubTenantService) GetTreeRAGCloudCredentials(context.Context) *types.TreeRAGCloudCredentials {
 	panic("unexpected")
 }
 

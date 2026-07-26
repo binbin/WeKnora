@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-WeKnora MCP Server
+TreeRAG MCP Server
 
-A Model Context Protocol server that provides access to the WeKnora knowledge management API.
+A Model Context Protocol server that provides access to the TreeRAG knowledge management API.
 """
 
 import argparse
@@ -97,11 +97,11 @@ class MCPAuthMiddleware:
         await self.app(scope, receive, send)
 
 
-class WeKnoraClient:
-    """Client for interacting with WeKnora API"""
+class TreeRAGClient:
+    """Client for interacting with TreeRAG API"""
 
     def __init__(self, base_url: str, api_key: str):
-        """Initialize the WeKnora API client with base URL and authentication"""
+        """Initialize the TreeRAG API client with base URL and authentication"""
         self.base_url = base_url
         self.api_key = api_key
         # SSL verification: enabled by default. Set WEKNORA_VERIFY_SSL=false to disable
@@ -125,7 +125,7 @@ class WeKnoraClient:
         )
 
     def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
-        """Make a request to the WeKnora API
+        """Make a request to the TreeRAG API
 
         Args:
             method: HTTP method (GET, POST, PUT, DELETE)
@@ -542,19 +542,19 @@ class WeKnoraClient:
 
 # Initialize MCP server instance
 app = Server("weknora-server")
-# Initialize WeKnora API client with configuration
-client = WeKnoraClient(WEKNORA_BASE_URL, WEKNORA_API_KEY)
+# Initialize TreeRAG API client with configuration
+client = TreeRAGClient(WEKNORA_BASE_URL, WEKNORA_API_KEY)
 
 
 # Tool definitions - Register all available tools for the MCP protocol
 @app.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
-    """List all available WeKnora tools with their schemas"""
+    """List all available TreeRAG tools with their schemas"""
     return [
         # Tenant Management
         types.Tool(
             name="create_tenant",
-            description="Create a new tenant in WeKnora",
+            description="Create a new tenant in TreeRAG",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -1422,7 +1422,7 @@ def main():
       2. MCP_TRANSPORT environment variable
       3. Default: stdio
     """
-    parser = argparse.ArgumentParser(description="WeKnora MCP Server")
+    parser = argparse.ArgumentParser(description="TreeRAG MCP Server")
     parser.add_argument(
         "--transport",
         choices=["stdio", "sse", "http"],

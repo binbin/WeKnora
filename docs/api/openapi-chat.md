@@ -4,6 +4,8 @@
 
 面向第三方 SDK / 脚本的 OpenAI 风格对话接口。密钥绑定单个智能体，仅可调用本页所述路由。
 
+控制台说明页：登录后打开 `/platform/docs/openapi-chat`（发布渠道「查看文档」也会跳转至此）。
+
 | 方法 | 路径 | 描述 |
 | ---- | ---- | ---- |
 | POST | `/chat/completions` | OpenAI 兼容聊天补全（非流式 / SSE 流式） |
@@ -92,7 +94,7 @@ curl -X POST 'http://localhost:8080/api/v1/chat/completions' \
 }
 ```
 
-`session_id` 为 WeKnora 扩展字段，用于续聊。
+`session_id` 为 TreeRAG 扩展字段，用于续聊。
 
 ## 流式示例
 

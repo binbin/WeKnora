@@ -15,10 +15,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const weKnoraCloudEmbedPath = "/api/v1/embeddings"
+const treeRAGCloudEmbedPath = "/api/v1/embeddings"
 
-// WeKnoraCloudEmbedder 实现 embedding.Embedder 接口，对接 WeKnoraCloud /api/v1/embeddings
-type WeKnoraCloudEmbedder struct {
+// TreeRAGCloudEmbedder 实现 embedding.Embedder 接口，对接 TreeRAGCloud /api/v1/embeddings
+type TreeRAGCloudEmbedder struct {
 	modelName                 string
 	remoteModelName           string
 	modelID                   string
@@ -31,13 +31,13 @@ type WeKnoraCloudEmbedder struct {
 	EmbedderPooler
 }
 
-// NewWeKnoraCloudEmbedder 构造 WeKnoraCloudEmbedder
-func NewWeKnoraCloudEmbedder(config Config) (*WeKnoraCloudEmbedder, error) {
+// NewTreeRAGCloudEmbedder 构造 TreeRAGCloudEmbedder
+func NewTreeRAGCloudEmbedder(config Config) (*TreeRAGCloudEmbedder, error) {
 	if config.AppID == "" {
-		return nil, fmt.Errorf("WeKnoraCloud embedder: AppID is required")
+		return nil, fmt.Errorf("TreeRAGCloud embedder: AppID is required")
 	}
 	if config.AppSecret == "" {
-		return nil, fmt.Errorf("WeKnoraCloud embedder: AppSecret is required")
+		return nil, fmt.Errorf("TreeRAGCloud embedder: AppSecret is required")
 	}
 	remoteModelName := ""
 	if config.ExtraConfig != nil {
@@ -45,12 +45,12 @@ func NewWeKnoraCloudEmbedder(config Config) (*WeKnoraCloudEmbedder, error) {
 	}
 	baseURL := strings.TrimRight(config.BaseURL, "/")
 	if baseURL == "" {
-		baseURL = provider.WeKnoraCloudBaseURL
+		baseURL = provider.TreeRAGCloudBaseURL
 	}
 	if err := validateEmbeddingBaseURL(baseURL); err != nil {
 		return nil, err
 	}
-	return &WeKnoraCloudEmbedder{
+	return &TreeRAGCloudEmbedder{
 		modelName:                 config.ModelName,
 		remoteModelName:           remoteModelName,
 		modelID:                   config.ModelID,
@@ -63,21 +63,21 @@ func NewWeKnoraCloudEmbedder(config Config) (*WeKnoraCloudEmbedder, error) {
 	}, nil
 }
 
-type weKnoraCloudEmbedRequest struct {
+type treeRAGCloudEmbedRequest struct {
 	Model                string   `json:"model"`
 	Input                []string `json:"input"`
 	Dimensions           int      `json:"dimensions,omitempty"`
 	TruncatePromptTokens int      `json:"truncate_prompt_tokens,omitempty"`
 }
 
-type weKnoraCloudEmbedResponse struct {
+type treeRAGCloudEmbedResponse struct {
 	Data []struct {
 		Index     int       `json:"index"`
 		Embedding []float32 `json:"embedding"`
 	} `json:"data"`
 }
 
-func (e *WeKnoraCloudEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (e *TreeRAGCloudEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	results, err := e.BatchEmbed(ctx, []string{text})
 	if err != nil {
 		return nil, err
@@ -88,8 +88,8 @@ func (e *WeKnoraCloudEmbedder) Embed(ctx context.Context, text string) ([]float3
 	return results[0], nil
 }
 
-func (e *WeKnoraCloudEmbedder) BatchEmbed(ctx context.Context, texts []string) ([][]float32, error) {
-	reqBody := weKnoraCloudEmbedRequest{Model: e.effectiveModelName(), Input: texts}
+func (e *TreeRAGCloudEmbedder) BatchEmbed(ctx context.Context, texts []string) ([][]float32, error) {
+	reqBody := treeRAGCloudEmbedRequest{Model: e.effectiveModelName(), Input: texts}
 	if e.supportsDimensionOverride && e.dimensions > 0 {
 		reqBody.Dimensions = e.dimensions
 	}
@@ -101,7 +101,7 @@ func (e *WeKnoraCloudEmbedder) BatchEmbed(ctx context.Context, texts []string) (
 	requestID := uuid.New().String()
 	headers := utils.Sign(e.appID, e.apiKey, requestID, string(bodyBytes))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+weKnoraCloudEmbedPath, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+treeRAGCloudEmbedPath, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("weknoracloud embedder: create request: %w", err)
 	}
@@ -124,7 +124,7 @@ func (e *WeKnoraCloudEmbedder) BatchEmbed(ctx context.Context, texts []string) (
 		return nil, fmt.Errorf("weknoracloud embedder: status %d: %s", resp.StatusCode, string(respBytes))
 	}
 
-	var embedResp weKnoraCloudEmbedResponse
+	var embedResp treeRAGCloudEmbedResponse
 	if err := json.Unmarshal(respBytes, &embedResp); err != nil {
 		return nil, fmt.Errorf("weknoracloud embedder: unmarshal: %w", err)
 	}
@@ -138,21 +138,21 @@ func (e *WeKnoraCloudEmbedder) BatchEmbed(ctx context.Context, texts []string) (
 	return result, nil
 }
 
-func (e *WeKnoraCloudEmbedder) BatchEmbedWithPool(ctx context.Context, model Embedder, texts []string) ([][]float32, error) {
+func (e *TreeRAGCloudEmbedder) BatchEmbedWithPool(ctx context.Context, model Embedder, texts []string) ([][]float32, error) {
 	return e.BatchEmbed(ctx, texts)
 }
 
-func (e *WeKnoraCloudEmbedder) SetSupportsDimensionOverride(supported bool) {
+func (e *TreeRAGCloudEmbedder) SetSupportsDimensionOverride(supported bool) {
 	e.supportsDimensionOverride = supported
 }
 
-func (e *WeKnoraCloudEmbedder) effectiveModelName() string {
+func (e *TreeRAGCloudEmbedder) effectiveModelName() string {
 	if e.remoteModelName != "" {
 		return e.remoteModelName
 	}
 	return e.modelName
 }
 
-func (e *WeKnoraCloudEmbedder) GetModelName() string { return e.modelName }
-func (e *WeKnoraCloudEmbedder) GetModelID() string   { return e.modelID }
-func (e *WeKnoraCloudEmbedder) GetDimensions() int   { return e.dimensions }
+func (e *TreeRAGCloudEmbedder) GetModelName() string { return e.modelName }
+func (e *TreeRAGCloudEmbedder) GetModelID() string   { return e.modelID }
+func (e *TreeRAGCloudEmbedder) GetDimensions() int   { return e.dimensions }

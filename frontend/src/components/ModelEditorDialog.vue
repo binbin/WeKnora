@@ -169,7 +169,7 @@
             </t-select>
           </div>
 
-          <!-- WeKnoraCloud 提示信息 -->
+          <!-- TreeRAGCloud 提示信息 -->
           <template v-if="formData.provider === 'weknoracloud'">
             <!-- 凭证已配置 -->
             <div v-if="wkcCredentialState === 'configured'" class="weknoracloud-hint weknoracloud-hint--ok">
@@ -388,7 +388,7 @@ import { ref, watch, computed, onUnmounted, nextTick } from 'vue'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { checkOllamaModels, checkRemoteModel, testEmbeddingModel, checkRerankModel, checkASRModel, listOllamaModels, downloadOllamaModel, getDownloadProgress, checkOllamaStatus, listModelProviders, type OllamaModelInfo, type ModelProviderOption } from '@/api/initialization'
 import {
-  getWeKnoraCloudStatus,
+  getTreeRAGCloudStatus,
   putModelCredentials,
   deleteModelCredentialField,
   type ModelCredentialField,
@@ -819,13 +819,13 @@ let downloadInterval: any = null
 const ollamaServiceStatus = ref<boolean | null>(null)
 const checkingOllamaStatus = ref(false)
 
-// WeKnoraCloud 凭证状态
+// TreeRAGCloud 凭证状态
 const wkcCredentialState = ref<'loading' | 'unconfigured' | 'configured' | 'expired'>('loading')
 
 const checkWkcCredentialStatus = async () => {
   wkcCredentialState.value = 'loading'
   try {
-    const status = await getWeKnoraCloudStatus()
+    const status = await getTreeRAGCloudStatus()
     if (status.needs_reinit) {
       wkcCredentialState.value = 'expired'
     } else if (status.has_models) {
@@ -1040,7 +1040,7 @@ watch(() => props.visible, (val) => {
         formData.value.source = 'remote'
       }
 
-      // 如果当前 provider 是 WeKnoraCloud，检查凭证状态
+      // 如果当前 provider 是 TreeRAGCloud，检查凭证状态
       if (formData.value.provider === 'weknoracloud') {
         checkWkcCredentialStatus()
       }
@@ -1111,7 +1111,7 @@ const handleProviderChange = (value: string) => {
     remoteAvailable.value = false
     remoteMessage.value = ''
   }
-  // WeKnoraCloud: 检查凭证状态
+  // TreeRAGCloud: 检查凭证状态
   if (value === 'weknoracloud') {
     checkWkcCredentialStatus()
   }
@@ -1466,7 +1466,7 @@ const handleConfirm = async () => {
       return
     }
 
-    // 如果是 remote 类型且非 WeKnoraCloud，必须填写 baseUrl
+    // 如果是 remote 类型且非 TreeRAGCloud，必须填写 baseUrl
     if (formData.value.source === 'remote' && formData.value.provider !== 'weknoracloud') {
       if (!formData.value.baseUrl || !formData.value.baseUrl.trim()) {
         MessagePlugin.warning(t('model.editor.remoteBaseUrlRequired'))
@@ -1923,7 +1923,7 @@ const handleCancel = () => {
   }
 }
 
-// WeKnoraCloud 提示信息
+// TreeRAGCloud 提示信息
 .weknoracloud-hint {
   display: flex;
   align-items: flex-start;

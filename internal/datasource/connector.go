@@ -56,7 +56,7 @@ type Connector interface {
 // (bounding memory to one item instead of the whole wiki) and to persist the
 // connector cursor at page boundaries, so a sync that times out mid-traversal
 // resumes from the last checkpoint instead of restarting from scratch
-// (Tencent/WeKnora#2136).
+// (Tencent/TreeRAG#2136).
 type StreamHandler interface {
 	// Emit ingests a single fetched item. Returning an error aborts the
 	// stream: the connector stops fetching and propagates the error, since a

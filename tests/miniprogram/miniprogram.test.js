@@ -26,7 +26,7 @@ test("normalizeBaseUrl trims trailing slashes", () => {
   assert.equal(normalizeBaseUrl(" https://example.com/// "), "https://example.com");
 });
 
-test("API helpers send WeKnora auth headers", async () => {
+test("API helpers send TreeRAG auth headers", async () => {
   let capturedRequest;
   global.wx = {
     getStorageSync() {

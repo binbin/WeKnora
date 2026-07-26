@@ -15,26 +15,26 @@ import (
 	"github.com/Tencent/WeKnora/internal/utils"
 )
 
-type weKnoraCloudService struct {
+type treeRAGCloudService struct {
 	tenantRepo interfaces.TenantRepository
 }
 
-// NewWeKnoraCloudService 构造 WeKnoraCloudService
-func NewWeKnoraCloudService(
+// NewTreeRAGCloudService 构造 TreeRAGCloudService
+func NewTreeRAGCloudService(
 	repo interfaces.ModelRepository,
 	tenantRepo interfaces.TenantRepository,
-) interfaces.WeKnoraCloudService {
-	return &weKnoraCloudService{
+) interfaces.TreeRAGCloudService {
+	return &treeRAGCloudService{
 		tenantRepo: tenantRepo,
 	}
 }
 
-func IsWeKnoraCloudDocReaderAddr(addr string) bool {
-	return strings.TrimSuffix(strings.TrimSpace(addr), "/") == strings.TrimRight(provider.WeKnoraCloudBaseURL, "/")+"/api/v1/doc/reader"
+func IsTreeRAGCloudDocReaderAddr(addr string) bool {
+	return strings.TrimSuffix(strings.TrimSpace(addr), "/") == strings.TrimRight(provider.TreeRAGCloudBaseURL, "/")+"/api/v1/doc/reader"
 }
 
 // SaveCredentials 仅保存 APPID/APPSECRET 凭证，不自动创建模型
-func (s *weKnoraCloudService) SaveCredentials(ctx context.Context, appID, appSecret string) error {
+func (s *treeRAGCloudService) SaveCredentials(ctx context.Context, appID, appSecret string) error {
 	if appID == "" {
 		return fmt.Errorf("app_id is required")
 	}
@@ -50,12 +50,12 @@ func (s *weKnoraCloudService) SaveCredentials(ctx context.Context, appID, appSec
 	return s.updateTenantCredentials(ctx, tenantID, appID, appSecret)
 }
 
-// verifyCredentials 向 WeKnoraCloud /api/v1/health 发送带签名头的 GET。
+// verifyCredentials 向 TreeRAGCloud /api/v1/health 发送带签名头的 GET。
 //
 // 注意：health 一般为探活接口，远端常不校验 APPID/SECRET 或签名；HTTP 200 通常只表示
 // 「网关/服务可达」，不能严格证明凭证有效。若需强校验，应改为调用必须鉴权的业务接口。
-func (s *weKnoraCloudService) verifyCredentials(ctx context.Context, appID, appSecret string) error {
-	baseURL := strings.TrimRight(provider.WeKnoraCloudBaseURL, "/")
+func (s *treeRAGCloudService) verifyCredentials(ctx context.Context, appID, appSecret string) error {
+	baseURL := strings.TrimRight(provider.TreeRAGCloudBaseURL, "/")
 	healthURL := baseURL + "/api/v1/health"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
@@ -89,35 +89,35 @@ func (s *weKnoraCloudService) verifyCredentials(ctx context.Context, appID, appS
 	return nil
 }
 
-// CheckStatus 检查 WeKnoraCloud 凭证是否可正常解密
-func (s *weKnoraCloudService) CheckStatus(ctx context.Context) (*types.WeKnoraCloudStatusResult, error) {
+// CheckStatus 检查 TreeRAGCloud 凭证是否可正常解密
+func (s *treeRAGCloudService) CheckStatus(ctx context.Context) (*types.TreeRAGCloudStatusResult, error) {
 	tenantID := types.MustTenantIDFromContext(ctx)
 
 	tenant, err := s.tenantRepo.GetTenantByID(ctx, tenantID)
 	if err != nil || tenant == nil {
-		return &types.WeKnoraCloudStatusResult{HasModels: false, NeedsReinit: false}, nil
+		return &types.TreeRAGCloudStatusResult{HasModels: false, NeedsReinit: false}, nil
 	}
 
-	creds := tenant.Credentials.GetWeKnoraCloud()
+	creds := tenant.Credentials.GetTreeRAGCloud()
 	if creds == nil {
-		return &types.WeKnoraCloudStatusResult{HasModels: false, NeedsReinit: false}, nil
+		return &types.TreeRAGCloudStatusResult{HasModels: false, NeedsReinit: false}, nil
 	}
 
 	// CredentialsConfig.Scan already attempts decryption.
 	// If the AES key has rotated, Scan silently keeps the enc:v1:... blob.
 	if strings.HasPrefix(creds.AppSecret, utils.EncPrefix) {
-		return &types.WeKnoraCloudStatusResult{
+		return &types.TreeRAGCloudStatusResult{
 			HasModels:   true,
 			NeedsReinit: true,
-			Reason:      "WeKnoraCloud 凭证解密失败（服务重启后加密密钥已变更），请重新填写 APPID 和 APPSECRET",
+			Reason:      "TreeRAGCloud 凭证解密失败（服务重启后加密密钥已变更），请重新填写 APPID 和 APPSECRET",
 		}, nil
 	}
 
-	return &types.WeKnoraCloudStatusResult{HasModels: true, NeedsReinit: false}, nil
+	return &types.TreeRAGCloudStatusResult{HasModels: true, NeedsReinit: false}, nil
 }
 
-// updateTenantCredentials 更新空间的 WeKnoraCloud 凭证
-func (s *weKnoraCloudService) updateTenantCredentials(ctx context.Context, tenantID uint64, appID, appSecret string) error {
+// updateTenantCredentials 更新空间的 TreeRAGCloud 凭证
+func (s *treeRAGCloudService) updateTenantCredentials(ctx context.Context, tenantID uint64, appID, appSecret string) error {
 	if s.tenantRepo == nil {
 		return fmt.Errorf("tenant repository is required")
 	}
@@ -129,7 +129,7 @@ func (s *weKnoraCloudService) updateTenantCredentials(ctx context.Context, tenan
 	if tenant.Credentials == nil {
 		tenant.Credentials = &types.CredentialsConfig{}
 	}
-	tenant.Credentials.WeKnoraCloud = &types.WeKnoraCloudCredentials{
+	tenant.Credentials.TreeRAGCloud = &types.TreeRAGCloudCredentials{
 		AppID:     appID,
 		AppSecret: appSecret,
 	}

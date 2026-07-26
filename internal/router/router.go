@@ -96,7 +96,7 @@ type RouterParams struct {
 	RedisClient                  *redis.Client
 	DataSourceHandler            *handler.DataSourceHandler
 	DataSourceCredentialsHandler *handler.DataSourceCredentialsHandler
-	WeKnoraCloudHandler          *handler.WeKnoraCloudHandler
+	TreeRAGCloudHandler          *handler.TreeRAGCloudHandler
 	WikiPageHandler              *handler.WikiPageHandler
 }
 
@@ -188,7 +188,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 	)
 
 	// Short-lived capability URLs for IM and other clients that cannot attach
-	// WeKnora authentication headers.
+	// TreeRAG authentication headers.
 	serveResourceGrants(r, params.ResourceCatalog, params.TenantService, params.FileService, params.StorageBackendResolver)
 
 	// 认证中间件
@@ -288,7 +288,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterGuestLinkChannelRoutes(v1, params.GuestLinkChannelHandler, rbacGuards)
 		RegisterAgentPublishAPIKeyRoutes(v1, params.AgentPublishAPIKeyHandler, rbacGuards)
 		RegisterDataSourceRoutes(v1, params.DataSourceHandler, params.DataSourceCredentialsHandler, rbacGuards)
-		RegisterWeKnoraCloudRoutes(v1, params.WeKnoraCloudHandler, rbacGuards)
+		RegisterTreeRAGCloudRoutes(v1, params.TreeRAGCloudHandler, rbacGuards)
 		RegisterWikiPageRoutes(v1, params.WikiPageHandler, rbacGuards)
 		RegisterChunkerDebugRoutes(v1, rbacGuards)
 
@@ -1035,7 +1035,7 @@ func RegisterMCPServiceRoutes(
 	// MCP OAuth provider redirect. Registered OUTSIDE the /mcp-services group
 	// to avoid a static-vs-":id" route conflict, and left unauthenticated
 	// (allow-listed in middleware/auth.go) because the third-party browser
-	// redirect carries no WeKnora bearer — the single-use state authenticates.
+	// redirect carries no TreeRAG bearer — the single-use state authenticates.
 	r.GET("/mcp-oauth/callback", oauthHandler.Callback)
 
 	mcpServices := g.apiKeyGroup(r.Group("/mcp-services"), apiKeyManageMCPServices(apiKeyFullAccess()))
@@ -1928,7 +1928,7 @@ func serveFilesWithResources(
 }
 
 // serveResourceGrants exposes short, revocable capability URLs for clients
-// such as IM platforms that cannot attach a WeKnora bearer/embed token.
+// such as IM platforms that cannot attach a TreeRAG bearer/embed token.
 func serveResourceGrants(
 	r *gin.Engine,
 	resourceCatalog interfaces.ResourceCatalog,
@@ -2483,11 +2483,11 @@ func RegisterDataSourceRoutes(
 	}
 }
 
-// RegisterWeKnoraCloudRoutes 注册 WeKnoraCloud 初始化路由
-// RegisterWeKnoraCloudRoutes registers the WeKnoraCloud credential
+// RegisterTreeRAGCloudRoutes 注册 TreeRAGCloud 初始化路由
+// RegisterTreeRAGCloudRoutes registers the TreeRAGCloud credential
 // management endpoints. SaveCredentials persists external SaaS keys
 // for the tenant (Admin+), Status is a low-risk readiness probe (Viewer+).
-func RegisterWeKnoraCloudRoutes(r *gin.RouterGroup, handler *handler.WeKnoraCloudHandler, g *rbacGuards) {
+func RegisterTreeRAGCloudRoutes(r *gin.RouterGroup, handler *handler.TreeRAGCloudHandler, g *rbacGuards) {
 	g.apiKeyRoute(r, http.MethodPost, "/weknoracloud/credentials", apiKeyManageModels(apiKeyFullAccess()), g.OwnerOrSystemAdmin(), handler.SaveCredentials)
 	g.apiKeyRoute(r, http.MethodGet, "/models/weknoracloud/status", apiKeyManageModels(apiKeyFullAccess()), g.Viewer(), handler.Status)
 }

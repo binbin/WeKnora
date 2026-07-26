@@ -4,7 +4,7 @@
 
 **Goal:** Ship P0 of WeChat Official Account (`wechat_oa`): Cloud third-party pre-auth QR bind, Cloud→instance HMAC message relay, text Q&A via existing IM pipeline; split publish-channel cards so 公众号 / 企业微信 / 个人微信 no longer mix.
 
-**Architecture:** New `internal/im/wechat_oa` adapter (`mode=cloud_relay`) talks to WeKnora Cloud OA HTTP APIs (client interface + real HTTP impl; tests use fake Cloud). Binding completes via Cloud HMAC callback that creates `im_channels`. Fan messages hit existing `POST /api/v1/im/callback/:channel_id` after HMAC verify. Replies call Cloud customer-service send. Cloud repo implements WeChat Open Platform; this repo owns instance contract + UI.
+**Architecture:** New `internal/im/wechat_oa` adapter (`mode=cloud_relay`) talks to TreeRAG Cloud OA HTTP APIs (client interface + real HTTP impl; tests use fake Cloud). Binding completes via Cloud HMAC callback that creates `im_channels`. Fan messages hit existing `POST /api/v1/im/callback/:channel_id` after HMAC verify. Replies call Cloud customer-service send. Cloud repo implements WeChat Open Platform; this repo owns instance contract + UI.
 
 **Tech Stack:** Go (Gin, GORM, dig), golang-migrate (PG + SQLite), Vue 3 + TDesign, existing IM Service / Agent QA.
 
@@ -655,7 +655,7 @@ Simplest P0: create channel only on BindingComplete (server-side); UI never POST
 - [ ] **Step 1: Add to .env.example**
 
 ```bash
-# Public base URL of this WeKnora API (no trailing slash). Required for WeChat OA Cloud relay callbacks.
+# Public base URL of this TreeRAG API (no trailing slash). Required for WeChat OA Cloud relay callbacks.
 # APP_EXTERNAL_URL=https://weknora.example.com
 # Optional override for OA callbacks only:
 # WECHAT_OA_CALLBACK_BASE_URL=

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WeKnora MCP Server 模组测试脚本
+TreeRAG MCP Server 模组测试脚本
 
 测试模组的各种启动方式和功能
 """
@@ -31,9 +31,9 @@ def test_imports():
         print("✓ weknora_mcp_server 模块导入成功")
 
         # 测试包导入
-        from weknora_mcp_server import WeKnoraClient, run
+        from weknora_mcp_server import TreeRAGClient, run
 
-        print("✓ WeKnoraClient 和 run 函数导入成功")
+        print("✓ TreeRAGClient 和 run 函数导入成功")
 
         # 测试主入口点
         import main
@@ -71,13 +71,13 @@ def test_client_creation():
     print("\n=== 测试客户端创建 ===")
 
     try:
-        from weknora_mcp_server import WeKnoraClient
+        from weknora_mcp_server import TreeRAGClient
 
         base_url = os.getenv("WEKNORA_BASE_URL", "http://localhost:8080/api/v1")
         api_key = os.getenv("WEKNORA_API_KEY", "test_key")
 
-        client = WeKnoraClient(base_url, api_key)
-        print("✓ WeKnoraClient 创建成功")
+        client = TreeRAGClient(base_url, api_key)
+        print("✓ TreeRAGClient 创建成功")
 
         # 检查客户端属性
         assert client.base_url == base_url
@@ -180,11 +180,11 @@ def test_wiki_tools():
         import weknora_mcp_server
 
         # 验证 Client 方法存在
-        client = weknora_mcp_server.WeKnoraClient("http://localhost:8080/api/v1", "test")
+        client = weknora_mcp_server.TreeRAGClient("http://localhost:8080/api/v1", "test")
         for method in ["wiki_search", "wiki_read_page", "wiki_index_view"]:
-            assert hasattr(client, method), f"WeKnoraClient 缺少方法: {method}"
+            assert hasattr(client, method), f"TreeRAGClient 缺少方法: {method}"
             assert callable(getattr(client, method)), f"{method} 不可调用"
-            print(f"✓ WeKnoraClient.{method} 存在")
+            print(f"✓ TreeRAGClient.{method} 存在")
 
         return True
 
@@ -224,7 +224,7 @@ def test_package_installation():
 
 def main():
     """运行所有测试"""
-    print("WeKnora MCP Server 模组测试")
+    print("TreeRAG MCP Server 模组测试")
     print("=" * 50)
 
     tests = [

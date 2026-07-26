@@ -1,4 +1,4 @@
-# Makefile for the WeKnora CLI (cli/ Go module).
+# Makefile for the TreeRAG CLI (cli/ Go module).
 #
 # Usage:
 #   make build         compile to ./bin/weknora with version metadata

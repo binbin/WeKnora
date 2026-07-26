@@ -2,7 +2,7 @@
 
 # Show help
 help:
-	@echo "WeKnora Makefile 帮助"
+	@echo "TreeRAG Makefile 帮助"
 	@echo ""
 	@echo "基础命令:"
 	@echo "  build             构建应用"
@@ -66,7 +66,7 @@ help:
 	@echo "  package-mac-app   构建并打包 macOS 桌面应用 (.app)"
 
 # Go related variables
-BINARY_NAME=WeKnora
+BINARY_NAME=TreeRAG
 MAIN_PATH=./cmd/server
 
 # Docker related variables

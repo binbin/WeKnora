@@ -4,7 +4,7 @@ services:
     # Requires frontend/dist — run ./scripts/build_frontend_dist.sh before --build
     build:
       context: ./frontend
-    container_name: WeKnora-frontend
+    container_name: TreeRAG-frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
     environment:
@@ -21,7 +21,7 @@ services:
       app:
         condition: service_healthy
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
 
   app:
@@ -31,7 +31,7 @@ services:
       dockerfile: docker/Dockerfile.app
       args:
         - APK_MIRROR_ARG=${APK_MIRROR_ARG:-}
-    container_name: WeKnora-app
+    container_name: TreeRAG-app
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
@@ -275,7 +275,7 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
       # 数据库中 API Key 等敏感字段落盘加密的 AES-256 主密钥（必须为 32 字节）。
       # 加密范围：tenants.api_key、模型 API key、向量库凭证、web search provider key、
-      # WeKnoraCloud.AppSecret 等。缺失或长度不对时，已加密字段无法解密（UI 显示为空，
+      # TreeRAGCloud.AppSecret 等。缺失或长度不对时，已加密字段无法解密（UI 显示为空，
       # 需重新填写）。生产环境必须显式设置且妥善保管，丢失则所有加密数据不可恢复。
       # （TENANT_AES_KEY / CRYPTO_MASTER_KEY / CRYPTO_SALT 已废弃：v0.4.0 起加密统一
       #   改用 SYSTEM_AES_KEY，Go 主应用不再读取这三个变量。）
@@ -356,7 +356,7 @@ services:
       docreader:
         condition: service_healthy
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -364,7 +364,7 @@ services:
   # Sandbox 镜像：仅用于 build/pull，非常驻服务；app 执行 Skills 时按需 docker run 该镜像，用毕即释
   sandbox:
     image: wechatopenai/weknora-sandbox:${WEKNORA_VERSION:-latest}
-    container_name: WeKnora-sandbox
+    container_name: TreeRAG-sandbox
     build:
       context: .
       dockerfile: docker/Dockerfile.sandbox
@@ -380,9 +380,9 @@ services:
       dockerfile: docker/Dockerfile.docreader
       args:
         - APT_MIRROR=${APT_MIRROR:-}
-    container_name: WeKnora-docreader
+    container_name: TreeRAG-docreader
     # docreader gRPC ships without auth/TLS and is only consumed by the app
-    # container over the WeKnora-network (DOCREADER_ADDR defaults to
+    # container over the TreeRAG-network (DOCREADER_ADDR defaults to
     # docreader:50051), so we don't publish 50051 to the host. `expose` keeps
     # the port reachable inside the compose network for documentation only.
     # If you need to call docreader from outside the host (e.g. for debugging),
@@ -472,7 +472,7 @@ services:
       retries: 3
       start_period: 60s
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -484,7 +484,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.odl-hybrid
     image: weknora-odl-hybrid:local
-    container_name: WeKnora-odl-hybrid
+    container_name: TreeRAG-odl-hybrid
     profiles:
       - odl-hybrid
     expose:
@@ -492,13 +492,13 @@ services:
     environment:
       - ODL_HYBRID_EXTRA_ARGS=${ODL_HYBRID_EXTRA_ARGS:---no-ocr}
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
 
   # 修改的PostgreSQL配置
   postgres:
     image: paradedb/paradedb:v0.22.2-pg17
-    container_name: WeKnora-postgres
+    container_name: TreeRAG-postgres
     environment:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -506,7 +506,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s # 增加时间间隔
@@ -519,11 +519,11 @@ services:
 
   redis:
     image: redis:7.0-alpine
-    container_name: WeKnora-redis
+    container_name: TreeRAG-redis
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     restart: always
     networks:
-      - WeKnora-network
+      - TreeRAG-network
 
   # One-shot init: copy the read-only template settings.yml into a named volume
   # before searxng starts. Necessary because the searxng entrypoint sed-replaces
@@ -532,21 +532,21 @@ services:
   # working tree (and prevent re-templating on subsequent restarts).
   searxng-init:
     image: busybox:1.36
-    container_name: WeKnora-searxng-init
+    container_name: TreeRAG-searxng-init
     command: ["sh", "-c", "cp /template/settings.yml /etc/searxng/settings.yml && chmod 0644 /etc/searxng/settings.yml"]
     volumes:
       - ./docker/searxng/settings.yml:/template/settings.yml:ro
       - searxng_config:/etc/searxng
     restart: "no"
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - searxng
       - full
 
   searxng:
     image: searxng/searxng:latest
-    container_name: WeKnora-searxng
+    container_name: TreeRAG-searxng
     # Bind to loopback by default; override SEARXNG_BIND=0.0.0.0 only after
     # rotating SEARXNG_SECRET and (optionally) re-enabling limiter in settings.yml.
     ports:
@@ -572,14 +572,14 @@ services:
       searxng-init:
         condition: service_completed_successfully
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - searxng
       - full
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: WeKnora-minio
+    container_name: TreeRAG-minio
     ports:
       - "${MINIO_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
@@ -595,14 +595,14 @@ services:
       timeout: 20s
       retries: 3
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - minio
       - full
 
   neo4j:
     image: neo4j:2025.10.1
-    container_name: WeKnora-neo4j
+    container_name: TreeRAG-neo4j
     volumes:
       - neo4j-data:/data
     environment:
@@ -616,21 +616,21 @@ services:
       - "7687:7687"
     restart: always
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - neo4j
       - full
 
   qdrant:
     image: qdrant/qdrant:v1.16.2
-    container_name: WeKnora-qdrant
+    container_name: TreeRAG-qdrant
     ports:
       - "${QDRANT_REST_PORT:-6333}:6333"
       - "${QDRANT_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     profiles:
       - qdrant
@@ -638,7 +638,7 @@ services:
 
   milvus:
     image: milvusdb/milvus:v2.6.11
-    container_name: WeKnora-milvus
+    container_name: TreeRAG-milvus
     security_opt:
       - seccomp:unconfined
     command: ["milvus", "run", "standalone"]
@@ -659,14 +659,14 @@ services:
     volumes:
       - milvus_data:/var/lib/milvus
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     profiles:
       - milvus
 
   weaviate:
     image: semitechnologies/weaviate:1.28.4
-    container_name: WeKnora-weaviate
+    container_name: TreeRAG-weaviate
     environment:
       - PERSISTENCE_DATA_PATH=/var/lib/weaviate
       - CLUSTER_HOSTNAME=node1
@@ -682,7 +682,7 @@ services:
     volumes:
       - weaviate_data:/var/lib/weaviate
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     profiles:
       - weaviate
@@ -694,7 +694,7 @@ services:
   # Stream Load partial_columns）。本 compose 使用 4.1 官方稳定 tag。
   #
   # 端口说明：
-  #   - 9030 (FE MySQL)：WeKnora 主链路读写、SQL 查询都走此端口。
+  #   - 9030 (FE MySQL)：TreeRAG 主链路读写、SQL 查询都走此端口。
   #   - 8030 (FE HTTP)：Stream Load partial update 入口。
   #   - 8040 (BE)     ：BE 心跳与数据传输；FE 会把 stream load 重定向到 BE。
   #
@@ -705,7 +705,7 @@ services:
   # ---------------------------------------------------------------------------
   doris-fe:
     image: apache/doris:fe-4.1.0
-    container_name: WeKnora-doris-fe
+    container_name: TreeRAG-doris-fe
     hostname: doris-fe
     environment:
       - FE_SERVERS=fe1:doris-fe:9010
@@ -717,14 +717,14 @@ services:
       - doris_fe_meta:/opt/apache-doris/fe/doris-meta
       - doris_fe_log:/opt/apache-doris/fe/log
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     profiles:
       - doris
 
   doris-be:
     image: apache/doris:be-4.1.0
-    container_name: WeKnora-doris-be
+    container_name: TreeRAG-doris-be
     hostname: doris-be
     environment:
       - FE_SERVERS=fe1:doris-fe:9010
@@ -737,7 +737,7 @@ services:
       - doris_be_storage:/opt/apache-doris/be/storage
       - doris_be_log:/opt/apache-doris/be/log
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     profiles:
       - doris
@@ -757,9 +757,9 @@ services:
   # ---------------------------------------------------------------------------
   # Langfuse 自建可观测栈 (opt-in via `--profile langfuse`)
   #
-  # 为了最小化资源占用，Langfuse 会复用 WeKnora 已有的 postgres 和 redis：
-  #   - postgres：在 WeKnora-postgres 中创建独立的 "langfuse" 数据库
-  #   - redis  ：复用 WeKnora-redis 的 DB 1（WeKnora 自己用 DB 0）
+  # 为了最小化资源占用，Langfuse 会复用 TreeRAG 已有的 postgres 和 redis：
+  #   - postgres：在 TreeRAG-postgres 中创建独立的 "langfuse" 数据库
+  #   - redis  ：复用 TreeRAG-redis 的 DB 1（TreeRAG 自己用 DB 0）
   # 需要新增的只有 Langfuse 应用自身 + ClickHouse（OLAP）+ 专用 MinIO（事件/媒体 S3）。
   #
   # 启用方式：
@@ -772,11 +772,11 @@ services:
   # 相关默认密码已写成占位符，生产部署务必用 openssl rand 重新生成！
   # ---------------------------------------------------------------------------
 
-  # 一次性初始化脚本：在已有的 WeKnora-postgres 里创建 langfuse 数据库（幂等，数据库已存在则跳过）
-  # 复用 WeKnora-postgres 的 ParadeDB 镜像，避免多拉一个 postgres 镜像
+  # 一次性初始化脚本：在已有的 TreeRAG-postgres 里创建 langfuse 数据库（幂等，数据库已存在则跳过）
+  # 复用 TreeRAG-postgres 的 ParadeDB 镜像，避免多拉一个 postgres 镜像
   langfuse-db-init:
     image: paradedb/paradedb:v0.22.2-pg17
-    container_name: WeKnora-langfuse-db-init
+    container_name: TreeRAG-langfuse-db-init
     depends_on:
       postgres:
         condition: service_healthy
@@ -788,7 +788,7 @@ services:
     command:
       - |
         set -e
-        echo "[langfuse-db-init] ensuring database '${LANGFUSE_DB_NAME:-langfuse}' exists in WeKnora-postgres..."
+        echo "[langfuse-db-init] ensuring database '${LANGFUSE_DB_NAME:-langfuse}' exists in TreeRAG-postgres..."
         # 先刷新现有库的 collation（镜像 ICU 2.36 与宿主 2.41 不匹配时必须做），否则 CREATE DATABASE 会失败
         psql -h postgres -U ${DB_USER} -d postgres -v ON_ERROR_STOP=0 -c "ALTER DATABASE template1 REFRESH COLLATION VERSION;" >/dev/null 2>&1 || true
         psql -h postgres -U ${DB_USER} -d postgres -v ON_ERROR_STOP=0 -c "ALTER DATABASE postgres REFRESH COLLATION VERSION;" >/dev/null 2>&1 || true
@@ -801,7 +801,7 @@ services:
         fi
         echo "[langfuse-db-init] done."
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: "no"
     profiles:
       - langfuse
@@ -809,7 +809,7 @@ services:
 
   langfuse-clickhouse:
     image: clickhouse/clickhouse-server:24.8
-    container_name: WeKnora-langfuse-clickhouse
+    container_name: TreeRAG-langfuse-clickhouse
     restart: unless-stopped
     user: "101:101"
     environment:
@@ -826,14 +826,14 @@ services:
       retries: 10
       start_period: 10s
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - langfuse
       - full
 
   langfuse-minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: WeKnora-langfuse-minio
+    container_name: TreeRAG-langfuse-minio
     restart: unless-stopped
     entrypoint: sh
     # 启动前创建 `langfuse` 桶，Langfuse 开箱即用
@@ -854,17 +854,17 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - langfuse
       - full
 
   langfuse-worker:
     image: langfuse/langfuse-worker:3
-    container_name: WeKnora-langfuse-worker
+    container_name: TreeRAG-langfuse-worker
     restart: unless-stopped
     depends_on: &langfuse-depends-on
-      # 复用 WeKnora 已有的 postgres/redis，需要先完成 langfuse 数据库的创建
+      # 复用 TreeRAG 已有的 postgres/redis，需要先完成 langfuse 数据库的创建
       langfuse-db-init:
         condition: service_completed_successfully
       redis:
@@ -926,14 +926,14 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - langfuse
       - full
 
   langfuse-web:
     image: langfuse/langfuse:3
-    container_name: WeKnora-langfuse-web
+    container_name: TreeRAG-langfuse-web
     restart: unless-stopped
     depends_on: *langfuse-depends-on
     ports:
@@ -968,7 +968,7 @@ services:
       LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-}
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     profiles:
       - langfuse
       - full
@@ -976,7 +976,7 @@ services:
   mcp:
     build:
       context: ./mcp-server
-    container_name: WeKnora-mcp
+    container_name: TreeRAG-mcp
     ports:
       - "${MCP_PORT:-8082}:8000"
     environment:
@@ -984,9 +984,9 @@ services:
       - WEKNORA_API_KEY=${WEKNORA_API_KEY:-}
       # HTTP/SSE 传输必填：mcp-server 启动时若缺少此项会拒绝启动（客户端以 Authorization: Bearer 携带）
       - MCP_SERVER_AUTH_TOKEN=${MCP_SERVER_AUTH_TOKEN:-}
-      # 调用 WeKnora REST 的读超时（秒，默认 300）
+      # 调用 TreeRAG REST 的读超时（秒，默认 300）
       - WEKNORA_CHAT_TIMEOUT=${WEKNORA_CHAT_TIMEOUT:-300}
-      # 是否校验 WeKnora 后端 TLS 证书（默认 true；自签证书可设 false）
+      # 是否校验 TreeRAG 后端 TLS 证书（默认 true；自签证书可设 false）
       - WEKNORA_VERIFY_SSL=${WEKNORA_VERIFY_SSL:-true}
       # 允许上传的目录白名单（逗号分隔；留空禁用文件上传工具）
       - MCP_ALLOWED_UPLOAD_DIRS=${MCP_ALLOWED_UPLOAD_DIRS:-}
@@ -994,13 +994,13 @@ services:
       app:
         condition: service_healthy
     networks:
-      - WeKnora-network
+      - TreeRAG-network
     restart: unless-stopped
     profiles:
       - full
 
 networks:
-  WeKnora-network:
+  TreeRAG-network:
     driver: bridge
 
 volumes:

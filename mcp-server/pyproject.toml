@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "weknora-mcp-server"
 version = "1.0.0"
-description = "WeKnora MCP Server - Model Context Protocol server for WeKnora API"
+description = "TreeRAG MCP Server - Model Context Protocol server for TreeRAG API"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "WeKnora Team", email = "support@weknora.com"}
+    {name = "TreeRAG Team", email = "support@weknora.com"}
 ]
 maintainers = [
-    {name = "WeKnora Team", email = "support@weknora.com"}
+    {name = "TreeRAG Team", email = "support@weknora.com"}
 ]
 keywords = ["mcp", "model-context-protocol", "weknora", "knowledge-management", "api-server"]
 classifiers = [
@@ -49,11 +49,11 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/NannaOlympicBroadcast/WeKnoraMCP"
+Homepage = "https://github.com/NannaOlympicBroadcast/TreeRAGMCP"
 Documentation = "https://docs.weknora.com"
-Repository = "https://github.com/NannaOlympicBroadcast/WeKnoraMCP"
-"Bug Reports" = "https://github.com/NannaOlympicBroadcast/WeKnoraMCP/issues"
-Changelog = "https://github.com/NannaOlympicBroadcast/WeKnoraMCP/blob/main/CHANGELOG.md"
+Repository = "https://github.com/NannaOlympicBroadcast/TreeRAGMCP"
+"Bug Reports" = "https://github.com/NannaOlympicBroadcast/TreeRAGMCP/issues"
+Changelog = "https://github.com/NannaOlympicBroadcast/TreeRAGMCP/blob/main/CHANGELOG.md"
 
 [project.scripts]
 weknora-mcp-server = "main:sync_main"

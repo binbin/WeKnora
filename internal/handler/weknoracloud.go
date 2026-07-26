@@ -7,17 +7,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// WeKnoraCloudHandler 处理 WeKnoraCloud 凭证管理
-type WeKnoraCloudHandler struct {
-	svc interfaces.WeKnoraCloudService
+// TreeRAGCloudHandler 处理 TreeRAGCloud 凭证管理
+type TreeRAGCloudHandler struct {
+	svc interfaces.TreeRAGCloudService
 }
 
-// NewWeKnoraCloudHandler 构造函数
-func NewWeKnoraCloudHandler(svc interfaces.WeKnoraCloudService) *WeKnoraCloudHandler {
-	return &WeKnoraCloudHandler{svc: svc}
+// NewTreeRAGCloudHandler 构造函数
+func NewTreeRAGCloudHandler(svc interfaces.TreeRAGCloudService) *TreeRAGCloudHandler {
+	return &TreeRAGCloudHandler{svc: svc}
 }
 
-type weKnoraCloudCredentialsRequest struct {
+type treeRAGCloudCredentialsRequest struct {
 	AppID     string `json:"app_id"     binding:"required"`
 	AppSecret string `json:"app_secret" binding:"required"`
 }
@@ -26,9 +26,9 @@ type weKnoraCloudCredentialsRequest struct {
 // 仅保存 APPID/APPSECRET 凭证到空间配置，不自动创建模型
 //
 // SaveCredentials godoc
-// @Summary      保存 WeKnoraCloud 凭证
+// @Summary      保存 TreeRAGCloud 凭证
 // @Description  保存 APPID/APPSECRET 到当前空间配置（不自动创建模型）
-// @Tags         WeKnoraCloud
+// @Tags         TreeRAGCloud
 // @Accept       json
 // @Produce      json
 // @Param        request  body      map[string]interface{}  true  "{app_id, app_secret}"
@@ -37,8 +37,8 @@ type weKnoraCloudCredentialsRequest struct {
 // @Security     Bearer
 // @Security     ApiKeyAuth
 // @Router       /weknoracloud/credentials [post]
-func (h *WeKnoraCloudHandler) SaveCredentials(c *gin.Context) {
-	var req weKnoraCloudCredentialsRequest
+func (h *TreeRAGCloudHandler) SaveCredentials(c *gin.Context) {
+	var req treeRAGCloudCredentialsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -53,19 +53,19 @@ func (h *WeKnoraCloudHandler) SaveCredentials(c *gin.Context) {
 }
 
 // Status GET /api/v1/models/weknoracloud/status
-// 检查当前空间的 WeKnoraCloud 凭证是否完好，如需重新初始化则返回 needs_reinit=true
+// 检查当前空间的 TreeRAGCloud 凭证是否完好，如需重新初始化则返回 needs_reinit=true
 //
 // Status godoc
-// @Summary      检查 WeKnoraCloud 凭证状态
-// @Description  检查当前空间的 WeKnoraCloud 凭证是否完好；needs_reinit=true 表示需要重新保存
-// @Tags         WeKnoraCloud
+// @Summary      检查 TreeRAGCloud 凭证状态
+// @Description  检查当前空间的 TreeRAGCloud 凭证是否完好；needs_reinit=true 表示需要重新保存
+// @Tags         TreeRAGCloud
 // @Produce      json
 // @Success      200  {object}  map[string]interface{}  "凭证状态"
 // @Failure      500  {object}  map[string]interface{}  "服务器错误"
 // @Security     Bearer
 // @Security     ApiKeyAuth
 // @Router       /models/weknoracloud/status [get]
-func (h *WeKnoraCloudHandler) Status(c *gin.Context) {
+func (h *TreeRAGCloudHandler) Status(c *gin.Context) {
 	result, err := h.svc.CheckStatus(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

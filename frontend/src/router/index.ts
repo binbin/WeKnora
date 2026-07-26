@@ -161,6 +161,12 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
+          path: "docs/openapi-chat",
+          name: "openapiChatDoc",
+          component: () => import("../views/docs/OpenAPIChatDoc.vue"),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
           path: "integrations",
           redirect: () => ({
             path: "/platform/settings",

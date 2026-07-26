@@ -256,7 +256,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       localStorage.removeItem('weknora_last_chat_model_id')
       localStorage.removeItem('weknora_current_kb')
-      const raw = localStorage.getItem('WeKnora_settings')
+      const raw = localStorage.getItem('TreeRAG_settings')
       if (raw) {
         const parsed = JSON.parse(raw)
         if (parsed && typeof parsed === 'object') {
@@ -272,7 +272,7 @@ export const useAuthStore = defineStore('auth', () => {
           parsed.selectedFiles = []
           parsed.selectedFileKbMap = {}
           parsed.knowledgeBaseId = ''
-          localStorage.setItem('WeKnora_settings', JSON.stringify(parsed))
+          localStorage.setItem('TreeRAG_settings', JSON.stringify(parsed))
         }
       }
     } catch (e) {

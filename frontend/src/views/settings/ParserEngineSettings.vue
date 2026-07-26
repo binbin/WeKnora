@@ -167,7 +167,7 @@
         </section>
 
         <!--
-          Section 2 — 状态信息（DocReader 连接 / WeKnoraCloud 凭证）
+          Section 2 — 状态信息（DocReader 连接 / TreeRAGCloud 凭证）
           只有有内容时才渲染，避免空 section 空底部分隔线。
         -->
         <section
@@ -381,7 +381,7 @@ import {
   type ParserEngineInfo,
   type ParserEngineConfig,
 } from '@/api/system'
-import { getWeKnoraCloudStatus } from '@/api/model'
+import { getTreeRAGCloudStatus } from '@/api/model'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -669,13 +669,13 @@ async function onSave() {
   }
 }
 
-// ---- WeKnoraCloud 凭证状态 ----
+// ---- TreeRAGCloud 凭证状态 ----
 const wkcState = ref<'loading' | 'unconfigured' | 'configured' | 'expired'>('loading')
 
 async function checkWkcStatus() {
   wkcState.value = 'loading'
   try {
-    const status = await getWeKnoraCloudStatus()
+    const status = await getTreeRAGCloudStatus()
     if (status.needs_reinit) {
       wkcState.value = 'expired'
     } else if (status.has_models) {

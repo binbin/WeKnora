@@ -210,7 +210,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewEvaluationService))
 	must(container.Provide(service.NewUserService))
 	must(container.Provide(service.NewSystemSettingService))
-	must(container.Provide(service.NewWeKnoraCloudService))
+	must(container.Provide(service.NewTreeRAGCloudService))
 
 	// Extract services - register individual extracters with names
 	must(container.Provide(service.NewChunkExtractService, dig.Name("chunkExtractor")))
@@ -398,7 +398,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewGuestLinkChannelHandler))
 	must(container.Provide(handler.NewAgentPublishAPIKeyHandler))
 	must(container.Provide(handler.NewOpenAPIChatHandler))
-	must(container.Provide(handler.NewWeKnoraCloudHandler))
+	must(container.Provide(handler.NewTreeRAGCloudHandler))
 	logger.Debugf(ctx, "[Container] HTTP handlers registered")
 
 	// Wire the chat package's local image resolver so multimodal chat can read
@@ -1582,11 +1582,11 @@ func registerIMAdapterFactories(
 				return nil, fmt.Errorf("wechat_oa: load tenant: %w", err)
 			}
 			if tenant.Credentials == nil {
-				return nil, fmt.Errorf("wechat_oa: WeKnoraCloud credentials not configured")
+				return nil, fmt.Errorf("wechat_oa: TreeRAGCloud credentials not configured")
 			}
-			creds := tenant.Credentials.GetWeKnoraCloud()
+			creds := tenant.Credentials.GetTreeRAGCloud()
 			if creds == nil {
-				return nil, fmt.Errorf("wechat_oa: WeKnoraCloud credentials not configured")
+				return nil, fmt.Errorf("wechat_oa: TreeRAGCloud credentials not configured")
 			}
 			return wechat_oa.NewHTTPCloudClient("", creds.AppID, creds.AppSecret, nil), nil
 		},

@@ -116,9 +116,7 @@
             <h3>{{ $t('agentEditor.publish.apiKeysTitle') }}</h3>
             <a
               class="channel-detail__doc"
-              href="https://github.com/Tencent/WeKnora/blob/main/docs/api/openapi-chat.md"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/platform/docs/openapi-chat"
               @click.prevent="openApiDoc"
             >
               {{ $t('agentEditor.publish.viewDocs') }}
@@ -293,6 +291,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next'
 import AgentEmbedChannelPanel from '@/components/AgentEmbedChannelPanel.vue'
 import AgentGuestLinkPanel from '@/components/AgentGuestLinkPanel.vue'
@@ -320,6 +319,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const selectedType = ref<ChannelTypeKey>('guest')
@@ -615,10 +615,10 @@ async function copyText(value: string): Promise<void> {
 }
 
 function openApiDoc(): void {
-  window.open(
-    'https://github.com/Tencent/WeKnora/blob/main/docs/api/openapi-chat.md',
-    '_blank',
-  )
+  router.push({
+    name: 'openapiChatDoc',
+    query: props.agentId ? { fromAgent: props.agentId } : undefined,
+  })
 }
 
 function startEmbed(channel: EmbedChannel): void {

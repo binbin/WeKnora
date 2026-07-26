@@ -227,7 +227,7 @@ func (ch *IMChannel) computeBotIdentity() string {
 	return ""
 }
 
-// ChannelSession maps an IM channel (user+chat combination) to a WeKnora session.
+// ChannelSession maps an IM channel (user+chat combination) to a TreeRAG session.
 // This allows the IM integration to maintain conversation continuity.
 type ChannelSession struct {
 	ID          string         `json:"id"            gorm:"type:varchar(36);primaryKey;default:uuid_generate_v4()"`

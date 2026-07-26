@@ -12,7 +12,7 @@ import (
 // result.Errors slice: that slice is persisted as jsonb and shipped in every
 // sync-log list response, so an uncapped list means multi-MB rows and payloads.
 // The accurate count lives in result.Failed (a bounded int), so Errors only
-// needs to retain a sample for display (Tencent/WeKnora#2136 / #1262).
+// needs to retain a sample for display (Tencent/TreeRAG#2136 / #1262).
 func TestApplyFetchedItem_CapsErrorSampleButKeepsAccurateFailedCount(t *testing.T) {
 	s := &DataSourceService{}
 	ds := &types.DataSource{}

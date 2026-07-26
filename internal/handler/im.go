@@ -103,7 +103,7 @@ func (h *IMHandler) CreateIMChannel(c *gin.Context) {
 		channel.Mode = "longpoll"
 		channel.OutputMode = "full"
 	} else if req.Platform == "wechat_oa" {
-		// WeChat Official Account relays through the WeKnora cloud and only
+		// WeChat Official Account relays through the TreeRAG cloud and only
 		// supports full (non-streaming) responses.
 		channel.Mode = "cloud_relay"
 		channel.OutputMode = "full"
@@ -474,9 +474,9 @@ func (h *IMHandler) bestEffortUnbindWeChatOA(
 		logger.Warnf(ctx, "[WeChatOA] skip Cloud unbind: tenant credentials unavailable")
 		return
 	}
-	wc := tenant.Credentials.GetWeKnoraCloud()
+	wc := tenant.Credentials.GetTreeRAGCloud()
 	if wc == nil {
-		logger.Warnf(ctx, "[WeChatOA] skip Cloud unbind: WeKnoraCloud not configured")
+		logger.Warnf(ctx, "[WeChatOA] skip Cloud unbind: TreeRAGCloud not configured")
 		return
 	}
 	client := wechat_oa.NewHTTPCloudClient("", wc.AppID, wc.AppSecret, nil)

@@ -97,7 +97,7 @@
 
     <!-- Logo - Top Left -->
     <div class="header-logo">
-      <img src="@/assets/img/weknora.png" alt="WeKnora" class="logo-image" />
+      <img src="@/assets/img/weknora.png" alt="TreeRAG" class="logo-image" />
     </div>
 
     <!-- Header Links - Top Right -->
