@@ -60,6 +60,9 @@ var noAuthAPI = map[string][]string{
 	// before GET to validate Content-Type / Content-Length when rendering
 	// image previews — both verbs must be allowed for image links to work.
 	"/api/v1/files/presigned": {"GET", "HEAD"},
+	// OpenAI-compatible chat completions authenticate via PublishAPIKeyAuth
+	// (Authorization: Bearer wkpub_…), not the global JWT / X-API-Key path.
+	"/api/v1/chat/completions": {"POST"},
 }
 
 // 检查请求是否在无需认证的API列表中
