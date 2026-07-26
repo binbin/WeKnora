@@ -91,6 +91,8 @@ type RouterParams struct {
 	EmbedChannelService          interfaces.EmbedChannelService
 	GuestLinkChannelHandler      *handler.GuestLinkChannelHandler
 	AgentPublishAPIKeyHandler    *handler.AgentPublishAPIKeyHandler
+	AgentPublishAPIKeyService    interfaces.AgentPublishAPIKeyService
+	OpenAPIChatHandler           *handler.OpenAPIChatHandler
 	RedisClient                  *redis.Client
 	DataSourceHandler            *handler.DataSourceHandler
 	DataSourceCredentialsHandler *handler.DataSourceCredentialsHandler
@@ -174,6 +176,15 @@ func NewRouter(params RouterParams) *gin.Engine {
 		params.FileService,
 		params.StorageBackendResolver,
 		params.ResourceCatalog,
+	)
+
+	// OpenAI-compatible chat completions (Bearer wkpub_… via PublishAPIKeyAuth).
+	// Registered before global Auth; path is also listed in noAuthAPI.
+	RegisterOpenAPIChatRoutes(
+		r,
+		params.OpenAPIChatHandler,
+		params.AgentPublishAPIKeyService,
+		params.TenantService,
 	)
 
 	// Short-lived capability URLs for IM and other clients that cannot attach
@@ -1506,6 +1517,25 @@ func RegisterAgentPublishAPIKeyRoutes(
 		group.POST("", g.OwnerOrSystemAdmin(), publishHandler.Create)
 		group.DELETE("/:key_id", g.OwnerOrSystemAdmin(), publishHandler.Delete)
 	}
+}
+
+// RegisterOpenAPIChatRoutes wires POST /api/v1/chat/completions with
+// PublishAPIKeyAuth. Must stay outside JWT Auth (and match noAuthAPI).
+func RegisterOpenAPIChatRoutes(
+	r *gin.Engine,
+	chatHandler *handler.OpenAPIChatHandler,
+	publishKeySvc interfaces.AgentPublishAPIKeyService,
+	tenantSvc interfaces.TenantService,
+) {
+	if chatHandler == nil || publishKeySvc == nil || tenantSvc == nil {
+		return
+	}
+	openapi := r.Group("/api/v1")
+	openapi.POST(
+		"/chat/completions",
+		middleware.PublishAPIKeyAuth(publishKeySvc, tenantSvc),
+		chatHandler.ChatCompletions,
+	)
 }
 
 // RegisterIMRoutes registers IM callback routes.

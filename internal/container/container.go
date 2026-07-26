@@ -397,6 +397,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewEmbedChannelHandler))
 	must(container.Provide(handler.NewGuestLinkChannelHandler))
 	must(container.Provide(handler.NewAgentPublishAPIKeyHandler))
+	must(container.Provide(handler.NewOpenAPIChatHandler))
 	must(container.Provide(handler.NewWeKnoraCloudHandler))
 	logger.Debugf(ctx, "[Container] HTTP handlers registered")
 
