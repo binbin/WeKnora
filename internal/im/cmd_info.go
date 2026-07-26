@@ -104,9 +104,7 @@ func (c *InfoCommand) Execute(ctx context.Context, cmdCtx *CommandContext, _ []s
 
 	// ── MCP ──
 	sb.WriteString("\n🔌 **MCP 服务**\n")
-	if cfg.MCPSelectionMode == "all" {
-		sb.WriteString("  全部接入\n")
-	} else if cfg.MCPSelectionMode == "selected" && len(cfg.MCPServices) > 0 {
+	if cfg.MCPSelectionMode == "selected" && len(cfg.MCPServices) > 0 {
 		sb.WriteString(fmt.Sprintf("  已接入 %d 个服务\n", len(cfg.MCPServices)))
 	} else {
 		sb.WriteString("  未配置\n")

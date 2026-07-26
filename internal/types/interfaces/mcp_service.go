@@ -42,7 +42,13 @@ type MCPServiceService interface {
 	ListMCPServices(ctx context.Context, tenantID uint64) ([]*types.MCPService, error)
 
 	// ListMCPServicesByIDs retrieves multiple MCP services by IDs
+	// (filtered by the caller's active OrgUnit browse scope).
 	ListMCPServicesByIDs(ctx context.Context, tenantID uint64, ids []string) ([]*types.MCPService, error)
+
+	// ListMCPServicesByIDsForRuntime loads MCP services already selected on an
+	// agent config for tool registration. Skips caller OrgUnit browse filtering
+	// so embed / viewer sessions can still use the agent's preset MCP tools.
+	ListMCPServicesByIDsForRuntime(ctx context.Context, tenantID uint64, ids []string) ([]*types.MCPService, error)
 
 	// UpdateMCPService updates an MCP service
 	UpdateMCPService(ctx context.Context, service *types.MCPService) error

@@ -40,6 +40,9 @@ export interface MCPService {
   }
   env_vars?: Record<string, string> // Environment variables for stdio transport
   is_builtin?: boolean // Whether this is a builtin MCP service
+  // Org-unit visibility (same as knowledge bases).
+  org_unit_id?: string
+  share_with_descendants?: boolean
   // Per-field "configured?" map embedded on the main response (server-side
   // dto.MCPServiceResponse.Credentials). Drives the CredentialResource card
   // without a follow-up GET. Absent for builtin services.

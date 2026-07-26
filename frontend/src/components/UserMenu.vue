@@ -70,9 +70,9 @@
             :title="$t('tenant.switcher.menuLabel')" />
         </div>
         <div class="menu-divider"></div>
-        <!-- QuickNav 入口与 Settings 的最低角色对齐：models/websearch/mcp
-             分别对应 viewer/admin/admin（详情见 Settings.vue 的
-             SECTION_MIN_ROLE）。成员管理已迁至侧栏独立页。低角色用户看到
+        <!-- QuickNav 入口与 Settings 的最低角色对齐：models/websearch
+             分别对应 viewer/admin（详情见 Settings.vue 的
+             SECTION_MIN_ROLE）。MCP 已迁至侧栏独立页。成员管理已迁至侧栏独立页。低角色用户看到
              这些入口点进去也只能看到 role-denied 兜底页，索性藏起来。 -->
         <div v-if="canSeeQuickNav('models')" class="menu-item" @click="handleQuickNav('models')">
           <t-icon name="control-platform" class="menu-icon" />
@@ -90,10 +90,6 @@
               stroke-linecap="round" />
           </svg>
           <span>{{ $t('settings.webSearchConfig') }}</span>
-        </div>
-        <div v-if="canSeeQuickNav('mcp')" class="menu-item" @click="handleQuickNav('mcp')">
-          <t-icon name="tools" class="menu-icon" />
-          <span>{{ $t('settings.mcpService') }}</span>
         </div>
         <div class="menu-divider"></div>
         <div class="menu-item" @click="handleSettings">
@@ -227,11 +223,10 @@ const showTenantIdentityLine = computed(() => {
 })
 
 // 与 Settings.vue 的 SECTION_MIN_ROLE 同步；这里只挂 quickNav 直接跳转的
-// 那 4 项。改这张表前请同步 Settings.vue 的对照注释。
+// 那几项。MCP 已迁至侧栏独立页，不再出现在用户菜单快捷入口。
 const QUICKNAV_MIN_ROLE: Record<string, 'viewer' | 'contributor' | 'admin' | 'owner'> = {
   models: 'viewer',
   websearch: 'admin',
-  mcp: 'admin',
 }
 const canSeeQuickNav = (key: string): boolean => {
   if (authStore.canAccessAllTenants) return true

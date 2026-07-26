@@ -30,7 +30,7 @@ type AgentConfig struct {
 	HistoryTurns            int           `json:"history_turns"`                        // Number of history turns to keep in context
 	SearchTargets           SearchTargets `json:"-"`                                    // Pre-computed unified search targets (runtime only)
 	// MCP service selection
-	MCPSelectionMode string   `json:"mcp_selection_mode"` // MCP selection mode: "all", "selected", "none"
+	MCPSelectionMode string `json:"mcp_selection_mode"` // MCP selection mode: "selected" | "none" (default none)
 	MCPServices      []string `json:"mcp_services"`       // Selected MCP service IDs (when mode is "selected")
 	// MCPAuthWaitTimeout is how many seconds an agent run waits for
 	// in-conversation OAuth authorization before skipping. <=0 falls back to

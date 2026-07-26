@@ -31,38 +31,33 @@
         </div>
         <div
           v-for="(message, index) in messagesList"
-          :key="String(message.id || index)"
-          :class="[
-            'debug-preview__bubble',
-            message.role === 'user'
-              ? 'debug-preview__bubble--user'
-              : 'debug-preview__bubble--assistant',
-          ]"
+          :key="String(message.id || `${message.role}-${index}`)"
+          class="debug-preview__msg"
         >
-          <div class="debug-preview__bubble-role">
-            {{
-              message.role === 'user'
-                ? $t('agentEditor.workspace.debugYou')
-                : $t('agentEditor.workspace.debugAgent')
-            }}
-          </div>
-          <div class="debug-preview__bubble-content">
-            {{ String(message.content || '') }}
-            <span
-              v-if="
-                message.role === 'assistant' &&
-                !message.is_completed &&
-                isReplying
-              "
-              class="debug-preview__cursor"
-            >|</span>
-          </div>
+          <EmbedUserMessage
+            v-if="message.role === 'user'"
+            :content="String(message.content || '')"
+            :embedded-mode="false"
+          />
+          <EmbedBotMessage
+            v-else-if="
+              message.role === 'assistant' &&
+              shouldRenderAssistantMessage(message)
+            "
+            :content="String(message.content || '')"
+            :session="message"
+            :session-id="sessionId"
+            :user-query="getUserQuery(index)"
+            :embedded-mode="false"
+          />
         </div>
         <div
-          v-if="isReplying && !hasTrailingAssistant"
+          v-if="showTypingIndicator"
           class="debug-preview__typing"
+          role="status"
+          :aria-label="$t('chat.thinkingAlt')"
         >
-          {{ $t('agentEditor.workspace.debugThinking') }}
+          <span class="debug-preview__typing-spinner" aria-hidden="true" />
         </div>
       </div>
 
@@ -73,7 +68,7 @@
           :placeholder="$t('agentEditor.workspace.debugPlaceholder')"
           :disabled="isReplying"
           :autosize="{ minRows: 2, maxRows: 4 }"
-          @keydown.enter.exact.prevent="handleSend"
+          @keydown="onDebugKeydown"
         />
         <t-button
           theme="primary"
@@ -85,6 +80,7 @@
         </t-button>
       </form>
     </template>
+    <ChatReferencesDrawer />
   </div>
 </template>
 
@@ -98,6 +94,12 @@ import {
   useChatStreamHandler,
   type ChatMessage,
 } from '@/composables/useChatStreamHandler'
+import { provideChatReferencesDrawer } from '@/composables/useChatReferencesDrawer'
+import ChatReferencesDrawer from '@/components/ChatReferencesDrawer.vue'
+import EmbedBotMessage from '@/views/embed/EmbedBotMessage.vue'
+import EmbedUserMessage from '@/views/embed/EmbedUserMessage.vue'
+
+provideChatReferencesDrawer()
 
 const props = defineProps<{
   agentId: string
@@ -122,11 +124,6 @@ const SCROLL_BOTTOM_THRESHOLD = 80
 
 const isAgentMode = computed(() => props.agentMode === 'smart-reasoning')
 
-const hasTrailingAssistant = computed(() => {
-  const last = messagesList[messagesList.length - 1]
-  return !!(last && last.role === 'assistant')
-})
-
 const isNearBottom = (): boolean => {
   if (!scrollContainer.value) return true
   const { scrollTop, scrollHeight, clientHeight } = scrollContainer.value
@@ -149,6 +146,8 @@ const onScroll = (): void => {
 const {
   processStreamChunk,
   prepareForNewOutgoingMessage,
+  shouldRenderAssistantMessage,
+  shouldShowGlobalTypingIndicator,
 } = useChatStreamHandler({
   messagesList,
   loading,
@@ -159,6 +158,20 @@ const {
   scrollToBottom,
   onError: (message) => MessagePlugin.error(message),
 })
+
+const showTypingIndicator = computed(() =>
+  shouldShowGlobalTypingIndicator(messagesList, isReplying.value),
+)
+
+const getUserQuery = (index: number): string => {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const item = messagesList[cursor]
+    if (item?.role === 'user') {
+      return String(item.content || '')
+    }
+  }
+  return ''
+}
 
 onChunk((data) => {
   processStreamChunk(data)
@@ -198,6 +211,24 @@ async function ensureSession(): Promise<string> {
   }
   sessionId.value = String(nextId)
   return sessionId.value
+}
+
+/** TDesign textarea 的 keydown 首参是 value 字符串，不能用 Vue 的 .enter 修饰符。 */
+function onDebugKeydown(
+  _value: string,
+  context: { e: KeyboardEvent },
+): void {
+  const event = context.e
+  if (
+    event.key === 'Enter' &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey
+  ) {
+    event.preventDefault()
+    void handleSend()
+  }
 }
 
 async function handleSend(): Promise<void> {
@@ -310,47 +341,27 @@ onBeforeUnmount(() => {
   color: var(--td-text-color-placeholder);
 }
 
-.debug-preview__bubble {
-  max-width: 92%;
-  padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.debug-preview__bubble--user {
-  align-self: flex-end;
-  background: color-mix(
-    in srgb,
-    var(--td-brand-color) 12%,
-    var(--td-bg-color-secondarycontainer)
-  );
-}
-
-.debug-preview__bubble--assistant {
-  align-self: flex-start;
-  background: var(--td-bg-color-secondarycontainer);
-}
-
-.debug-preview__bubble-role {
-  margin-bottom: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--td-text-color-placeholder);
-}
-
-.debug-preview__cursor {
-  display: inline-block;
-  margin-left: 2px;
-  animation: debug-blink 1s steps(1) infinite;
-  color: var(--td-brand-color);
+.debug-preview__msg {
+  width: 100%;
+  max-width: 100%;
 }
 
 .debug-preview__typing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
   font-size: 12px;
   color: var(--td-text-color-placeholder);
+}
+
+.debug-preview__typing-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--td-component-stroke);
+  border-top-color: var(--td-brand-color);
+  border-radius: 50%;
+  animation: debug-spin 0.7s linear infinite;
 }
 
 .debug-preview__input {
@@ -362,9 +373,9 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--td-component-stroke);
 }
 
-@keyframes debug-blink {
-  50% {
-    opacity: 0;
+@keyframes debug-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

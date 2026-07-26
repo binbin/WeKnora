@@ -210,6 +210,39 @@ type AgentShareRepository interface {
 	GetShareByAgentIDForTenant(ctx context.Context, tenantID uint64, agentID string, excludeTenantID uint64) (*types.AgentShare, error)
 }
 
+// MCPShareService defines the MCP service sharing service interface.
+//
+// Mirrors KBShareService: permission is viewer|editor (not agent-only-viewer),
+// and resolution keys on the caller's tenant with the same 3-D cap via
+// applyTenantRoleCap.
+type MCPShareService interface {
+	ShareMCPService(ctx context.Context, serviceID string, orgID string, userID string, tenantID uint64, permission types.OrgMemberRole) (*types.MCPServiceShare, error)
+	RemoveShare(ctx context.Context, shareID string, userID string, tenantID uint64) error
+	UpdateSharePermission(ctx context.Context, shareID string, permission types.OrgMemberRole, userID string, tenantID uint64) error
+	ListSharesByService(ctx context.Context, serviceID string, tenantID uint64) ([]*types.MCPServiceShare, error)
+	ListSharesByOrganization(ctx context.Context, orgID string) ([]*types.MCPServiceShare, error)
+	ListSharedMCPServices(ctx context.Context, tenantID uint64, callerTenantRole types.TenantRole) ([]*types.SharedMCPServiceInfo, error)
+	GetShare(ctx context.Context, shareID string) (*types.MCPServiceShare, error)
+	// CountByOrganizations returns share counts per organization (for sidebar); excludes deleted MCP services
+	CountByOrganizations(ctx context.Context, orgIDs []string) (map[string]int64, error)
+}
+
+// MCPShareRepository defines the MCP service sharing repository interface
+type MCPShareRepository interface {
+	Create(ctx context.Context, share *types.MCPServiceShare) error
+	GetByID(ctx context.Context, id string) (*types.MCPServiceShare, error)
+	GetByServiceAndOrg(ctx context.Context, serviceID string, orgID string) (*types.MCPServiceShare, error)
+	Update(ctx context.Context, share *types.MCPServiceShare) error
+	Delete(ctx context.Context, id string) error
+	DeleteByServiceID(ctx context.Context, serviceID string) error
+	DeleteByOrganizationID(ctx context.Context, orgID string) error
+	ListByService(ctx context.Context, serviceID string) ([]*types.MCPServiceShare, error)
+	ListByOrganization(ctx context.Context, orgID string) ([]*types.MCPServiceShare, error)
+	ListByOrganizations(ctx context.Context, orgIDs []string) ([]*types.MCPServiceShare, error)
+	ListSharedMCPServicesForTenant(ctx context.Context, tenantID uint64) ([]*types.MCPServiceShare, error)
+	CountByOrganizations(ctx context.Context, orgIDs []string) (map[string]int64, error)
+}
+
 // TenantDisabledSharedAgentRepository stores per-tenant "disabled" agents (hidden from conversation dropdown; own and shared)
 type TenantDisabledSharedAgentRepository interface {
 	ListByTenantID(ctx context.Context, tenantID uint64) ([]*types.TenantDisabledSharedAgent, error)

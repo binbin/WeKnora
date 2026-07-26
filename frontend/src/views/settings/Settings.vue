@@ -143,11 +143,6 @@
                   <div v-if="currentSection === 'tenant'" class="section">
                     <TenantInfo />
                   </div>
-
-                  <!-- MCP 服务 -->
-                  <div v-if="currentSection === 'mcp'" class="section">
-                    <McpSettings />
-                  </div>
                 </template>
               </div>
             </div>
@@ -169,7 +164,6 @@ import TenantInfo from './TenantInfo.vue'
 import UserProfile from './UserProfile.vue'
 import GeneralSettings from './GeneralSettings.vue'
 import ModelSettings from './ModelSettings.vue'
-import McpSettings from './McpSettings.vue'
 import WebSearchSettings from './WebSearchSettings.vue'
 import ChatHistorySettings from './ChatHistorySettings.vue'
 import VectorStoreSettings from './VectorStoreSettings.vue'
@@ -206,7 +200,7 @@ type NavGroup = {
 
 // 设置二级导航的最低可见角色：和 internal/router/router.go 的守卫矩阵对齐。
 // 以「页面里至少有 1 个有意义的写操作所要求的最低角色」为基准，把基础设
-// 施配置（models 写、websearch 写、parser/storage/vector/mcp
+// 施配置（models 写、websearch 写、parser/storage/vector
 // CRUD、chat-history 配置）统一收到 admin；只读类（general / system info /
 // tenant-info）保留 viewer 可见；最高敏感的 reset api
 // key 是 owner-only。改这张表前请在 router.go 里复核对应路由组。
@@ -218,7 +212,7 @@ type NavGroup = {
 // - models 列表 viewer 可读，页面内的「+ 添加模型 / 编辑 / 删除」按钮在
 //   ModelSettings.vue 里另用 hasRole('admin') 自己 gate，所以入口保留
 //   viewer 是合理的（contributor 也能浏览模型列表）。
-// - members / orgunits 已迁至侧栏独立页，不再出现在设置弹窗导航中。
+// - members / orgunits / mcp 已迁至侧栏独立页，不再出现在设置弹窗导航中。
 type RoleKey = 'viewer' | 'contributor' | 'admin' | 'owner'
 const SECTION_MIN_ROLE: Record<string, RoleKey> = {
   general: 'viewer',
@@ -228,7 +222,6 @@ const SECTION_MIN_ROLE: Record<string, RoleKey> = {
   vectorstore: 'admin',
   parser: 'admin',
   storage: 'admin',
-  mcp: 'admin',
   system: 'viewer',
   userprofile: 'viewer',
   tenant: 'viewer',
@@ -246,13 +239,17 @@ const REMOVED_SETTINGS_SECTIONS = new Set([
   'integration-api',
   'integration-chrome',
   'integration-claw',
-  // 已迁至侧栏独立页；旧 openSettings / deep-link 会落到 general。
+  // 已迁至侧栏独立页；旧 openSettings / deep-link 会落到 general / 由 beforeEnter 重定向。
   'members',
   'orgunits',
+  'mcp',
 ])
 
 const normalizeSettingsSection = (section: string) => {
   if (section === 'members' || section === 'orgunits') {
+    return 'general'
+  }
+  if (section === 'mcp') {
     return 'general'
   }
   if (REMOVED_SETTINGS_SECTIONS.has(section) || section.startsWith('integration-')) {
@@ -284,7 +281,6 @@ const navItems = computed(() => {
     { key: 'vectorstore', icon: 'data-base', label: t('settings.vectorStoreEngine') },
     { key: 'parser', icon: 'file-search', label: t('settings.parserEngine') },
     { key: 'storage', icon: 'cloud', label: t('settings.storageEngine') },
-    { key: 'mcp', icon: 'tools', label: t('settings.mcpService') },
     { key: 'system', icon: 'info-circle', label: t('settings.versionInfo') },
     { key: 'system-global', icon: 'server', label: t('settings.system') },
     { key: 'runtime-queues', icon: 'queue', label: t('settings.taskQueue') },
@@ -330,7 +326,6 @@ const navGroups = computed<NavGroup[]>(() => {
         'parser',
         'storage',
         'websearch',
-        'mcp',
       ]),
     },
     {

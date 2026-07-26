@@ -1,6 +1,7 @@
 export default {
   menu: {
     knowledgeBase: "知识库",
+    mcp: "MCP",
     agents: "智能体",
     integrations: "发布集成",
     organizations: "共享空间",
@@ -5096,6 +5097,15 @@ export default {
     envValuePlaceholder: "变量值",
     addEnvVar: "添加环境变量",
     enableService: "启用服务",
+    shareWithDescendantsLabel: "是否共享给下级机构",
+    shareWithDescendantsTip:
+      "勾选后，下级机构可只读引用本 MCP 服务；默认不共享。",
+    share: {
+      description: "将 MCP 服务共享到共享空间，空间成员可按权限使用该服务",
+      hintTitle: "共享说明",
+      tip1: "共享后，目标空间成员可在其空间中看到并使用该 MCP 服务。",
+      tip2: "只读权限仅可调用；可编辑权限允许修改服务配置（仍受空间角色上限约束）。",
+    },
     authConfig: "认证配置",
     authType: "认证方式",
     authTypeNone: "无 / 自定义 Header",
@@ -5935,7 +5945,6 @@ export default {
       debugThinking: "思考中…",
       publishNeedSave: "请先保存智能体后再配置发布渠道",
       publishBuiltinBlocked: "内置智能体不支持在此发布渠道",
-      publishShortcutDesc: "网页嵌入、IM、API 等渠道请在顶栏「发布渠道」中配置",
       logsTitle: "对话日志",
       logsNeedSave: "保存智能体后可查看相关对话",
       logsEmpty: "暂无与该智能体相关的对话",

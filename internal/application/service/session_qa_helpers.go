@@ -33,6 +33,7 @@ func (s *sessionService) resolveKnowledgeBases(
 			hasExplicitMention, customAgent.Config.RetrieveKBOnlyWhenMentioned, customAgent.Config.KBSelectionMode)
 	}
 
+	fromAgentPreset := false
 	if hasExplicitMention {
 		logger.Infof(ctx, "Using request-specified targets: kbs=%v, docs=%v", kbIDs, knowledgeIDs)
 		// When using a shared agent, restrict @mentions to the agent's allowed KB scope
@@ -47,6 +48,7 @@ func (s *sessionService) resolveKnowledgeBases(
 		logger.Infof(ctx, "RetrieveKBOnlyWhenMentioned is enabled and no @ mention found, KB retrieval disabled for this request")
 	} else if customAgent != nil {
 		kbIDs = s.resolveKnowledgeBasesFromAgent(ctx, customAgent, req.Session.TenantID)
+		fromAgentPreset = true
 	}
 
 	if err := types.AuthorizeTenantAPIKeyKnowledgeTargets(ctx, requestedKBIDs, req.KnowledgeIDs); err != nil {
@@ -57,14 +59,31 @@ func (s *sessionService) resolveKnowledgeBases(
 		return nil, nil, err
 	}
 	// Drop peer / descendant / unshared-ancestor KBs so @mentions and
-	// agent selected lists cannot reference out-of-scope org units.
-	if s.knowledgeBaseService != nil {
+	// workspace agent selected lists cannot reference out-of-scope org units.
+	// Embed / IM callers have no OrgUnit (Viewer-like): re-applying the browse
+	// filter would strip every bound KB from the agent's preset. Same rationale
+	// as MCP ListMCPServicesByIDsForRuntime.
+	if s.knowledgeBaseService != nil &&
+		!(fromAgentPreset && shouldSkipCallerOrgKBBrowseFilter(ctx)) {
 		kbIDs, err = s.knowledgeBaseService.FilterReadableKnowledgeBaseIDs(ctx, kbIDs)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 	return kbIDs, knowledgeIDs, nil
+}
+
+// shouldSkipCallerOrgKBBrowseFilter is true for publish/channel principals that
+// are not org-unit actors. Agent-preset KBs must still resolve for them.
+func shouldSkipCallerOrgKBBrowseFilter(ctx context.Context) bool {
+	if types.IsEmbedPrincipal(ctx) {
+		return true
+	}
+	if principal, ok := types.PrincipalFromContext(ctx); ok &&
+		principal.Type == types.PrincipalIMUser {
+		return true
+	}
+	return false
 }
 
 func (s *sessionService) restrictTagScopesToAgentScope(

@@ -30,6 +30,14 @@ export const useMenuStore = defineStore('menuStore', () => {
       children: createMenuChildren()
     },
     { title: '', titleKey: 'menu.knowledgeBase', icon: 'zhishiku', path: 'knowledge-bases' },
+    {
+      title: '',
+      titleKey: 'menu.mcp',
+      icon: 'mcp',
+      path: 'mcp',
+      // MCP 管理：仅管理员/所有者可见；编辑(contributor)/访客(viewer)不露入口。
+      minRole: 'admin',
+    },
     { title: '', titleKey: 'menu.agents', icon: 'agent', path: 'agents' },
     {
       title: '',

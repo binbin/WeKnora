@@ -115,6 +115,23 @@
             </span>
           </div>
         </div>
+
+        <div v-if="hasOrgHierarchy" class="form-item">
+          <t-checkbox v-model="formData.share_with_descendants">
+            {{ t('mcpServiceDialog.shareWithDescendantsLabel') }}
+          </t-checkbox>
+          <p class="form-desc">
+            {{ t('mcpServiceDialog.shareWithDescendantsTip') }}
+          </p>
+        </div>
+      </section>
+
+      <!-- 跨空间共享（仅编辑模式，对齐知识库） -->
+      <section
+        v-if="mode === 'edit' && props.service?.id && !props.service?.is_builtin"
+        class="setting-drawer__section"
+      >
+        <McpShareSettings :service-id="props.service.id" :can-share="canShareMCP" />
       </section>
 
       <!-- Section 2 — 连接配置（transport + url） -->
@@ -366,7 +383,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue'
+import { ref, watch, computed, nextTick, onMounted } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next'
 import { useI18n } from 'vue-i18n'
@@ -386,8 +403,11 @@ import {
   type MCPTestResult,
   type MCPOAuthTokenState,
 } from '@/api/mcp-service'
+import { listOrgUnits } from '@/api/org-unit'
+import { useAuthStore } from '@/stores/auth'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
 import McpTestResultBody from './McpTestResultBody.vue'
+import McpShareSettings from './McpShareSettings.vue'
 import CredentialResource, {
   type CredentialFieldDef,
   type CredentialResourceApi,
@@ -413,6 +433,27 @@ const emit = defineEmits<Emits>()
 const formRef = ref<FormInstanceFunctions>()
 const submitting = ref(false)
 const { t } = useI18n()
+const authStore = useAuthStore()
+const hasOrgHierarchy = ref(false)
+const canShareMCP = computed(
+  () =>
+    authStore.isSystemAdmin ||
+    authStore.canAccessAllTenants ||
+    authStore.hasRole('admin'),
+)
+
+const loadOrgHierarchyFlag = async () => {
+  try {
+    const units = await listOrgUnits(false)
+    hasOrgHierarchy.value = units.length > 0
+  } catch {
+    hasOrgHierarchy.value = false
+  }
+}
+
+onMounted(() => {
+  void loadOrgHierarchyFlag()
+})
 const codeImportPlaceholder = `{
   "mcpServers": {
     "my-server": {
@@ -425,6 +466,8 @@ const formData = ref({
   name: '',
   description: '',
   enabled: true,
+  // Default off: descendants cannot read this MCP until opted in.
+  share_with_descendants: false,
   transport_type: 'sse' as 'sse' | 'http-streamable',
   url: '',
   // Custom HTTP headers attached to every MCP request — edited as key/value
@@ -920,6 +963,7 @@ const resetForm = () => {
     name: '',
     description: '',
     enabled: true,
+    share_with_descendants: false,
     transport_type: 'sse',
     url: '',
     headers: [],
@@ -945,6 +989,7 @@ watch(
         name: service.name || '',
         description: service.description || '',
         enabled: service.enabled ?? true,
+        share_with_descendants: !!service.share_with_descendants,
         transport_type: transportType as 'sse' | 'http-streamable',
         url: service.url || '',
         headers: service.headers
@@ -997,6 +1042,7 @@ function buildPayload(asCreate: boolean): Partial<MCPService> {
     name: formData.value.name,
     description: formData.value.description,
     enabled: formData.value.enabled,
+    share_with_descendants: !!formData.value.share_with_descendants,
     transport_type: formData.value.transport_type,
     advanced_config: formData.value.advanced_config,
     url: formData.value.url || undefined,

@@ -1367,10 +1367,25 @@ func RegisterOrganizationRoutes(r *gin.RouterGroup, orgHandler *handler.Organiza
 		agentShares.DELETE("/:share_id", g.OwnedAgentOrSystemAdmin(), orgHandler.RemoveAgentShare)
 	}
 
+	// MCP service sharing routes — same rationale as KB shares. Registered as
+	// a standalone group (like kbShares/agentShares) rather than inside
+	// RegisterMCPServiceRoutes' "/mcp-services" group, to avoid a
+	// static-vs-":id" sub-route conflict and keep share management gated the
+	// same way as KB/agent shares (full-access key only; scoped keys default-deny).
+	mcpShares := g.apiKeyGroup(r.Group("/mcp-services/:id/shares"), apiKeyFullAccess())
+	{
+		mcpShares.POST("", g.AdminOrSystemAdmin(), orgHandler.ShareMCPService)
+		mcpShares.GET("", g.Viewer(), orgHandler.ListMCPShares)
+		mcpShares.PUT("/:share_id", g.AdminOrSystemAdmin(), orgHandler.UpdateMCPSharePermission)
+		mcpShares.DELETE("/:share_id", g.AdminOrSystemAdmin(), orgHandler.RemoveMCPShare)
+	}
+
 	// Shared knowledge bases route — Viewer+
 	g.apiKeyRoute(r, http.MethodGet, "/shared-knowledge-bases", apiKeyManageSpaces(apiKeyFullAccess()), g.Viewer(), orgHandler.ListSharedKnowledgeBases)
 	// Shared agents route — Viewer+
 	g.apiKeyRoute(r, http.MethodGet, "/shared-agents", apiKeyManageSpaces(apiKeyFullAccess()), g.Viewer(), orgHandler.ListSharedAgents)
+	// Shared MCP services route — Viewer+
+	g.apiKeyRoute(r, http.MethodGet, "/shared-mcp-services", apiKeyManageSpaces(apiKeyFullAccess()), g.Viewer(), orgHandler.ListSharedMCPServices)
 	// "Disable by me" 是空间级偏好（写到 tenant_disabled_shared_agents），
 	// 影响整个空间在会话下拉里看到的 agent 列表。任何 Viewer 改这个表就
 	// 等于替整个空间做决定 — 必须 Admin+ 才允许调整。

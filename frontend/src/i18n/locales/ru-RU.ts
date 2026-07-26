@@ -1,6 +1,7 @@
 export default {
   menu: {
     knowledgeBase: 'База знаний',
+    mcp: 'MCP',
     chat: 'Диалог',
     newChat: 'Новый диалог',
     createChat: 'Создать диалог',
@@ -5297,7 +5298,6 @@ export default {
       debugThinking: 'Думаю…',
       publishNeedSave: 'Сначала сохраните агента, затем настройте каналы',
       publishBuiltinBlocked: 'Встроенных агентов нельзя публиковать здесь',
-      publishShortcutDesc: 'Настройте веб-встраивание, IM и API во вкладке публикации',
       logsTitle: 'Журнал диалогов',
       logsNeedSave: 'Сохраните агента, чтобы видеть связанные диалоги',
       logsEmpty: 'Нет диалогов по этому агенту',

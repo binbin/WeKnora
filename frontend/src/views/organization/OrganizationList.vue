@@ -287,7 +287,7 @@
                           <label class="join-form-label">{{ $t('organization.inviteCode') }}</label>
                           <p class="join-form-desc">{{ $t('organization.invite.inputDesc') }}</p>
                           <t-input v-model="joinInputCode" :placeholder="$t('organization.inviteCodePlaceholder')"
-                            size="medium" :maxlength="32" clearable @keyup.enter="doPreviewFromInput" />
+                            size="medium" :maxlength="32" clearable @enter="doPreviewFromInput" />
                           <p class="join-form-tip">{{ $t('organization.editor.inviteCodeTip') }}</p>
                         </div>
                       </template>
@@ -299,7 +299,7 @@
                         <div class="join-form-item">
                           <label class="join-form-label">{{ $t('organization.inviteCode') }}</label>
                           <t-input v-model="joinInputCode" :placeholder="$t('organization.inviteCodePlaceholder')"
-                            size="medium" :maxlength="32" clearable @keyup.enter="doPreviewFromInput" />
+                            size="medium" :maxlength="32" clearable @enter="doPreviewFromInput" />
                         </div>
                       </template>
                       <div class="invite-preview-footer invite-preview-footer-single">
@@ -319,7 +319,7 @@
                         <label class="join-form-label">{{ $t('organization.join.searchSpaces') }}</label>
                         <p class="join-form-desc">{{ $t('organization.join.searchSpacesDesc') }}</p>
                         <t-input v-model="searchQuery" :placeholder="$t('organization.join.searchSpacesPlaceholder')"
-                          size="medium" clearable @input="doSearchSearchableDebounced" @keyup.enter="doSearchSearchable">
+                          size="medium" clearable @input="doSearchSearchableDebounced" @enter="doSearchSearchable">
                           <template #prefix-icon>
                             <t-icon name="search" />
                           </template>

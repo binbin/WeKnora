@@ -219,6 +219,11 @@ func (h *MCPServiceHandler) UpdateMCPService(c *gin.Context) {
 		}
 		updateFields["enabled"] = true
 	}
+	if shareWithDescendants, ok := updateData["share_with_descendants"].(bool); ok {
+		service.ShareWithDescendants = shareWithDescendants
+		service.ShareWithDescendantsProvided = true
+		updateFields["share_with_descendants"] = true
+	}
 	if transportType, ok := updateData["transport_type"].(string); ok {
 		service.TransportType = types.MCPTransportType(transportType)
 	}

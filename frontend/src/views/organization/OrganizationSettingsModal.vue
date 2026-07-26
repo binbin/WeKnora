@@ -1216,7 +1216,6 @@ function agentWebSearchScopeLabel(share: AgentShareResponse): string {
 
 function agentMcpScopeLabel(share: AgentShareResponse): string {
   if (share.scope_mcp === undefined || share.scope_mcp === '') return '—'
-  if (share.scope_mcp === 'all') return t('agent.shareScope.mcpAll')
   if (share.scope_mcp === 'selected' && (share.scope_mcp_count ?? 0) > 0) {
     return t('agent.shareScope.mcpSelected', { count: share.scope_mcp_count })
   }

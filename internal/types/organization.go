@@ -254,6 +254,52 @@ func (AgentShare) TableName() string {
 	return "agent_shares"
 }
 
+// MCPServiceShare represents sharing an MCP service to an organization.
+// Mirrors KnowledgeBaseShare (viewer | editor).
+type MCPServiceShare struct {
+	ID             string         `json:"id" gorm:"type:varchar(36);primaryKey"`
+	MCPServiceID   string         `json:"mcp_service_id" gorm:"type:varchar(36);not null;index"`
+	OrganizationID string         `json:"organization_id" gorm:"type:varchar(36);not null;index"`
+	SharedByUserID string         `json:"shared_by_user_id" gorm:"type:varchar(36);not null"`
+	SourceTenantID uint64         `json:"source_tenant_id" gorm:"not null;index"`
+	Permission     OrgMemberRole  `json:"permission" gorm:"type:varchar(32);not null;default:'viewer'"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+	MCPService     *MCPService    `json:"mcp_service,omitempty" gorm:"foreignKey:MCPServiceID"`
+	Organization   *Organization  `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+}
+
+// TableName returns the table name for GORM
+func (MCPServiceShare) TableName() string {
+	return "mcp_shares"
+}
+
+// SharedMCPServiceInfo is a shared MCP service with share metadata.
+type SharedMCPServiceInfo struct {
+	MCPService     *MCPService   `json:"mcp_service"`
+	ShareID        string        `json:"share_id"`
+	OrganizationID string        `json:"organization_id"`
+	OrgName        string        `json:"org_name"`
+	Permission     OrgMemberRole `json:"permission"`
+	SourceTenantID uint64        `json:"source_tenant_id"`
+	SharedAt       time.Time     `json:"shared_at"`
+}
+
+// MCPServiceShareResponse is the API response shape for an MCP share row.
+type MCPServiceShareResponse struct {
+	ID               string       `json:"id"`
+	MCPServiceID     string       `json:"mcp_service_id"`
+	OrganizationID   string       `json:"organization_id"`
+	OrganizationName string       `json:"organization_name,omitempty"`
+	SharedByUserID   string       `json:"shared_by_user_id"`
+	SharedByUsername string       `json:"shared_by_username,omitempty"`
+	SourceTenantID   uint64       `json:"source_tenant_id"`
+	Permission       OrgMemberRole `json:"permission"`
+	CreatedAt        time.Time    `json:"created_at"`
+	UpdatedAt        time.Time    `json:"updated_at"`
+}
+
 // SharedAgentInfo represents a shared agent with additional sharing info
 type SharedAgentInfo struct {
 	Agent            *CustomAgent  `json:"agent"`

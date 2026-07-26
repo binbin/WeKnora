@@ -21,6 +21,7 @@ type OrganizationHandler struct {
 	orgService         interfaces.OrganizationService
 	shareService       interfaces.KBShareService
 	agentShareService  interfaces.AgentShareService
+	mcpShareService    interfaces.MCPShareService
 	customAgentService interfaces.CustomAgentService
 	userService        interfaces.UserService
 	// tenantService is used to resolve tenant_name in member listings
@@ -38,6 +39,7 @@ func NewOrganizationHandler(
 	orgService interfaces.OrganizationService,
 	shareService interfaces.KBShareService,
 	agentShareService interfaces.AgentShareService,
+	mcpShareService interfaces.MCPShareService,
 	customAgentService interfaces.CustomAgentService,
 	userService interfaces.UserService,
 	tenantService interfaces.TenantService,
@@ -49,6 +51,7 @@ func NewOrganizationHandler(
 		orgService:         orgService,
 		shareService:       shareService,
 		agentShareService:  agentShareService,
+		mcpShareService:    mcpShareService,
 		customAgentService: customAgentService,
 		userService:        userService,
 		tenantService:      tenantService,
@@ -1513,6 +1516,215 @@ func (h *OrganizationHandler) ListSharedAgents(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": list, "total": len(list)})
+}
+
+// ShareMCPService shares an MCP service to an organization
+// @Summary      共享 MCP 服务
+// @Description  将 MCP 服务共享到指定组织
+// @Tags         MCP服务共享
+// @Accept       json
+// @Produce      json
+// @Param        id       path      string                            true  "MCP服务ID"
+// @Param        request  body      types.ShareKnowledgeBaseRequest  true  "共享信息"
+// @Success      201      {object}  map[string]interface{}
+// @Failure      403      {object}  apperrors.AppError
+// @Security     Bearer
+// @Router       /mcp-services/{id}/shares [post]
+func (h *OrganizationHandler) ShareMCPService(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	serviceID := c.Param("id")
+	userID := c.GetString(types.UserIDContextKey.String())
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+
+	var req types.ShareKnowledgeBaseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError("Invalid request parameters").WithDetails(err.Error()))
+		return
+	}
+
+	share, err := h.mcpShareService.ShareMCPService(ctx, serviceID, req.OrganizationID, userID, tenantID, req.Permission)
+	if err != nil {
+		logger.Errorf(ctx, "Failed to share mcp service: %v", err)
+		if errors.Is(err, service.ErrOrgRoleCannotShareMCP) {
+			c.Error(apperrors.NewForbiddenError("Only editors and admins can share mcp services to this organization"))
+			return
+		}
+		if errors.Is(err, service.ErrMCPServiceBuiltinCannotShare) {
+			c.Error(apperrors.NewForbiddenError("Builtin mcp services cannot be shared"))
+			return
+		}
+		if errors.Is(err, service.ErrMCPServiceNotFoundForShare) {
+			c.Error(apperrors.NewNotFoundError("MCP service not found"))
+			return
+		}
+		c.Error(apperrors.NewForbiddenError("Permission denied or invalid operation"))
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"data":    share,
+	})
+}
+
+// ListMCPShares lists all shares for an MCP service
+// @Summary      获取 MCP 服务的共享列表
+// @Description  获取 MCP 服务的所有共享记录
+// @Tags         MCP服务共享
+// @Produce      json
+// @Param        id  path  string  true  "MCP服务ID"
+// @Success      200  {object}  map[string]interface{}
+// @Security     Bearer
+// @Router       /mcp-services/{id}/shares [get]
+func (h *OrganizationHandler) ListMCPShares(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	serviceID := c.Param("id")
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+	if tenantID == 0 {
+		c.Error(apperrors.NewUnauthorizedError("Unauthorized"))
+		return
+	}
+
+	shares, err := h.mcpShareService.ListSharesByService(ctx, serviceID, tenantID)
+	if err != nil {
+		if errors.Is(err, service.ErrMCPServiceNotFoundForShare) {
+			c.Error(apperrors.NewNotFoundError("MCP service not found"))
+			return
+		}
+		if errors.Is(err, service.ErrNotMCPServiceOwner) {
+			c.Error(apperrors.NewForbiddenError("Only the mcp service owner can list its shares"))
+			return
+		}
+		logger.Errorf(ctx, "Failed to list mcp shares: %v", err)
+		c.Error(apperrors.NewInternalServerError("Failed to list shares"))
+		return
+	}
+
+	response := make([]types.MCPServiceShareResponse, 0, len(shares))
+	for _, s := range shares {
+		resp := types.MCPServiceShareResponse{
+			ID:             s.ID,
+			MCPServiceID:   s.MCPServiceID,
+			OrganizationID: s.OrganizationID,
+			SharedByUserID: s.SharedByUserID,
+			SourceTenantID: s.SourceTenantID,
+			Permission:     s.Permission,
+			CreatedAt:      s.CreatedAt,
+			UpdatedAt:      s.UpdatedAt,
+		}
+		if s.Organization != nil {
+			resp.OrganizationName = s.Organization.Name
+		}
+		if u, err := h.userService.GetUserByID(ctx, s.SharedByUserID); err == nil && u != nil {
+			resp.SharedByUsername = u.Username
+		}
+		response = append(response, resp)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"shares": response,
+			"total":  len(response),
+		},
+	})
+}
+
+// UpdateMCPSharePermission updates the permission of an MCP service share
+// @Summary      更新 MCP 服务共享权限
+// @Description  更新 MCP 服务共享的权限级别
+// @Tags         MCP服务共享
+// @Accept       json
+// @Produce      json
+// @Param        id        path      string                              true  "MCP服务ID"
+// @Param        share_id  path      string                              true  "共享记录ID"
+// @Param        request   body      types.UpdateSharePermissionRequest  true  "权限信息"
+// @Success      200       {object}  map[string]interface{}
+// @Failure      403       {object}  apperrors.AppError
+// @Security     Bearer
+// @Router       /mcp-services/{id}/shares/{share_id} [put]
+func (h *OrganizationHandler) UpdateMCPSharePermission(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	shareID := c.Param("share_id")
+	userID := c.GetString(types.UserIDContextKey.String())
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+
+	var req types.UpdateSharePermissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError("Invalid request parameters").WithDetails(err.Error()))
+		return
+	}
+
+	if err := h.mcpShareService.UpdateSharePermission(ctx, shareID, req.Permission, userID, tenantID); err != nil {
+		logger.Errorf(ctx, "Failed to update mcp share permission: %v", err)
+		c.Error(apperrors.NewForbiddenError("Permission denied"))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Share permission updated successfully",
+	})
+}
+
+// RemoveMCPShare removes an MCP service share
+// @Summary      取消 MCP 服务共享
+// @Description  取消 MCP 服务的共享
+// @Tags         MCP服务共享
+// @Param        id        path  string  true  "MCP服务ID"
+// @Param        share_id  path  string  true  "共享记录ID"
+// @Success      200       {object}  map[string]interface{}
+// @Failure      403       {object}  apperrors.AppError
+// @Security     Bearer
+// @Router       /mcp-services/{id}/shares/{share_id} [delete]
+func (h *OrganizationHandler) RemoveMCPShare(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	shareID := c.Param("share_id")
+	userID := c.GetString(types.UserIDContextKey.String())
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+
+	if err := h.mcpShareService.RemoveShare(ctx, shareID, userID, tenantID); err != nil {
+		logger.Errorf(ctx, "Failed to remove mcp share: %v", err)
+		c.Error(apperrors.NewForbiddenError("Permission denied"))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Share removed successfully",
+	})
+}
+
+// ListSharedMCPServices lists all MCP services shared to the current tenant
+// @Summary      获取共享给我的 MCP 服务列表
+// @Description  获取通过组织共享给当前空间的所有 MCP 服务
+// @Tags         MCP服务共享
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Security     Bearer
+// @Router       /shared-mcp-services [get]
+func (h *OrganizationHandler) ListSharedMCPServices(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	tenantID := types.MustTenantIDFromContext(ctx)
+	callerTenantRole := types.TenantRoleFromContext(ctx)
+
+	sharedServices, err := h.mcpShareService.ListSharedMCPServices(ctx, tenantID, callerTenantRole)
+	if err != nil {
+		logger.Errorf(ctx, "Failed to list shared mcp services: %v", err)
+		c.Error(apperrors.NewInternalServerError("Failed to list shared mcp services"))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    sharedServices,
+		"total":   len(sharedServices),
+	})
 }
 
 // listSpaceKnowledgeBasesInOrganization returns merged list of direct shared KBs and agent-carried KBs in the org (for list and count).

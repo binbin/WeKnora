@@ -438,14 +438,13 @@ func resolvePerRequestMCPScope(
 		}
 	}
 	switch selectionMode {
-	case "none":
-		return nil, selectionMode
+	case "none", "all", "":
+		// "all" / empty are treated as disabled (MCP is opt-in via selected).
+		return nil, "none"
 	case "selected":
 		effective = intersectPreservingRequestOrder(mentioned, agentMCPs)
-	case "all", "":
-		effective = mentioned
 	default:
-		effective = mentioned
+		return nil, "none"
 	}
 	if len(effective) == 0 {
 		return nil, selectionMode

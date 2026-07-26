@@ -1,6 +1,7 @@
 export default {
   menu: {
     knowledgeBase: 'Knowledge Base',
+    mcp: 'MCP',
     agents: 'Agents',
     integrations: 'Publish & Integrations',
     organizations: 'Shared Spaces',
@@ -5054,6 +5055,16 @@ export default {
     envValuePlaceholder: 'Value',
     addEnvVar: 'Add Environment Variable',
     enableService: 'Enable Service',
+    shareWithDescendantsLabel: 'Share with subordinate units',
+    shareWithDescendantsTip:
+      'When enabled, descendant org units can read-only use this MCP service. Off by default.',
+    share: {
+      description:
+        'Share this MCP service to a shared space so members can use it by permission',
+      hintTitle: 'Sharing notes',
+      tip1: 'After sharing, members of the target space can see and use this MCP service.',
+      tip2: 'Read-only allows calling; editable allows changing service config (still capped by space role).',
+    },
     authConfig: 'Authentication',
     authType: 'Auth Method',
     authTypeNone: 'None / Custom Header',
@@ -5881,7 +5892,6 @@ export default {
       debugThinking: 'Thinking…',
       publishNeedSave: 'Save the agent before configuring publish channels',
       publishBuiltinBlocked: 'Built-in agents cannot be published here',
-      publishShortcutDesc: 'Configure web embed, IM, and API channels under Publish channels',
       logsTitle: 'Conversation logs',
       logsNeedSave: 'Save the agent to view related conversations',
       logsEmpty: 'No conversations found for this agent',

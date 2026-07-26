@@ -20,6 +20,7 @@ type mcpServiceService struct {
 	mcpServiceRepo interfaces.MCPServiceRepository
 	mcpManager     *mcp.MCPManager
 	oauthRepo      interfaces.MCPOAuthRepository
+	orgUnitService interfaces.OrgUnitService
 }
 
 // NewMCPServiceService creates a new MCP service service
@@ -27,11 +28,13 @@ func NewMCPServiceService(
 	mcpServiceRepo interfaces.MCPServiceRepository,
 	mcpManager *mcp.MCPManager,
 	oauthRepo interfaces.MCPOAuthRepository,
+	orgUnitService interfaces.OrgUnitService,
 ) interfaces.MCPServiceService {
 	return &mcpServiceService{
 		mcpServiceRepo: mcpServiceRepo,
 		mcpManager:     mcpManager,
 		oauthRepo:      oauthRepo,
+		orgUnitService: orgUnitService,
 	}
 }
 
@@ -45,6 +48,14 @@ func (s *mcpServiceService) CreateMCPService(ctx context.Context, service *types
 	// Set default advanced config if not provided
 	if service.AdvancedConfig == nil {
 		service.AdvancedConfig = types.GetDefaultAdvancedConfig()
+	}
+
+	// OrgUnit binding comes from the active OrgUnit context only —
+	// never trust a client-supplied org_unit_id (would enable escalation).
+	if orgUnitID, ok := types.OrgUnitIDFromContext(ctx); ok {
+		service.OrgUnitID = orgUnitID
+	} else {
+		service.OrgUnitID = ""
 	}
 
 	// Set timestamps
@@ -80,6 +91,9 @@ func (s *mcpServiceService) GetMCPServiceByID(
 	if service == nil {
 		return nil, fmt.Errorf("MCP service not found")
 	}
+	if err := s.ensureCanReadMCP(ctx, tenantID, service); err != nil {
+		return nil, err
+	}
 	return service, nil
 }
 
@@ -93,11 +107,35 @@ func (s *mcpServiceService) ListMCPServices(ctx context.Context, tenantID uint64
 		logger.GetLogger(ctx).Errorf("Failed to list MCP services: %v", err)
 		return nil, fmt.Errorf("failed to list MCP services: %w", err)
 	}
-	return services, nil
+	return s.filterMCPByOrgUnit(ctx, tenantID, services), nil
 }
 
 // ListMCPServicesByIDs retrieves multiple MCP services by IDs
 func (s *mcpServiceService) ListMCPServicesByIDs(
+	ctx context.Context,
+	tenantID uint64,
+	ids []string,
+) ([]*types.MCPService, error) {
+	services, err := s.listMCPServicesByIDsRaw(ctx, tenantID, ids)
+	if err != nil {
+		return nil, err
+	}
+	return s.filterMCPByOrgUnit(ctx, tenantID, services), nil
+}
+
+// ListMCPServicesByIDsForRuntime loads agent-preset MCP services for tool
+// registration. Caller OrgUnit browse scope is not applied: the agent owner
+// already selected these IDs, and publish/embed visitors must still receive
+// them.
+func (s *mcpServiceService) ListMCPServicesByIDsForRuntime(
+	ctx context.Context,
+	tenantID uint64,
+	ids []string,
+) ([]*types.MCPService, error) {
+	return s.listMCPServicesByIDsRaw(ctx, tenantID, ids)
+}
+
+func (s *mcpServiceService) listMCPServicesByIDsRaw(
 	ctx context.Context,
 	tenantID uint64,
 	ids []string,
@@ -111,8 +149,82 @@ func (s *mcpServiceService) ListMCPServicesByIDs(
 		logger.GetLogger(ctx).Errorf("Failed to list MCP services by IDs: %v", err)
 		return nil, fmt.Errorf("failed to list MCP services by IDs: %w", err)
 	}
-
 	return services, nil
+}
+
+// filterMCPByOrgUnit keeps services the active OrgUnit may read (self +
+// shared ancestors + unbound + builtin). Peer and descendant services are
+// dropped. Same rules as knowledge bases (CanReadKB).
+func (s *mcpServiceService) filterMCPByOrgUnit(
+	ctx context.Context,
+	tenantID uint64,
+	services []*types.MCPService,
+) []*types.MCPService {
+	if s.orgUnitService == nil || len(services) == 0 {
+		return services
+	}
+	activeID, _ := types.OrgUnitIDFromContext(ctx)
+	filtered := make([]*types.MCPService, 0, len(services))
+	for _, svc := range services {
+		if svc == nil {
+			continue
+		}
+		if svc.IsBuiltin {
+			filtered = append(filtered, svc)
+			continue
+		}
+		ok, err := s.orgUnitService.CanReadKB(
+			ctx, tenantID, activeID, svc.OrgUnitID, svc.ShareWithDescendants,
+		)
+		if err != nil {
+			logger.Warnf(ctx, "org unit read check failed for mcp %s: %v", svc.ID, err)
+			continue
+		}
+		if ok {
+			filtered = append(filtered, svc)
+		}
+	}
+	return filtered
+}
+
+func (s *mcpServiceService) ensureCanReadMCP(
+	ctx context.Context,
+	tenantID uint64,
+	svc *types.MCPService,
+) error {
+	if s.orgUnitService == nil || svc == nil || svc.IsBuiltin {
+		return nil
+	}
+	activeID, _ := types.OrgUnitIDFromContext(ctx)
+	ok, err := s.orgUnitService.CanReadKB(
+		ctx, tenantID, activeID, svc.OrgUnitID, svc.ShareWithDescendants,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to check mcp org visibility: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("MCP service not found")
+	}
+	return nil
+}
+
+func (s *mcpServiceService) ensureCanWriteMCP(
+	ctx context.Context,
+	tenantID uint64,
+	svc *types.MCPService,
+) error {
+	if s.orgUnitService == nil || svc == nil || svc.IsBuiltin {
+		return nil
+	}
+	activeID, _ := types.OrgUnitIDFromContext(ctx)
+	ok, err := s.orgUnitService.CanWriteKB(ctx, tenantID, activeID, svc.OrgUnitID)
+	if err != nil {
+		return fmt.Errorf("failed to check mcp org write: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("permission denied: MCP service is outside the active org unit")
+	}
+	return nil
 }
 
 // UpdateMCPService updates an MCP service
@@ -129,6 +241,9 @@ func (s *mcpServiceService) UpdateMCPService(ctx context.Context, service *types
 	// Builtin MCP services cannot be updated
 	if existing.IsBuiltin {
 		return fmt.Errorf("builtin MCP services cannot be updated")
+	}
+	if err := s.ensureCanWriteMCP(ctx, service.TenantID, existing); err != nil {
+		return err
 	}
 
 	// Determine the final transport type after merge
@@ -245,6 +360,13 @@ func (s *mcpServiceService) UpdateMCPService(ctx context.Context, service *types
 		if service.AdvancedConfig != nil {
 			existing.AdvancedConfig = service.AdvancedConfig
 		}
+		if service.ShareWithDescendantsProvided {
+			existing.ShareWithDescendants = service.ShareWithDescendants
+		}
+	}
+	// Partial updates (e.g. enabled-only) may still flip share_with_descendants.
+	if service.Name == "" && service.ShareWithDescendantsProvided {
+		existing.ShareWithDescendants = service.ShareWithDescendants
 	}
 
 	// Update timestamp
@@ -331,6 +453,9 @@ func (s *mcpServiceService) DeleteMCPService(ctx context.Context, tenantID uint6
 	if existing.IsBuiltin {
 		return fmt.Errorf("builtin MCP services cannot be deleted")
 	}
+	if err := s.ensureCanWriteMCP(ctx, tenantID, existing); err != nil {
+		return err
+	}
 
 	// Close client connection
 	s.mcpManager.CloseClient(id)
@@ -377,6 +502,9 @@ func (s *mcpServiceService) TestMCPService(
 	}
 	if service == nil {
 		return nil, fmt.Errorf("MCP service not found")
+	}
+	if err := s.ensureCanWriteMCP(ctx, tenantID, service); err != nil {
+		return nil, err
 	}
 
 	// Create temporary client for testing. For OAuth services, wire the
@@ -498,6 +626,9 @@ func (s *mcpServiceService) UpdateMCPCredentials(
 	if existing.IsBuiltin {
 		return nil, fmt.Errorf("builtin MCP services cannot have credentials modified")
 	}
+	if err := s.ensureCanWriteMCP(ctx, tenantID, existing); err != nil {
+		return nil, err
+	}
 
 	if existing.AuthConfig == nil {
 		existing.AuthConfig = &types.MCPAuthConfig{}
@@ -543,6 +674,9 @@ func (s *mcpServiceService) ClearMCPCredential(
 	}
 	if existing.IsBuiltin {
 		return fmt.Errorf("builtin MCP services cannot have credentials modified")
+	}
+	if err := s.ensureCanWriteMCP(ctx, tenantID, existing); err != nil {
+		return err
 	}
 	if existing.AuthConfig == nil {
 		return nil // nothing to clear

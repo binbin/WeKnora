@@ -34,10 +34,22 @@ type MCPService struct {
 	AdvancedConfig *MCPAdvancedConfig `json:"advanced_config"        gorm:"type:json"`
 	StdioConfig    *MCPStdioConfig    `json:"stdio_config,omitempty" gorm:"type:json"`     // Required for stdio transport
 	EnvVars        MCPEnvVars         `json:"env_vars,omitempty"     gorm:"type:json"`     // Environment variables for stdio
-	IsBuiltin      bool               `json:"is_builtin"             gorm:"default:false"` // Whether this is a builtin MCP service (visible to all workspaces)
-	CreatedAt      time.Time          `json:"created_at"`
-	UpdatedAt      time.Time          `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt     `json:"deleted_at"             gorm:"index"`
+	IsBuiltin bool `json:"is_builtin" gorm:"default:false"` // Builtin: visible to all workspaces
+	// OrgUnitID binds this service to a tenant-scoped OrgUnit (省/市/县).
+	// Empty string means unbound: legacy tenant-wide visibility.
+	OrgUnitID string `json:"org_unit_id" gorm:"type:varchar(36);default:'';index"`
+	// ShareWithDescendants, when true, lets descendant OrgUnits read this
+	// service. Default false — subordinates cannot see it until opted in.
+	// Write stays self-only (same as knowledge bases).
+	ShareWithDescendants bool `json:"share_with_descendants" gorm:"default:false"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
+	DeletedAt            gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+
+	// ShareWithDescendantsProvided marks that the update payload explicitly
+	// set share_with_descendants (so false can be distinguished from omit).
+	// Not persisted.
+	ShareWithDescendantsProvided bool `json:"-" gorm:"-"`
 }
 
 // MCPHeaders represents HTTP headers as a map

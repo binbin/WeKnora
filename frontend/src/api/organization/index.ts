@@ -301,6 +301,26 @@ export interface AgentShareResponse {
   agent_avatar?: string
 }
 
+export interface MCPServiceShare {
+  id: string
+  mcp_service_id: string
+  organization_id: string
+  organization_name?: string
+  shared_by_user_id: string
+  shared_by_username?: string
+  source_tenant_id: number
+  permission: string
+  my_role_in_org?: string
+  my_permission?: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface ListMCPSharesResponse {
+  shares: MCPServiceShare[]
+  total: number
+}
+
 export interface SharedAgentInfo {
   agent: { id: string; name: string; description?: string; [key: string]: any }
   share_id: string
@@ -685,6 +705,73 @@ export async function removeAgentShare(agentId: string, shareId: string): Promis
     return response as unknown as ApiResponse<void>
   } catch (error: any) {
     return { success: false, message: error.message || 'Failed to remove share' }
+  }
+}
+
+/** Share MCP service to an organization (viewer | editor). */
+export async function shareMCPService(
+  serviceId: string,
+  req: ShareKnowledgeBaseRequest,
+): Promise<ApiResponse<MCPServiceShare>> {
+  try {
+    const response = await post(`/api/v1/mcp-services/${serviceId}/shares`, req)
+    return response as unknown as ApiResponse<MCPServiceShare>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to share MCP service' }
+  }
+}
+
+export async function listMCPShares(
+  serviceId: string,
+): Promise<ApiResponse<ListMCPSharesResponse>> {
+  try {
+    const response = await get(`/api/v1/mcp-services/${serviceId}/shares`)
+    return response as unknown as ApiResponse<ListMCPSharesResponse>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to list MCP shares' }
+  }
+}
+
+export async function updateMCPSharePermission(
+  serviceId: string,
+  shareId: string,
+  req: UpdateSharePermissionRequest,
+): Promise<ApiResponse<void>> {
+  try {
+    const response = await put(
+      `/api/v1/mcp-services/${serviceId}/shares/${shareId}`,
+      req,
+    )
+    return response as unknown as ApiResponse<void>
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || 'Failed to update MCP share permission',
+    }
+  }
+}
+
+export async function removeMCPShare(
+  serviceId: string,
+  shareId: string,
+): Promise<ApiResponse<void>> {
+  try {
+    const response = await del(`/api/v1/mcp-services/${serviceId}/shares/${shareId}`)
+    return response as unknown as ApiResponse<void>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to remove MCP share' }
+  }
+}
+
+export async function listSharedMCPServices(): Promise<ApiResponse<unknown[]>> {
+  try {
+    const response = await get('/api/v1/shared-mcp-services')
+    return response as unknown as ApiResponse<unknown[]>
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || 'Failed to list shared MCP services',
+    }
   }
 }
 

@@ -45,22 +45,33 @@ func TestResolvePerRequestMCPScope_SharedAgentBlocksOutsidePreset(t *testing.T) 
 	effective, mode := resolvePerRequestMCPScope(
 		[]string{"mcp-x"},
 		[]string{"mcp-a"},
-		"all",
+		"selected",
 		true,
 	)
 	assert.Empty(t, effective)
-	assert.Equal(t, "all", mode)
+	assert.Equal(t, "selected", mode)
 }
 
 func TestResolvePerRequestMCPScope_SharedAgentAllowsPreset(t *testing.T) {
 	effective, mode := resolvePerRequestMCPScope(
 		[]string{"mcp-a", "mcp-x"},
 		[]string{"mcp-a", "mcp-b"},
-		"all",
+		"selected",
 		true,
 	)
 	assert.Equal(t, "selected", mode)
 	assert.Equal(t, []string{"mcp-a"}, effective)
+}
+
+func TestResolvePerRequestMCPScope_LegacyAllTreatedAsNone(t *testing.T) {
+	effective, mode := resolvePerRequestMCPScope(
+		[]string{"mcp-a"},
+		[]string{"mcp-a"},
+		"all",
+		false,
+	)
+	assert.Empty(t, effective)
+	assert.Equal(t, "none", mode)
 }
 
 func TestApplyPerRequestMCPScope_SelectedNarrowsAndPins(t *testing.T) {

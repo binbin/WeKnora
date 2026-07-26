@@ -247,8 +247,9 @@ func (s *agentService) registerMCPTools(
 	}
 
 	mcpMode := config.MCPSelectionMode
-	if mcpMode == "" {
-		mcpMode = "all"
+	if mcpMode == "" || mcpMode == "all" {
+		// Empty / legacy "all": MCP is opt-in via "selected" only.
+		mcpMode = "none"
 	}
 	if mcpMode == "none" {
 		logger.Infof(ctx, "MCP services disabled by agent config (mode: none)")
@@ -258,24 +259,22 @@ func (s *agentService) registerMCPTools(
 	var mcpServices []*types.MCPService
 	var err error
 
-	if mcpMode == "selected" {
-		if len(config.MCPServices) == 0 {
-			logger.Infof(ctx, "MCP services disabled by agent config (mode: selected, no services)")
-			return
-		}
-		mcpServices, err = s.mcpServiceService.ListMCPServicesByIDs(ctx, tenantID, config.MCPServices)
-		if err != nil {
-			logger.Warnf(ctx, "Failed to list selected MCP services: %v", err)
-			return
-		}
-		logger.Infof(ctx, "Using %d selected MCP services from agent config", len(mcpServices))
-	} else {
-		mcpServices, err = s.mcpServiceService.ListMCPServices(ctx, tenantID)
-		if err != nil {
-			logger.Warnf(ctx, "Failed to list MCP services: %v", err)
-			return
-		}
+	if mcpMode != "selected" {
+		logger.Infof(ctx, "MCP services disabled by agent config (unsupported mode: %s)", mcpMode)
+		return
 	}
+	if len(config.MCPServices) == 0 {
+		logger.Infof(ctx, "MCP services disabled by agent config (mode: selected, no services)")
+		return
+	}
+	mcpServices, err = s.mcpServiceService.ListMCPServicesByIDsForRuntime(
+		ctx, tenantID, config.MCPServices,
+	)
+	if err != nil {
+		logger.Warnf(ctx, "Failed to list selected MCP services: %v", err)
+		return
+	}
+	logger.Infof(ctx, "Using %d selected MCP services from agent config", len(mcpServices))
 
 	enabledServices := make([]*types.MCPService, 0)
 	for _, svc := range mcpServices {
@@ -890,7 +889,9 @@ func (s *agentService) resolvePinnedMCPServiceInfos(
 		return fallbackPinnedMCPInfos(config.PinnedMCPServiceIDs)
 	}
 
-	services, err := s.mcpServiceService.ListMCPServicesByIDs(ctx, tenantID, config.PinnedMCPServiceIDs)
+	services, err := s.mcpServiceService.ListMCPServicesByIDsForRuntime(
+		ctx, tenantID, config.PinnedMCPServiceIDs,
+	)
 	if err != nil {
 		logger.Warnf(ctx, "Failed to resolve pinned MCP services: %v", err)
 		return fallbackPinnedMCPInfos(config.PinnedMCPServiceIDs)

@@ -33,10 +33,12 @@ type MCPServiceResponse struct {
 	AuthConfig     *MCPAuthConfigResponse   `json:"auth_config,omitempty"`
 	AdvancedConfig *types.MCPAdvancedConfig `json:"advanced_config,omitempty"`
 	StdioConfig    *types.MCPStdioConfig    `json:"stdio_config,omitempty"`
-	EnvVars        types.MCPEnvVars         `json:"env_vars,omitempty"`
-	IsBuiltin      bool                     `json:"is_builtin"`
-	CreatedAt      time.Time                `json:"created_at"`
-	UpdatedAt      time.Time                `json:"updated_at"`
+	EnvVars              types.MCPEnvVars         `json:"env_vars,omitempty"`
+	IsBuiltin            bool                     `json:"is_builtin"`
+	OrgUnitID            string                   `json:"org_unit_id"`
+	ShareWithDescendants bool                     `json:"share_with_descendants"`
+	CreatedAt            time.Time                `json:"created_at"`
+	UpdatedAt            time.Time                `json:"updated_at"`
 	// Credentials is the per-field "configured?" map. Embedded on the main
 	// response so the credential UI doesn't need a follow-up GET. The
 	// frontend never sees the actual secret value — only whether one is
@@ -85,10 +87,12 @@ func NewMCPServiceResponse(ctx context.Context, svc *types.MCPService) *MCPServi
 		Headers:        svc.Headers,
 		AdvancedConfig: svc.AdvancedConfig,
 		StdioConfig:    svc.StdioConfig,
-		EnvVars:        svc.EnvVars,
-		IsBuiltin:      svc.IsBuiltin,
-		CreatedAt:      svc.CreatedAt,
-		UpdatedAt:      svc.UpdatedAt,
+		EnvVars:              svc.EnvVars,
+		IsBuiltin:            svc.IsBuiltin,
+		OrgUnitID:            svc.OrgUnitID,
+		ShareWithDescendants: svc.ShareWithDescendants,
+		CreatedAt:            svc.CreatedAt,
+		UpdatedAt:            svc.UpdatedAt,
 	}
 	if !includeDetail {
 		resp.Headers = nil

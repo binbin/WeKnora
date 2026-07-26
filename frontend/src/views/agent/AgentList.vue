@@ -264,7 +264,7 @@
                         <t-icon name="folder" size="16px" />
                       </div>
                     </t-tooltip>
-                    <t-tooltip v-if="agent.config?.mcp_services?.length || agent.config?.mcp_selection_mode === 'all'"
+                    <t-tooltip v-if="agent.config?.mcp_selection_mode === 'selected' && agent.config?.mcp_services?.length"
                       :content="$t('agent.features.mcp')" placement="top">
                       <div class="feature-badge mcp">
                         <t-icon name="extension" size="16px" />
@@ -455,7 +455,7 @@
                         <t-icon name="folder" size="16px" />
                       </div>
                     </t-tooltip>
-                    <t-tooltip v-if="agent.config?.mcp_services?.length || agent.config?.mcp_selection_mode === 'all'"
+                    <t-tooltip v-if="agent.config?.mcp_selection_mode === 'selected' && agent.config?.mcp_services?.length"
                       :content="$t('agent.features.mcp')" placement="top">
                       <div class="feature-badge mcp">
                         <t-icon name="extension" size="16px" />
@@ -608,7 +608,7 @@
                       <div class="feature-badge knowledge"><t-icon name="folder" size="16px" /></div>
                     </t-tooltip>
                     <t-tooltip
-                      v-if="shared.agent?.config?.mcp_services?.length || shared.agent?.config?.mcp_selection_mode === 'all'"
+                      v-if="shared.agent?.config?.mcp_selection_mode === 'selected' && shared.agent?.config?.mcp_services?.length"
                       :content="$t('agent.features.mcp')" placement="top">
                       <div class="feature-badge mcp"><t-icon name="extension" size="16px" /></div>
                     </t-tooltip>
@@ -1054,8 +1054,9 @@ const sharedAgentKbScopeText = computed(() => {
 const sharedAgentMcpScopeText = computed(() => {
   const c = currentSharedAgent.value?.agent?.config
   if (!c) return t('agent.shareScope.mcpNone')
-  if (c.mcp_selection_mode === 'all') return t('agent.shareScope.mcpAll')
-  if (c.mcp_selection_mode === 'selected' && c.mcp_services?.length) return t('agent.shareScope.mcpSelected', { count: c.mcp_services.length })
+  if (c.mcp_selection_mode === 'selected' && c.mcp_services?.length) {
+    return t('agent.shareScope.mcpSelected', { count: c.mcp_services.length })
+  }
   return t('agent.shareScope.mcpNone')
 })
 /** 当前打开三点菜单的卡片 agent.id（用于受控弹出层，避免 computed 项无持久引用导致菜单不响应） */

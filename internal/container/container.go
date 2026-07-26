@@ -165,6 +165,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewOrgUnitWorkspaceRepository))
 	must(container.Provide(repository.NewKBShareRepository))
 	must(container.Provide(repository.NewAgentShareRepository))
+	must(container.Provide(repository.NewMCPShareRepository))
 	must(container.Provide(repository.NewEmbedChannelRepository))
 	must(container.Provide(repository.NewGuestLinkChannelRepository))
 	must(container.Provide(repository.NewTenantDisabledSharedAgentRepository))
@@ -196,6 +197,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewOrgWorkspaceService))
 	must(container.Provide(service.NewKBShareService)) // KBShareService must be registered before KnowledgeService and KnowledgeTagService
 	must(container.Provide(service.NewAgentShareService))
+	must(container.Provide(service.NewMCPShareService))
 	must(container.Provide(service.NewKnowledgeService))
 	must(container.Provide(service.NewSpanTracker))
 	must(container.Provide(service.NewChunkService))

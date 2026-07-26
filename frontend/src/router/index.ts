@@ -93,6 +93,9 @@ const router = createRouter({
             if (section === 'orgunits') {
               return { path: '/platform/org-units' }
             }
+            if (section === 'mcp') {
+              return { path: '/platform/mcp' }
+            }
           },
         },
         {
@@ -107,6 +110,13 @@ const router = createRouter({
           name: "orgUnits",
           component: () => import("../views/org-units/OrgUnitPage.vue"),
           // 与侧栏 menu.minRole 对齐：编辑/访客不可进组织层级页。
+          meta: { requiresInit: true, requiresAuth: true, requiresAdmin: true }
+        },
+        {
+          path: "mcp",
+          name: "mcpServices",
+          component: () => import("../views/mcp/McpPage.vue"),
+          // 与侧栏 menu.minRole 对齐：编辑/访客不可进 MCP 管理页。
           meta: { requiresInit: true, requiresAuth: true, requiresAdmin: true }
         },
         {

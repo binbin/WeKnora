@@ -302,9 +302,14 @@ const normalizeSelectionMode = (mode?: string): SelectionMode => {
   return mode === 'all' || mode === 'selected' || mode === 'none' ? mode : 'none';
 };
 
-const agentMCPSelectionMode = computed<SelectionMode>(() => {
+/** MCP 仅支持 selected / none；历史 all 视为禁用。 */
+const normalizeMCPSelectionMode = (mode?: string): 'selected' | 'none' => {
+  return mode === 'selected' ? 'selected' : 'none';
+};
+
+const agentMCPSelectionMode = computed<'selected' | 'none'>(() => {
   if (!settingsStore.isAgentStreamMode || !hasAgentConfig.value) return 'none';
-  return normalizeSelectionMode(currentAgentConfig.value?.mcp_selection_mode);
+  return normalizeMCPSelectionMode(currentAgentConfig.value?.mcp_selection_mode);
 });
 
 const agentMCPServiceIds = computed<string[]>(() => {
@@ -316,8 +321,7 @@ const isMCPAllowedByAgent = (service: MCPService) => {
   if (!settingsStore.isAgentStreamMode || !service.enabled) return false;
   const mode = agentMCPSelectionMode.value;
   if (mode === 'none') return false;
-  if (mode === 'selected') return agentMCPServiceIds.value.includes(service.id);
-  return true;
+  return agentMCPServiceIds.value.includes(service.id);
 };
 
 const agentSkillsSelectionMode = computed<SelectionMode>(() => {

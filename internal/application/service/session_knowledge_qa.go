@@ -347,8 +347,18 @@ func (s *sessionService) resolveKnowledgeBasesFromAgent(
 			return tools.KBSatisfiesAgentRequirements(kb.Capabilities(), customAgent.Config.AgentMode, customAgent.Config.AllowedTools)
 		}
 
-		// Get own knowledge bases (uses ctx TenantID = agent's tenant)
-		allKBs, err := s.knowledgeBaseService.ListKnowledgeBases(ctx)
+		// Workspace callers use the org-scoped list. Embed / IM have no
+		// OrgUnit, so ListKnowledgeBases would drop every bound KB — load the
+		// agent tenant's full set instead.
+		var allKBs []*types.KnowledgeBase
+		var err error
+		if shouldSkipCallerOrgKBBrowseFilter(ctx) {
+			allKBs, err = s.knowledgeBaseService.ListKnowledgeBasesByTenantID(
+				ctx, customAgent.TenantID,
+			)
+		} else {
+			allKBs, err = s.knowledgeBaseService.ListKnowledgeBases(ctx)
+		}
 		if err != nil {
 			logger.Warnf(ctx, "Failed to list all knowledge bases: %v", err)
 		}

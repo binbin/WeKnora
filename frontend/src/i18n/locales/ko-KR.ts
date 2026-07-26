@@ -1,6 +1,7 @@
 export default {
   menu: {
     knowledgeBase: "지식베이스",
+    mcp: "MCP",
     agents: "에이전트",
     integrations: "게시 및 통합",
     organizations: "공유 스페이스",
@@ -5858,7 +5859,6 @@ export default {
       debugThinking: '생각 중…',
       publishNeedSave: '게시 채널을 구성하려면 먼저 에이전트를 저장하세요',
       publishBuiltinBlocked: '내장 에이전트는 여기서 게시할 수 없습니다',
-      publishShortcutDesc: '웹 임베드, IM, API 채널은 상단 「게시 채널」에서 설정하세요',
       logsTitle: '대화 로그',
       logsNeedSave: '에이전트를 저장하면 관련 대화를 볼 수 있습니다',
       logsEmpty: '이 에이전트와 관련된 대화가 없습니다',

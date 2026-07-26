@@ -139,7 +139,8 @@ type CustomAgentConfig struct {
 	LLMCallTimeout int `yaml:"llm_call_timeout" json:"llm_call_timeout,omitempty"`
 	// Allowed tools (only for agent type)
 	AllowedTools []string `yaml:"allowed_tools" json:"allowed_tools"`
-	// MCP service selection mode: "all" = all enabled MCP services, "selected" = specific services, "none" = no MCP
+	// MCP service selection mode: "selected" = specific services, "none" = disabled (default).
+	// Legacy "all" is treated as "none".
 	MCPSelectionMode string `yaml:"mcp_selection_mode" json:"mcp_selection_mode"`
 	// Selected MCP service IDs (only used when MCPSelectionMode is "selected")
 	MCPServices []string `yaml:"mcp_services" json:"mcp_services"`

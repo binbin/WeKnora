@@ -519,8 +519,8 @@
                 <div class="textarea-container">
                   <div class="full-width-input-wrapper textarea-wrapper">
                     <t-textarea v-model="answerInput" :placeholder="$t('knowledgeEditor.faq.answerPlaceholder')"
-                      :autosize="{ minRows: 3, maxRows: 6 }" class="full-width-textarea" @keydown.ctrl.enter="addAnswer"
-                      @keydown.meta.enter="addAnswer" />
+                      :autosize="{ minRows: 3, maxRows: 6 }" class="full-width-textarea"
+                      @keydown="onAnswerKeydown" />
                     <t-button theme="primary" variant="outline"
                       :disabled="!answerInput.trim() || editorForm.answers.length >= 5" @click="addAnswer"
                       class="add-item-btn" size="small">
@@ -1692,6 +1692,18 @@ const addAnswer = () => {
   if (trimmed && editorForm.answers.length < 5 && !editorForm.answers.includes(trimmed)) {
     editorForm.answers.push(trimmed)
     answerInput.value = ''
+  }
+}
+
+/** TDesign textarea 的 keydown 首参是 value，不能用 .ctrl.enter 修饰符。 */
+const onAnswerKeydown = (
+  _value: string,
+  context: { e: KeyboardEvent },
+): void => {
+  const event = context.e
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault()
+    addAnswer()
   }
 }
 

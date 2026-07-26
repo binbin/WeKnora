@@ -322,14 +322,10 @@ const getImageUploadCapabilityState = (agent: CustomAgent): string => {
 
 const getMcpCapability = (agent: CustomAgent): string => {
   const config = agent.config || {};
-  if (config.mcp_selection_mode === 'none' || (!config.mcp_services?.length && config.mcp_selection_mode !== 'all')) {
-    return '';
-  }
-  if (config.mcp_selection_mode === 'all') return t('agent.shareScope.mcpAll');
-  if (config.mcp_services?.length) {
+  if (config.mcp_selection_mode === 'selected' && config.mcp_services?.length) {
     return t('agent.shareScope.mcpSelected', { count: config.mcp_services.length });
   }
-  return t('agent.capabilities.mcpEnabled');
+  return '';
 };
 
 const modelsList = computed(() => props.allModels ?? []);

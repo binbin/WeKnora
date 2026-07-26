@@ -709,6 +709,8 @@ func patchEmbedChatPayload(body io.Reader, ch *types.EmbedChannel, agentMode boo
 		payload = make(map[string]any)
 	}
 	payload["agent_id"] = ch.AgentID
+	// Visitors cannot @KB; per-request IDs are cleared. Agent-preset KBs
+	// (kb_selection_mode + knowledge_bases) still resolve at runtime.
 	payload["knowledge_base_ids"] = []string{}
 	clientWebSearch := false
 	if v, ok := payload["web_search_enabled"].(bool); ok {
@@ -721,6 +723,9 @@ func patchEmbedChatPayload(body io.Reader, ch *types.EmbedChannel, agentMode boo
 		delete(payload, "attachment_uploads")
 		delete(payload, "attachment_ids")
 	}
+	// Visitors cannot @MCP; per-request IDs are always cleared. Agent-preset
+	// MCP (mcp_selection_mode=selected + mcp_services) still registers at
+	// runtime via the agent's config.
 	payload["mcp_service_ids"] = []string{}
 	if agentMode {
 		payload["agent_enabled"] = true

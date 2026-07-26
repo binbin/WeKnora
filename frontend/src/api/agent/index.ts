@@ -54,7 +54,7 @@ export interface CustomAgentConfig {
   allowed_tools?: string[];         // 允许的工具
   reflection_enabled?: boolean;     // 是否启用反思
   // MCP服务选择模式：all=全部启用的MCP服务, selected=指定服务, none=不使用MCP
-  mcp_selection_mode?: 'all' | 'selected' | 'none';
+  mcp_selection_mode?: 'selected' | 'none';
   mcp_services?: string[];          // 选择的MCP服务ID列表
   // 对话中触发 OAuth 授权时的等待超时（秒）：到点后自动跳过授权提示。
   // <=0 时使用服务端默认超时。仅对使用 OAuth 的 MCP 服务生效。

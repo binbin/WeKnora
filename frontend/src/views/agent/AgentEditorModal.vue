@@ -104,27 +104,6 @@
                       </div>
                     </div>
 
-                    <!-- 发布渠道快捷入口 -->
-                    <div v-if="editorMode === 'edit' && editorAgent?.id && !editorAgent?.is_builtin" class="setting-row">
-                      <div class="setting-info">
-                        <label>{{ $t('integrations.agentEditor.label') }}</label>
-                        <p class="desc">{{ $t('agentEditor.workspace.publishShortcutDesc') }}</p>
-                      </div>
-                      <div class="setting-control">
-                        <div class="integration-inline">
-                          <button type="button" class="integration-inline__stat integration-inline__link" @click="setWorkspaceTab('publish')">
-                            <span>{{ $t('integrations.tabs.embed') }} · {{ agentEmbedChannelCount }}</span>
-                            <t-icon name="chevron-right" size="14px" />
-                          </button>
-                          <span class="integration-inline__sep" aria-hidden="true">|</span>
-                          <button type="button" class="integration-inline__stat integration-inline__link" @click="setWorkspaceTab('publish')">
-                            <span>{{ $t('integrations.tabs.im') }} · {{ agentIMChannelCount }}</span>
-                            <t-icon name="chevron-right" size="14px" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
                     <!-- 运行模式（首先选择） -->
                     <div class="setting-row">
                       <div class="setting-info">
@@ -1225,7 +1204,6 @@
                       </div>
                       <div class="setting-control">
                         <t-radio-group v-model="mcpSelectionMode">
-                          <t-radio-button value="all">{{ $t('agentEditor.selection.all') }}</t-radio-button>
                           <t-radio-button value="selected">{{ $t('agentEditor.selection.selected') }}</t-radio-button>
                           <t-radio-button value="none">{{ $t('agentEditor.selection.disabled') }}</t-radio-button>
                         </t-radio-group>
@@ -1705,7 +1683,6 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import {
   createAgent,
   updateAgent,
-  listIMChannels,
   type CustomAgent,
   type PlaceholderDefinition,
   type AgentTypePreset,
@@ -1727,7 +1704,6 @@ import AgentAvatar from '@/components/AgentAvatar.vue';
 import PromptTemplateSelector from '@/components/PromptTemplateSelector.vue';
 import ModelSelector from '@/components/ModelSelector.vue';
 import KBParserSettings, { type ParserEngineRule } from '@/views/knowledge/settings/KBParserSettings.vue';
-import { listEmbedChannels } from '@/api/embed';
 import { getRootZoom, rectToCssPx } from '@/utils/zoom';
 import {
   evaluateToolRequirement,
@@ -2036,7 +2012,7 @@ const isInitializing = ref(false);
 const kbSelectionMode = ref<'all' | 'selected' | 'none'>('none');
 
 // MCP 服务选择模式：all=全部, selected=指定, none=不使用
-const mcpSelectionMode = ref<'all' | 'selected' | 'none'>('none');
+const mcpSelectionMode = ref<'selected' | 'none'>('none');
 
 // Skills 选择模式：all=全部, selected=指定, none=不使用
 const skillsSelectionMode = ref<'all' | 'selected' | 'none'>('none');
@@ -2440,7 +2416,7 @@ const defaultFormData = {
     allowed_tools: [] as string[],
     reflection_enabled: false,
     // MCP 服务设置
-    mcp_selection_mode: 'none' as 'all' | 'selected' | 'none',
+    mcp_selection_mode: 'none' as 'selected' | 'none',
     mcp_services: [] as string[],
     // 对话中触发 OAuth 授权时的等待超时（秒），默认 600
     mcp_auth_wait_timeout: 600,
@@ -2654,23 +2630,6 @@ watch(currentSection, (section) => {
     syncActivePromptAnchor();
   }
 });
-
-const agentIMChannelCount = ref(0);
-const agentEmbedChannelCount = ref(0);
-
-async function loadAgentIntegrationCounts(agentId: string) {
-  try {
-    const [imResp, embedResp] = await Promise.all([
-      listIMChannels(agentId),
-      listEmbedChannels(agentId),
-    ]);
-    agentIMChannelCount.value = imResp?.data?.length ?? 0;
-    agentEmbedChannelCount.value = embedResp?.data?.length ?? 0;
-  } catch {
-    agentIMChannelCount.value = 0;
-    agentEmbedChannelCount.value = 0;
-  }
-}
 
 const filteredIntentPlaceholders = computed(() => {
   if (!intentPromptPopup.value.prefix) {
@@ -3115,7 +3074,6 @@ const initializeEditor = async () => {
       if (agentData.is_builtin) {
         fillBuiltinAgentDefaults();
       }
-      void loadAgentIntegrationCounts(agentData.id);
     } else {
       // 创建新智能体，使用系统默认值
       const newFormData = JSON.parse(JSON.stringify(defaultFormData));
@@ -3200,17 +3158,16 @@ const initKbSelectionMode = () => {
   }
 };
 
-// 初始化 MCP 选择模式
+// 初始化 MCP 选择模式：仅保留指定 / 禁用，默认禁用；历史 "all" 视为禁用。
 const initMcpSelectionMode = () => {
-  if (formData.value.config.mcp_selection_mode) {
-    // 如果有保存的模式，直接使用
-    mcpSelectionMode.value = formData.value.config.mcp_selection_mode;
-  } else if (formData.value.config.mcp_services?.length > 0) {
-    // 有指定 MCP 服务
-    mcpSelectionMode.value = 'selected';
-  } else {
-    mcpSelectionMode.value = 'none';
+  const mode = formData.value.config.mcp_selection_mode
+  if (mode === 'selected' || (formData.value.config.mcp_services?.length ?? 0) > 0) {
+    mcpSelectionMode.value = 'selected'
+    formData.value.config.mcp_selection_mode = 'selected'
+    return
   }
+  mcpSelectionMode.value = 'none'
+  formData.value.config.mcp_selection_mode = 'none'
 };
 
 // 初始化 Skills 选择模式
@@ -3278,10 +3235,6 @@ watch(kbSelectionMode, (mode) => {
 watch(mcpSelectionMode, (mode) => {
   formData.value.config.mcp_selection_mode = mode;
   if (mode === 'none') {
-    // 不使用 MCP，清空相关配置
-    formData.value.config.mcp_services = [];
-  } else if (mode === 'all') {
-    // 全部 MCP，清空指定列表
     formData.value.config.mcp_services = [];
   }
   // selected 模式保持 mcp_services 不变
@@ -5105,62 +5058,6 @@ const handleSave = async () => {
 
   :deep(.t-input-number) {
     width: 120px;
-  }
-}
-
-.integration-inline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-
-  &__stat {
-    font-size: 13px;
-    color: var(--td-text-color-secondary);
-
-    &.integration-inline__link {
-      display: inline-flex;
-      align-items: center;
-      gap: 2px;
-      padding: 0;
-      border: none;
-      background: transparent;
-      line-height: 1;
-      color: var(--td-brand-color);
-      cursor: pointer;
-
-      &:hover {
-        opacity: 0.85;
-      }
-    }
-  }
-
-  &__sep {
-    color: var(--td-component-stroke);
-    font-size: 12px;
-  }
-
-  &__link {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    margin-left: 4px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    line-height: 1;
-    color: var(--td-brand-color);
-    cursor: pointer;
-
-    &:hover {
-      opacity: 0.85;
-    }
-
-    :deep(.t-icon) {
-      display: block;
-    }
   }
 }
 

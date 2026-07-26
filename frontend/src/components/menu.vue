@@ -393,6 +393,7 @@ const SHOW_SIDEBAR_CHAT = false;
 const TOP_MENU_PATHS = new Set([
     ...(SHOW_SIDEBAR_CHAT ? ['creatChat'] as const : []),
     'knowledge-bases',
+    'mcp',
     'agents',
     'members',
     'org-units',
@@ -408,6 +409,8 @@ const isMenuItemActive = (itemPath: string): boolean => {
             return currentRoute === 'knowledgeBaseList' ||
                 currentRoute === 'knowledgeBaseDetail' ||
                 currentRoute === 'knowledgeBaseSettings';
+        case 'mcp':
+            return currentRoute === 'mcpServices';
         case 'agents':
             return currentRoute === 'agentList';
         case 'organizations':
@@ -1033,6 +1036,7 @@ let prefixIcon = ref('prefixIcon.svg');
 let logoutIcon = ref('logout.svg');
 let settingIcon = ref('setting.svg');
 let agentIcon = ref('agent.svg');
+let mcpIcon = ref('mcp.svg');
 let organizationIcon = ref('organization.svg');
 let membersIcon = ref('members.svg');
 let pathPrefix = ref(route.name)
@@ -1041,6 +1045,8 @@ const resolveMenuIcon = (item: MenuItem): string => {
     switch (item.icon) {
         case 'zhishiku':
             return knowledgeIcon.value;
+        case 'mcp':
+            return mcpIcon.value;
         case 'agent':
             return agentIcon.value;
         case 'organization':
@@ -1061,6 +1067,7 @@ const getIcon = (path: string) => {
     const kbActiveState = getIconActiveState('knowledge-bases');
     const creatChatActiveState = getIconActiveState('creatChat');
     const settingsActiveState = getIconActiveState('settings');
+    const mcpActiveState = route.name === 'mcpServices';
     const agentsActiveState = route.name === 'agentList';
     const organizationsActiveState =
         route.name === 'organizationList' || route.name === 'orgUnits';
@@ -1068,6 +1075,9 @@ const getIcon = (path: string) => {
 
     // 知识库图标：只在知识库页面显示绿色
     knowledgeIcon.value = kbActiveState.isKbActive ? 'zhishiku-green.svg' : 'zhishiku.svg';
+
+    // MCP 图标
+    mcpIcon.value = mcpActiveState ? 'mcp-green.svg' : 'mcp.svg';
 
     // 智能体图标：只在智能体页面显示绿色
     agentIcon.value = agentsActiveState ? 'agent-green.svg' : 'agent.svg';
@@ -1097,6 +1107,8 @@ const handleMenuClick = async (path: string) => {
         } else {
             router.push('/platform/knowledge-bases')
         }
+    } else if (path === 'mcp') {
+        router.push('/platform/mcp')
     } else if (path === 'agents') {
         router.push('/platform/agents')
     } else if (path === 'organizations') {

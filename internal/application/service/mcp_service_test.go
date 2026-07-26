@@ -356,3 +356,20 @@ func TestListMCPServices_ReturnsRawCredentials(t *testing.T) {
 	assert.Equal(t, "real-api", got[0].AuthConfig.APIKey)
 	assert.Equal(t, "real-token", got[0].AuthConfig.Token)
 }
+
+func TestListMCPServicesByIDsForRuntime_LoadsAgentPreset(t *testing.T) {
+	ctx := context.Background()
+	svc, repo := newTestService()
+	id := seedService(t, repo, "runtime-api", "runtime-token")
+
+	stored, err := repo.GetByID(ctx, 1, id)
+	require.NoError(t, err)
+	stored.OrgUnitID = "city-unit"
+	require.NoError(t, repo.Update(ctx, stored))
+
+	got, err := svc.ListMCPServicesByIDsForRuntime(ctx, 1, []string{id})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, id, got[0].ID)
+	assert.Equal(t, "city-unit", got[0].OrgUnitID)
+}
