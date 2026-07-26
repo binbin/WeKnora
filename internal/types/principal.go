@@ -11,6 +11,7 @@ const (
 	PrincipalAPITenant       = "api_tenant"
 	PrincipalAPIPlatform     = "api_platform"
 	PrincipalAPIExternalUser = "api_external_user"
+	PrincipalAPIPublish      = "api_publish_key"
 	PrincipalIMUser          = "im_user"
 	PrincipalEmbedChannel    = "embed_channel"
 	PrincipalEmbedSession    = "embed_session"
@@ -25,6 +26,11 @@ const EmbedVisitorHeader = "X-Embed-Visitor"
 // tenant API key. The full owner id is "api_tenant_key:<tenantID>:<keyID>", so a
 // LIKE '<prefix>%' selects every API-key session in the tenant.
 const SessionOwnerAPITenantKeyPrefix = "api_tenant_key:"
+
+// SessionOwnerAPIPublishKeyPrefix prefixes sessions.user_id for rows created by
+// an agent publish API key. The full owner id is
+// "api_publish_key:<tenantID>:<keyID>".
+const SessionOwnerAPIPublishKeyPrefix = "api_publish_key:"
 
 // Principal represents the terminal caller for per-subject isolation features.
 // It is intentionally separate from UserID: many principals, such as IM users
@@ -174,7 +180,8 @@ func MCPOAuthPrincipalFromContext(ctx context.Context) Principal {
 
 // SessionOwnerIDFromContext returns the sessions.user_id scope for the current
 // caller. API external users and embed chat sessions use principal-derived IDs;
-// tenant API keys are isolated per key id; MCP OAuth token storage uses
+// tenant API keys are isolated per key id; agent publish API keys are isolated
+// per publish key id; MCP OAuth token storage uses
 // MCPOAuthPrincipalFromContext (visitor-level for embed).
 func SessionOwnerIDFromContext(ctx context.Context) string {
 	if p, ok := PrincipalFromContext(ctx); ok {
@@ -187,7 +194,18 @@ func SessionOwnerIDFromContext(ctx context.Context) string {
 					return fmt.Sprintf("%s%d:%d", SessionOwnerAPITenantKeyPrefix, tenantID, scope.KeyID)
 				}
 			}
+		case PrincipalAPIPublish:
+			if pub, ok := AgentPublishAPIKeyContextFromContext(ctx); ok && pub.KeyID > 0 {
+				return fmt.Sprintf(
+					"%s%d:%d", SessionOwnerAPIPublishKeyPrefix, pub.TenantID, pub.KeyID,
+				)
+			}
 		}
+	}
+	if pub, ok := AgentPublishAPIKeyContextFromContext(ctx); ok && pub.KeyID > 0 {
+		return fmt.Sprintf(
+			"%s%d:%d", SessionOwnerAPIPublishKeyPrefix, pub.TenantID, pub.KeyID,
+		)
 	}
 	userID, _ := UserIDFromContext(ctx)
 	return userID
