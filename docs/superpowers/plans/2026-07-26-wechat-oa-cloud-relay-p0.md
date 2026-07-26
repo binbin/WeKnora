@@ -425,7 +425,7 @@ func (a *Adapter) ParseCallback(c *gin.Context) (*im.IncomingMessage, error) {
 		UserID:      ev.FromUser,
 		Content:     ev.Content,
 		MessageID:   id,
-		ChatType:    im.ChatTypeDirect, // use whatever constant exists
+		ChatType:    im.ChatTypeDirect,
 	}, nil
 }
 
@@ -488,6 +488,7 @@ type WeChatOAPreauth struct {
 	State          string    `json:"state"`
 	Status         string    `json:"status"`
 	QRCodeURL      string    `json:"qrcode_url"`
+	CallbackSecret string    `json:"-"` // never expose to browser
 	ChannelID      string    `json:"channel_id"`
 	ErrorMessage   string    `json:"error_message"`
 	ExpiresAt      time.Time `json:"expires_at"`
