@@ -116,29 +116,41 @@
             <h3>{{ $t('agentEditor.publish.apiKeysTitle') }}</h3>
             <a
               class="channel-detail__doc"
-              href="https://github.com/Tencent/WeKnora"
+              href="https://github.com/Tencent/WeKnora/blob/main/docs/api/openapi-chat.md"
               target="_blank"
               rel="noopener noreferrer"
+              @click.prevent="openApiDoc"
             >
               {{ $t('agentEditor.publish.viewDocs') }}
             </a>
           </div>
           <div class="channel-detail__aside">
-            <div class="api-root">
-              <span>{{ $t('agentEditor.publish.apiRoot') }}</span>
-              <code>{{ apiBaseUrl }}</code>
-              <t-button size="small" variant="text" @click="copyText(apiBaseUrl)">
-                <t-icon name="file-copy" />
-              </t-button>
-            </div>
             <t-button v-if="canManage" theme="primary" @click="openCreateApiKey">
               + {{ $t('common.create') }}
             </t-button>
           </div>
         </div>
-        <p class="channel-detail__hint">
-          {{ $t('agentEditor.publish.apiHint', { agentId }) }}
-        </p>
+        <div class="api-meta">
+          <div class="api-root">
+            <span>{{ $t('agentEditor.publish.apiRoot') }}</span>
+            <code>{{ apiBaseUrl }}</code>
+            <t-button size="small" variant="text" @click="copyText(apiBaseUrl)">
+              <t-icon name="file-copy" />
+            </t-button>
+          </div>
+          <p class="channel-detail__hint">{{ $t('agentEditor.publish.apiRootHint') }}</p>
+          <p class="channel-detail__hint">{{ $t('agentEditor.publish.apiAuthHint') }}</p>
+          <p class="channel-detail__hint">{{ $t('agentEditor.publish.apiHint') }}</p>
+        </div>
+        <div class="api-curl">
+          <div class="api-curl__header">
+            <span>{{ $t('agentEditor.publish.apiCurlTitle') }}</span>
+            <t-button size="small" variant="text" @click="copyText(apiCurlSample)">
+              <t-icon name="file-copy" />
+            </t-button>
+          </div>
+          <pre class="api-curl__body">{{ apiCurlSample }}</pre>
+        </div>
         <t-loading :loading="apiLoading" size="small">
           <t-table
             row-key="id"
@@ -148,6 +160,17 @@
           >
             <template #empty>
               <div class="table-empty">{{ $t('agentEditor.publish.apiEmpty') }}</div>
+            </template>
+            <template #ops="{ row }">
+              <t-button
+                v-if="canManage"
+                size="small"
+                theme="danger"
+                variant="outline"
+                @click="revokeApiKey(row)"
+              >
+                {{ $t('agentEditor.publish.apiRevoke') }}
+              </t-button>
             </template>
           </t-table>
         </t-loading>
@@ -238,23 +261,49 @@
         </t-form-item>
       </t-form>
     </t-dialog>
+
+    <t-dialog
+      v-model:visible="plaintextVisible"
+      :header="$t('agentEditor.publish.apiPlaintextTitle')"
+      :confirm-btn="$t('common.close')"
+      :cancel-btn="null"
+      @confirm="plaintextVisible = false"
+    >
+      <t-alert
+        theme="warning"
+        :message="$t('agentEditor.publish.apiPlaintextWarn')"
+        class="api-plaintext-alert"
+      />
+      <div class="api-plaintext-row">
+        <code class="api-plaintext-value">{{ plaintextValue }}</code>
+        <t-button
+          size="small"
+          theme="primary"
+          variant="outline"
+          @click="copyText(plaintextValue)"
+        >
+          <t-icon name="file-copy" />
+          {{ $t('common.copy') }}
+        </t-button>
+      </div>
+    </t-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MessagePlugin } from 'tdesign-vue-next'
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next'
 import AgentEmbedChannelPanel from '@/components/AgentEmbedChannelPanel.vue'
 import AgentGuestLinkPanel from '@/components/AgentGuestLinkPanel.vue'
 import IMChannelPanel from '@/components/IMChannelPanel.vue'
 import { listEmbedChannels, type EmbedChannel } from '@/api/embed'
 import { listIMChannels, type IMChannel } from '@/api/agent'
 import {
-  createTenantAPIKey,
-  listTenantAPIKeys,
-  type TenantAPIKey,
-} from '@/api/tenant'
+  createAgentPublishAPIKey,
+  deleteAgentPublishAPIKey,
+  listAgentPublishAPIKeys,
+} from '@/api/agent-publish-api-key'
 import { getApiBaseUrl } from '@/utils/api-base'
 import { useAuthStore } from '@/stores/auth'
 import feishuLogo from '@/assets/img/im/feishu.svg'
@@ -280,6 +329,8 @@ const imPanelRef = ref<InstanceType<typeof IMChannelPanel> | null>(null)
 const createApiKeyVisible = ref(false)
 const createApiKeyLoading = ref(false)
 const createApiKeyName = ref('')
+const plaintextVisible = ref(false)
+const plaintextValue = ref('')
 
 const embedLoading = ref(false)
 const embedRows = ref<Array<{
@@ -308,7 +359,24 @@ const imRows = ref<Array<{
   raw: IMChannel
 }>>([])
 
-const apiBaseUrl = getApiBaseUrl()
+const apiBaseUrl = computed(() => {
+  const configured = getApiBaseUrl().trim().replace(/\/$/, '')
+  const origin = typeof window !== 'undefined' && window.location.origin !== 'null'
+    ? window.location.origin
+    : ''
+  return `${configured || origin}/api/v1`
+})
+
+const apiCurlSample = computed(() => {
+  const root = apiBaseUrl.value
+  return [
+    `curl -X POST ${root}/chat/completions \\`,
+    `  -H "Authorization: Bearer <YOUR_KEY>" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -d '{"messages":[{"role":"user","content":"Hello"}]}'`,
+  ].join('\n')
+})
+
 const canManage = computed(() => props.canManage !== false && authStore.hasRole('admin'))
 
 const channelTypes = computed(() => [
@@ -415,6 +483,7 @@ const apiColumns = [
   { colKey: 'apiKey', title: () => t('agentEditor.publish.colApiKey') },
   { colKey: 'createdAt', title: () => t('agentEditor.publish.colCreatedAt') },
   { colKey: 'lastUsedAt', title: () => t('agentEditor.publish.colLastUsed') },
+  { colKey: 'ops', title: () => t('common.edit'), cell: 'ops', width: 120 },
 ]
 
 const imColumns = [
@@ -447,7 +516,7 @@ onMounted(() => {
   void refreshAll()
 })
 
-function formatTime(value?: string): string {
+function formatTime(value?: string | null): string {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -487,18 +556,17 @@ async function loadEmbedRows(): Promise<void> {
 }
 
 async function loadApiRows(): Promise<void> {
-  const tenantId = authStore.selectedTenantId || Number(authStore.tenant?.id || 0)
-  if (!tenantId) {
+  if (!props.agentId) {
     apiRows.value = []
     return
   }
   apiLoading.value = true
   try {
-    const response = await listTenantAPIKeys(tenantId)
-    apiRows.value = (response?.data || []).map((key: TenantAPIKey) => ({
+    const response = await listAgentPublishAPIKeys(props.agentId)
+    apiRows.value = (response?.data || []).map((key) => ({
       id: key.id,
       name: key.name,
-      apiKey: maskKey(key.api_key),
+      apiKey: key.api_key || '—',
       createdAt: formatTime(key.created_at),
       lastUsedAt: formatTime(key.last_used_at),
     }))
@@ -537,12 +605,6 @@ async function loadImRows(): Promise<void> {
   }
 }
 
-function maskKey(value: string): string {
-  if (!value) return '—'
-  if (value.length <= 6) return '******'
-  return `******${value.slice(-4)}`
-}
-
 async function copyText(value: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(value)
@@ -550,6 +612,13 @@ async function copyText(value: string): Promise<void> {
   } catch {
     MessagePlugin.error(t('common.copyFailed'))
   }
+}
+
+function openApiDoc(): void {
+  window.open(
+    'https://github.com/Tencent/WeKnora/blob/main/docs/api/openapi-chat.md',
+    '_blank',
+  )
 }
 
 function startEmbed(channel: EmbedChannel): void {
@@ -580,20 +649,19 @@ async function createApiKey(): Promise<boolean> {
     MessagePlugin.error(t('integrations.api.apiKeyNameRequired'))
     return false
   }
-  const tenantId = authStore.selectedTenantId || Number(authStore.tenant?.id || 0)
-  if (!tenantId) {
+  if (!props.agentId) {
     MessagePlugin.error(t('integrations.api.createApiKeyFailed'))
     return false
   }
   createApiKeyLoading.value = true
   try {
-    const response = await createTenantAPIKey(tenantId, {
-      name,
-      full_access: true,
-    })
-    if (!response.success) {
-      throw new Error(response.message || t('integrations.api.createApiKeyFailed'))
+    const response = await createAgentPublishAPIKey(props.agentId, { name })
+    if (!response.success || !response.plaintext) {
+      throw new Error(t('integrations.api.createApiKeyFailed'))
     }
+    createApiKeyVisible.value = false
+    plaintextValue.value = response.plaintext
+    plaintextVisible.value = true
     MessagePlugin.success(t('integrations.api.apiKeyCreated'))
     await loadApiRows()
     return true
@@ -606,6 +674,32 @@ async function createApiKey(): Promise<boolean> {
   } finally {
     createApiKeyLoading.value = false
   }
+}
+
+function revokeApiKey(row: { id: number; name: string }): void {
+  const dialog = DialogPlugin.confirm({
+    header: t('agentEditor.publish.apiRevoke'),
+    body: t('agentEditor.publish.apiRevokeConfirm', { name: row.name }),
+    confirmBtn: {
+      content: t('agentEditor.publish.apiRevoke'),
+      theme: 'danger',
+    },
+    cancelBtn: t('common.cancel'),
+    onConfirm: async () => {
+      try {
+        await deleteAgentPublishAPIKey(props.agentId, row.id)
+        MessagePlugin.success(t('agentEditor.publish.apiRevokeSuccess'))
+        await loadApiRows()
+        dialog.destroy()
+      } catch (error: unknown) {
+        const message = error instanceof Error
+          ? error.message
+          : t('agentEditor.publish.apiRevokeFailed')
+        MessagePlugin.error(message)
+      }
+    },
+    onCancel: () => dialog.destroy(),
+  })
 }
 </script>
 
@@ -742,26 +836,81 @@ async function createApiKey(): Promise<boolean> {
 }
 
 .channel-detail__hint {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 12px;
   color: var(--td-text-color-secondary);
+}
+
+.api-meta {
+  margin-bottom: 12px;
 }
 
 .api-root {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 8px;
   font-size: 12px;
   color: var(--td-text-color-secondary);
 
   code {
     font-family: var(--app-font-family-mono, ui-monospace, monospace);
     color: var(--td-text-color-primary);
-    max-width: 280px;
+    max-width: 420px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.api-curl {
+  margin-bottom: 16px;
+  border: 1px solid var(--td-component-stroke);
+  border-radius: 8px;
+  background: var(--td-bg-color-secondarycontainer);
+  overflow: hidden;
+}
+
+.api-curl__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+  border-bottom: 1px solid var(--td-component-stroke);
+}
+
+.api-curl__body {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  font-family: var(--app-font-family-mono, ui-monospace, monospace);
+  color: var(--td-text-color-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.api-plaintext-alert {
+  margin-bottom: 12px;
+}
+
+.api-plaintext-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-plaintext-value {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--td-bg-color-secondarycontainer);
+  font-family: var(--app-font-family-mono, ui-monospace, monospace);
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .link-btn {
