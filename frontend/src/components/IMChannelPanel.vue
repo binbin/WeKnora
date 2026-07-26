@@ -146,7 +146,7 @@
 
       <!-- Step 2: Connection -->
       <div v-else-if="wizardStep === 1" class="im-step-body">
-        <section v-if="formData.platform !== 'wechat'" class="setting-drawer__section im-drawer__section">
+        <section v-if="formData.platform !== 'wechat' && formData.platform !== 'wechat_oa'" class="setting-drawer__section im-drawer__section">
           <h4 class="setting-drawer__section-title">{{ $t('agentEditor.im.sectionAccess') }}</h4>
 
           <div class="form-item">
@@ -564,6 +564,41 @@
                     <template v-else>
                       {{ $t('agentEditor.im.wechatScanning') }}
                     </template>
+
+            <!-- WeChat OA credentials (Cloud QR bind) -->
+            <template v-if="formData.platform === 'wechat_oa'">
+              <p class="form-desc">{{ $t('agentEditor.im.wechatOaHint') }}</p>
+              <div v-if="wechatOaBound" class="wechat-bound-status">
+                <t-icon name="check-circle-filled" class="bound-icon" />
+                <span>{{ $t('agentEditor.im.wechatOaBindSuccess') }}</span>
+                <t-button size="small" variant="outline" theme="default" @click="startWeChatOABinding">
+                  {{ $t('agentEditor.im.wechatOaRebind') }}
+                </t-button>
+              </div>
+              <div v-else class="wechat-qr-section">
+                <div v-if="!wechatOaQRImgUrl" class="wechat-bind-action">
+                  <t-button theme="default" variant="outline" :loading="wechatOaLoading" @click="startWeChatOABinding">
+                    <template #icon><t-icon name="scan" /></template>
+                    {{ $t('agentEditor.im.wechatOaScanBind') }}
+                  </t-button>
+                </div>
+                <div v-else class="wechat-qr-display">
+                  <div class="qr-container">
+                    <img :src="wechatOaQRImgUrl" alt="WeChat OA QR" class="qr-image" />
+                    <div v-if="wechatOaQRStatus === 'expired'" class="qr-expired-overlay" @click="startWeChatOABinding">
+                      <t-icon name="refresh" class="refresh-icon" />
+                      <span>{{ $t('agentEditor.im.wechatOaQRExpired') }}</span>
+                    </div>
+                  </div>
+                  <p class="qr-hint">
+                    <template v-if="wechatOaQRStatus === 'scaned' || wechatOaQRStatus === 'wait'">
+                      {{ wechatOaQRStatus === 'scaned' ? $t('agentEditor.im.wechatOaBinding') : $t('agentEditor.im.wechatOaScanning') }}
+                    </template>
+                  </p>
+                </div>
+              </div>
+            </template>
+
                   </p>
                 </div>
               </div>
@@ -581,7 +616,7 @@ import { useI18n } from 'vue-i18n';
 import { MessagePlugin } from 'tdesign-vue-next';
 import {
   listIMChannels, createIMChannel, updateIMChannel, deleteIMChannel, toggleIMChannel,
-  getWeChatQRCode, pollWeChatQRCodeStatus, listAllIMChannels, listAgents,
+  getWeChatQRCode, pollWeChatQRCodeStatus, createWeChatOAPreauth, getWeChatOAPreauthStatus, listAllIMChannels, listAgents,
   type IMChannelOverview, type CustomAgent,
 } from '@/api/agent';
 import { useChatResourcesStore } from '@/stores/chatResources';
@@ -611,6 +646,7 @@ const PLATFORM_LOGO: Record<string, string> = {
   dingtalk: dingtalkLogo,
   mattermost: mattermostLogo,
   wechat: wechatLogo,
+  wechat_oa: wechatLogo,
   qqbot: qqbotLogo,
   yunzhijia: yunzhijiaLogo,
 };
@@ -689,6 +725,7 @@ const platformOptions = computed(() => ([
   { value: 'dingtalk' as IMPlatform, label: t('agentEditor.im.dingtalk'), logo: dingtalkLogo },
   { value: 'mattermost' as IMPlatform, label: t('agentEditor.im.mattermost'), logo: mattermostLogo },
   { value: 'wechat' as IMPlatform, label: t('agentEditor.im.wechat'), logo: wechatLogo },
+  { value: 'wechat_oa' as IMPlatform, label: t('agentEditor.publish.types.wechat_oa'), logo: wechatLogo },
   { value: 'qqbot' as IMPlatform, label: t('agentEditor.im.qqbot'), logo: qqbotLogo },
   { value: 'yunzhijia' as IMPlatform, label: t('agentEditor.im.yunzhijia'), logo: yunzhijiaLogo },
 ]));
@@ -830,6 +867,10 @@ function onPlatformChange(val: string | number | boolean) {
   if (editingChannel.value) return;
   formData.value.credentials = defaultCredentials();
   stopWeChatPolling();
+  stopWeChatOAPolling();
+  wechatOaQRImgUrl.value = '';
+  wechatOaPreauthId.value = '';
+  wechatOaQRStatus.value = '';
   wechatQRContent.value = '';
   wechatQRImgUrl.value = '';
   wechatQRCode.value = '';
@@ -1042,6 +1083,10 @@ function resetForm() {
   wizardStep.value = 0;
   channelNameTouched.value = false;
   stopWeChatPolling();
+  stopWeChatOAPolling();
+  wechatOaQRImgUrl.value = '';
+  wechatOaPreauthId.value = '';
+  wechatOaQRStatus.value = '';
   wechatQRContent.value = '';
   wechatQRImgUrl.value = '';
   wechatQRCode.value = '';
@@ -1064,6 +1109,10 @@ async function handleSave() {
     // For WeChat, validate that credentials are bound
     if (formData.value.platform === 'wechat' && !formData.value.credentials.bot_token) {
       MessagePlugin.warning(t('agentEditor.im.wechatScanBind'));
+      return;
+    }
+    if (formData.value.platform === 'wechat_oa' && !formData.value.credentials.authorizer_appid) {
+      MessagePlugin.warning(t('agentEditor.im.wechatOaScanBind'));
       return;
     }
     if (formData.value.platform === 'yunzhijia') {

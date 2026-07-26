@@ -260,8 +260,9 @@ import { useAuthStore } from '@/stores/auth'
 import feishuLogo from '@/assets/img/im/feishu.svg'
 import dingtalkLogo from '@/assets/img/im/dingtalk.svg'
 import wechatLogo from '@/assets/img/im/wechat.svg'
+import wecomLogo from '@/assets/img/im/wecom.svg'
 
-type ChannelTypeKey = 'guest' | 'embed' | 'api' | 'feishu' | 'dingtalk' | 'wechat' | 'portal'
+type ChannelTypeKey = 'guest' | 'embed' | 'api' | 'feishu' | 'dingtalk' | 'wechat_oa' | 'wecom' | 'wechat' | 'portal'
 
 const props = defineProps<{
   agentId: string
@@ -344,6 +345,20 @@ const channelTypes = computed(() => [
     logo: dingtalkLogo,
   },
   {
+    key: 'wechat_oa' as const,
+    title: t('agentEditor.publish.types.wechat_oa'),
+    desc: t('agentEditor.publish.types.wechat_oaDesc'),
+    icon: 'chat',
+    logo: wechatLogo,
+  },
+  {
+    key: 'wecom' as const,
+    title: t('agentEditor.publish.types.wecom'),
+    desc: t('agentEditor.publish.types.wecomDesc'),
+    icon: 'chat',
+    logo: wecomLogo,
+  },
+  {
     key: 'wechat' as const,
     title: t('agentEditor.publish.types.wechat'),
     desc: t('agentEditor.publish.types.wechatDesc'),
@@ -365,20 +380,26 @@ const currentTypeMeta = computed(() =>
 const isImType = computed(() =>
   selectedType.value === 'feishu'
   || selectedType.value === 'dingtalk'
+  || selectedType.value === 'wechat_oa'
+  || selectedType.value === 'wecom'
   || selectedType.value === 'wechat',
 )
 
 const imPlatformFilter = computed(() => {
   if (selectedType.value === 'feishu') return ['feishu', 'lark']
   if (selectedType.value === 'dingtalk') return 'dingtalk'
-  if (selectedType.value === 'wechat') return ['wechat', 'wecom']
+  if (selectedType.value === 'wechat_oa') return 'wechat_oa'
+  if (selectedType.value === 'wecom') return 'wecom'
+  if (selectedType.value === 'wechat') return 'wechat'
   return undefined
 })
 
 const primaryImPlatform = computed(() => {
   if (selectedType.value === 'feishu') return 'feishu'
   if (selectedType.value === 'dingtalk') return 'dingtalk'
-  if (selectedType.value === 'wechat') return 'wecom'
+  if (selectedType.value === 'wechat_oa') return 'wechat_oa'
+  if (selectedType.value === 'wecom') return 'wecom'
+  if (selectedType.value === 'wechat') return 'wechat'
   return 'wecom'
 })
 

@@ -305,10 +305,10 @@ export interface IMChannel {
   tenant_id?: number;
   agent_id: string;
   // 'lark' is Feishu's international edition; it shares Feishu's credentials and modes.
-  platform: 'wecom' | 'feishu' | 'lark' | 'slack' | 'telegram' | 'dingtalk' | 'mattermost' | 'wechat' | 'qqbot' | 'yunzhijia';
+  platform: 'wecom' | 'feishu' | 'lark' | 'slack' | 'telegram' | 'dingtalk' | 'mattermost' | 'wechat' | 'wechat_oa' | 'qqbot' | 'yunzhijia';
   name: string;
   enabled: boolean;
-  mode: 'webhook' | 'websocket' | 'longpoll';
+  mode: 'webhook' | 'websocket' | 'longpoll' | 'cloud_relay';
   output_mode: 'stream' | 'full';
   session_mode?: 'user' | 'thread';
   knowledge_base_id?: string;
@@ -410,4 +410,30 @@ export function getWeChatQRCode() {
 
 export function pollWeChatQRCodeStatus(qrcode: string) {
   return post<{ data: WeChatQRCodeStatus }>('/api/v1/wechat/qrcode/status', { qrcode });
+}
+
+
+// ===== WeChat Official Account (Cloud preauth) =====
+
+export function createWeChatOAPreauth(agentId: string) {
+  return post<{
+    data: {
+      preauth_id: string
+      qrcode_url: string
+      expires_at: string
+      status: string
+    }
+  }>(`/api/v1/agents/${agentId}/wechat-oa/preauth`)
+}
+
+export function getWeChatOAPreauthStatus(preauthId: string) {
+  return get<{
+    data: {
+      status: string
+      channel_id?: string
+      qrcode_url?: string
+      error_message?: string
+      expires_at?: string
+    }
+  }>(`/api/v1/wechat-oa/preauth/${preauthId}`)
 }
