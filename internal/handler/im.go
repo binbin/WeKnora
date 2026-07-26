@@ -15,7 +15,7 @@ import (
 // validIMPlatforms is the set of supported IM platforms.
 var validIMPlatforms = map[string]bool{
 	"wecom": true, "feishu": true, "lark": true, "slack": true, "telegram": true, "dingtalk": true,
-	"mattermost": true, "wechat": true, "qqbot": true, "yunzhijia": true,
+	"mattermost": true, "wechat": true, "wechat_oa": true, "qqbot": true, "yunzhijia": true,
 }
 
 // invalidIMPlatformError is the 400 message listing the accepted platforms. It
@@ -94,6 +94,11 @@ func (h *IMHandler) CreateIMChannel(c *gin.Context) {
 	// WeChat uses long-polling mode and full output only
 	if req.Platform == "wechat" {
 		channel.Mode = "longpoll"
+		channel.OutputMode = "full"
+	} else if req.Platform == "wechat_oa" {
+		// WeChat Official Account relays through the WeKnora cloud and only
+		// supports full (non-streaming) responses.
+		channel.Mode = "cloud_relay"
 		channel.OutputMode = "full"
 	} else {
 		if channel.Mode == "" {

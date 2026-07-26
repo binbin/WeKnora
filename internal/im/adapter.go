@@ -21,6 +21,7 @@ const (
 	PlatformDingtalk   Platform = "dingtalk"
 	PlatformMattermost Platform = "mattermost"
 	PlatformWeChat     Platform = "wechat"
+	PlatformWeChatOA   Platform = "wechat_oa"
 	PlatformQQBot      Platform = "qqbot"
 	PlatformYunzhijia  Platform = "yunzhijia"
 )

@@ -23,6 +23,7 @@ const (
 	ChannelAPI              = "api"               // External API call
 	ChannelBrowserExtension = "browser_extension" // Browser extension / plugin
 	ChannelWechat           = "wechat"            // WeChat
+	ChannelWechatOA         = "wechat_oa"         // WeChat Official Account (微信公众号)
 	ChannelWecom            = "wecom"             // WeCom (企业微信)
 	ChannelFeishu           = "feishu"            // Feishu / Lark
 	ChannelDingtalk         = "dingtalk"          // DingTalk

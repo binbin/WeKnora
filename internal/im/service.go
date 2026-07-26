@@ -3326,6 +3326,8 @@ func imPlatformToChannel(platform string) string {
 	switch strings.ToLower(platform) {
 	case "wechat":
 		return types.ChannelWechat
+	case "wechat_oa":
+		return types.ChannelWechatOA
 	case "wecom", "wxwork":
 		return types.ChannelWecom
 	case "feishu", "lark":

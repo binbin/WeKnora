@@ -200,6 +200,17 @@ func TestIMChannelComputeBotIdentity_YunzhijiaUsesYZJToken(t *testing.T) {
 	}
 }
 
+func TestComputeBotIdentity_WeChatOA(t *testing.T) {
+	ch := &IMChannel{
+		Platform:    "wechat_oa",
+		Credentials: []byte(`{"authorizer_appid":"wxabc"}`),
+	}
+	want := "wechat_oa:wxabc"
+	if got := ch.computeBotIdentity(); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestChannelSessionThreadIDField(t *testing.T) {
 	cs := ChannelSession{
 		Platform: "slack",

@@ -12,12 +12,13 @@ import (
 // UI rather than falling through to the generic "im" channel.
 func TestIMPlatformToChannel(t *testing.T) {
 	cases := map[string]string{
-		"feishu": types.ChannelFeishu,
-		"lark":   types.ChannelFeishu,
-		"Lark":   types.ChannelFeishu, // matching is case-insensitive
-		"wechat": types.ChannelWechat,
-		"wecom":  types.ChannelWecom,
-		"wxwork": types.ChannelWecom,
+		"feishu":    types.ChannelFeishu,
+		"lark":      types.ChannelFeishu,
+		"Lark":      types.ChannelFeishu, // matching is case-insensitive
+		"wechat":    types.ChannelWechat,
+		"wechat_oa": types.ChannelWechatOA,
+		"wecom":     types.ChannelWecom,
+		"wxwork":    types.ChannelWecom,
 
 		"dingtalk": types.ChannelDingtalk,
 		"slack":    types.ChannelSlack,
