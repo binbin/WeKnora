@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2026-07-26
+
+### Bug Fixes
+
+- **FIXED**: **Guest short links (`/w/:slug`) follow agent capabilities** — image
+  upload and web search for visitors now inherit the bound agent's
+  `ImageUploadEnabled` / `WebSearchEnabled` instead of stale channel toggles;
+  public config injects the channel tenant so agent capability flags resolve
+  without an authenticated principal; chat payload patching no longer strips
+  uploads on guest-mapped channels.
+
+### Improvements
+
+- **IMPROVED**: Agent editor debug preview supports image and document uploads
+  when the agent has image upload enabled, matching the guest-link visitor UX.
+
 ## [0.8.0] - 2026-07-26
 
 ### New Features
