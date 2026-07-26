@@ -34,7 +34,7 @@
 | `internal/container/container.go` | Provide repo/service/handler |
 | `frontend/src/api/agent-publish-api-key/index.ts` | Admin client |
 | `frontend/src/components/AgentPublishChannels.vue` | Replace tenant-key usage |
-| `frontend/src/i18n/locales/{zh-CN,en-US}.ts` | Copy for API channel |
+| `frontend/src/i18n/locales/{zh-CN,en-US,ko-KR,ru-RU}.ts` | Copy for API channel |
 | `docs/api/openapi-chat.md` | Usage doc |
 | `docs/api/README.md` | Index entry |
 
@@ -639,6 +639,8 @@ git commit -m "feat: stream OpenAI-compatible chat completions"
 - Modify: `frontend/src/components/AgentPublishChannels.vue`
 - Modify: `frontend/src/i18n/locales/zh-CN.ts`
 - Modify: `frontend/src/i18n/locales/en-US.ts`
+- Modify: `frontend/src/i18n/locales/ko-KR.ts`
+- Modify: `frontend/src/i18n/locales/ru-RU.ts`
 
 - [ ] **Step 1: API client**
 
@@ -698,7 +700,9 @@ If `frontend/e2e/publish-exact-url.spec.ts` can extend cheaply, assert API panel
 git add frontend/src/api/agent-publish-api-key \
   frontend/src/components/AgentPublishChannels.vue \
   frontend/src/i18n/locales/zh-CN.ts \
-  frontend/src/i18n/locales/en-US.ts
+  frontend/src/i18n/locales/en-US.ts \
+  frontend/src/i18n/locales/ko-KR.ts \
+  frontend/src/i18n/locales/ru-RU.ts
 git commit -m "feat(frontend): publish-channel API keys UI"
 ```
 
