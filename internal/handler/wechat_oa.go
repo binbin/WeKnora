@@ -239,6 +239,10 @@ func (handler *WeChatOAHandler) BindingComplete(c *gin.Context) {
 		OutputMode:  "full",
 		Credentials: types.JSON(credsJSON),
 	}
+	if handler.imService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "im service unavailable"})
+		return
+	}
 	if err := handler.imService.CreateChannel(channel); err != nil {
 		logger.Errorf(ctx, "[WeChatOA] CreateChannel: %v", err)
 		if strings.HasPrefix(err.Error(), "duplicate_bot:") {
