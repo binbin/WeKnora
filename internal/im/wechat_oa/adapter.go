@@ -67,6 +67,7 @@ func (adapter *Adapter) ParseCallback(c *gin.Context) (*im.IncomingMessage, erro
 		// P0: ignore non-text (ACK only).
 		return nil, nil
 	}
+	// MessageID feeds IM Service dedup (Redis/local, ~5m TTL).
 	messageID := event.MsgID
 	if messageID == "" {
 		messageID = event.RelayEventID

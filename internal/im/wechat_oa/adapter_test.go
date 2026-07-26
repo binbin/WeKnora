@@ -92,3 +92,31 @@ func TestAdapter_SendReply_CallsCloud(t *testing.T) {
 		t.Fatalf("err=%v sent=%q", err, fake.sent)
 	}
 }
+
+func TestAdapter_ParseCallback_SetsMessageIDForDedup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	secret := "sekrit"
+	event := RelayEvent{
+		RelayEventID: "relay-only",
+		MsgID:        "",
+		FromUser:     "o2",
+		MsgType:      "text",
+		Content:      "x",
+	}
+	body, _ := json.Marshal(event)
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	sig := SignHMAC(secret, ts, body)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-WeKnora-OA-Timestamp", ts)
+	req.Header.Set("X-WeKnora-OA-Signature", sig)
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = req
+	adapter := NewAdapter("wx", secret, &fakeCloud{})
+	_ = adapter.VerifyCallback(ctx)
+	msg, err := adapter.ParseCallback(ctx)
+	if err != nil || msg == nil || msg.MessageID != "relay-only" {
+		t.Fatalf("want MessageID=relay-only got %+v err=%v", msg, err)
+	}
+}
