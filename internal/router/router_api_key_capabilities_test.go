@@ -344,7 +344,7 @@ func TestTenantInfrastructureRoutesDeclareSpecificCapabilities(t *testing.T) {
 	RegisterStorageBackendRoutes(v1, &handler.StorageBackendHandler{}, g)
 	RegisterEmbedChannelRoutes(v1, &handler.EmbedChannelHandler{}, g)
 	RegisterGuestLinkChannelRoutes(v1, &handler.GuestLinkChannelHandler{}, g)
-	RegisterIMChannelRoutes(v1, &handler.IMHandler{}, g)
+	RegisterIMChannelRoutes(v1, &handler.IMHandler{}, nil, g)
 	RegisterDataSourceRoutes(v1, &handler.DataSourceHandler{}, &handler.DataSourceCredentialsHandler{}, g)
 	RegisterWeKnoraCloudRoutes(v1, &handler.WeKnoraCloudHandler{}, g)
 

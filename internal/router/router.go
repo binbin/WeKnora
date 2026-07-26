@@ -86,6 +86,7 @@ type RouterParams struct {
 	OrganizationHandler          *handler.OrganizationHandler
 	OrgUnitHandler               *handler.OrgUnitHandler
 	IMHandler                    *handler.IMHandler
+	WeChatOAHandler               *handler.WeChatOAHandler
 	EmbedChannelHandler          *handler.EmbedChannelHandler
 	EmbedChannelService          interfaces.EmbedChannelService
 	GuestLinkChannelHandler      *handler.GuestLinkChannelHandler
@@ -159,7 +160,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 	}
 
 	// IM 回调路由（在认证中间件之前注册，使用各平台自身的签名验证）
-	RegisterIMRoutes(r, params.IMHandler)
+	RegisterIMRoutes(r, params.IMHandler, params.WeChatOAHandler)
 
 	// Web embed 公开路由（使用 publish token 鉴权，不走全局 Auth）
 	RegisterEmbedPublicRoutes(
@@ -270,7 +271,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterSkillRoutes(v1, params.SkillHandler, rbacGuards)
 		RegisterOrganizationRoutes(v1, params.OrganizationHandler, rbacGuards)
 		RegisterOrgUnitRoutes(v1, params.OrgUnitHandler, rbacGuards)
-		RegisterIMChannelRoutes(v1, params.IMHandler, rbacGuards)
+		RegisterIMChannelRoutes(v1, params.IMHandler, params.WeChatOAHandler, rbacGuards)
 		RegisterEmbedChannelRoutes(v1, params.EmbedChannelHandler, rbacGuards)
 		RegisterGuestLinkChannelRoutes(v1, params.GuestLinkChannelHandler, rbacGuards)
 		RegisterDataSourceRoutes(v1, params.DataSourceHandler, params.DataSourceCredentialsHandler, rbacGuards)
@@ -1485,11 +1486,14 @@ func RegisterGuestLinkChannelRoutes(r *gin.RouterGroup, guestLinkHandler *handle
 
 // RegisterIMRoutes registers IM callback routes.
 // These are registered BEFORE auth middleware since IM platforms use their own signature verification.
-func RegisterIMRoutes(r *gin.Engine, imHandler *handler.IMHandler) {
+func RegisterIMRoutes(r *gin.Engine, imHandler *handler.IMHandler, oaHandler *handler.WeChatOAHandler) {
 	im := r.Group("/api/v1/im")
 	{
 		im.GET("/callback/:channel_id", imHandler.IMCallback)
 		im.POST("/callback/:channel_id", imHandler.IMCallback)
+		if oaHandler != nil {
+			im.POST("/wechat_oa/binding/complete", oaHandler.BindingComplete)
+		}
 	}
 }
 
@@ -1498,7 +1502,7 @@ func RegisterIMRoutes(r *gin.Engine, imHandler *handler.IMHandler) {
 // IM channels carry external bot credentials (WeChat/Feishu/Slack/...);
 // listing is Viewer+ but any mutation, toggle, or QR-code login flow
 // (which can hijack a personal WeChat session) is Admin+.
-func RegisterIMChannelRoutes(r *gin.RouterGroup, imHandler *handler.IMHandler, g *rbacGuards) {
+func RegisterIMChannelRoutes(r *gin.RouterGroup, imHandler *handler.IMHandler, oaHandler *handler.WeChatOAHandler, g *rbacGuards) {
 	// Channel CRUD under agents
 	agentChannels := g.apiKeyGroup(r.Group("/agents/:id/im-channels"), apiKeyManageChannels(apiKeyFullAccess()))
 	{
@@ -1513,6 +1517,19 @@ func RegisterIMChannelRoutes(r *gin.RouterGroup, imHandler *handler.IMHandler, g
 		channels.PUT("/:id", g.OwnerOrSystemAdmin(), imHandler.UpdateIMChannel)
 		channels.DELETE("/:id", g.OwnerOrSystemAdmin(), imHandler.DeleteIMChannel)
 		channels.POST("/:id/toggle", g.OwnerOrSystemAdmin(), imHandler.ToggleIMChannel)
+	}
+
+
+	// WeChat Official Account Cloud pre-auth bind
+	if oaHandler != nil {
+		oaAgent := g.apiKeyGroup(r.Group("/agents/:id/wechat-oa"), apiKeyManageChannels(apiKeyFullAccess()))
+		{
+			oaAgent.POST("/preauth", g.OwnerOrSystemAdmin(), oaHandler.CreatePreAuth)
+		}
+		oStatus := g.apiKeyGroup(r.Group("/wechat-oa"), apiKeyManageChannels(apiKeyFullAccess()))
+		{
+			oStatus.GET("/preauth/:id", g.OwnerOrSystemAdmin(), oaHandler.GetPreAuthStatus)
+		}
 	}
 
 	// WeChat QR code login (requires authentication) — Admin+: a successful

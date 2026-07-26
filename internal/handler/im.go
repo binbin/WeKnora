@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/im"
+	"github.com/Tencent/WeKnora/internal/im/wechat_oa"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
+	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,13 +34,18 @@ var invalidIMPlatformError = func() string {
 
 // IMHandler handles IM platform callback requests and channel CRUD.
 type IMHandler struct {
-	imService *im.Service
+	imService  *im.Service
+	tenantRepo interfaces.TenantRepository
 }
 
 // NewIMHandler creates a new IM handler.
-func NewIMHandler(imService *im.Service) *IMHandler {
+func NewIMHandler(
+	imService *im.Service,
+	tenantRepo interfaces.TenantRepository,
+) *IMHandler {
 	return &IMHandler{
-		imService: imService,
+		imService:  imService,
+		tenantRepo: tenantRepo,
 	}
 }
 
@@ -289,6 +296,13 @@ func (h *IMHandler) DeleteIMChannel(c *gin.Context) {
 		return
 	}
 
+	ctx := c.Request.Context()
+	if channel, err := h.imService.GetChannelByIDAndTenant(channelID, tenantID); err == nil && channel != nil {
+		if channel.Platform == "wechat_oa" {
+			h.bestEffortUnbindWeChatOA(ctx, tenantID, channel)
+		}
+	}
+
 	if err := h.imService.DeleteChannel(channelID, tenantID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete channel"})
 		return
@@ -440,4 +454,33 @@ func (h *IMHandler) IMCallback(c *gin.Context) {
 			logger.Errorf(asyncCtx, "[IM] Handle message error for channel %s: %v", channelID, err)
 		}
 	}()
+}
+
+func (h *IMHandler) bestEffortUnbindWeChatOA(
+	ctx context.Context,
+	tenantID uint64,
+	channel *im.IMChannel,
+) {
+	creds, err := im.ParseCredentials(channel.Credentials)
+	if err != nil {
+		return
+	}
+	appID := im.GetString(creds, "authorizer_appid")
+	if appID == "" || h.tenantRepo == nil {
+		return
+	}
+	tenant, err := h.tenantRepo.GetTenantByID(ctx, tenantID)
+	if err != nil || tenant == nil || tenant.Credentials == nil {
+		logger.Warnf(ctx, "[WeChatOA] skip Cloud unbind: tenant credentials unavailable")
+		return
+	}
+	wc := tenant.Credentials.GetWeKnoraCloud()
+	if wc == nil {
+		logger.Warnf(ctx, "[WeChatOA] skip Cloud unbind: WeKnoraCloud not configured")
+		return
+	}
+	client := wechat_oa.NewHTTPCloudClient("", wc.AppID, wc.AppSecret, nil)
+	if err := client.Unbind(ctx, appID); err != nil {
+		logger.Warnf(ctx, "[WeChatOA] Cloud unbind failed for %s: %v", appID, err)
+	}
 }

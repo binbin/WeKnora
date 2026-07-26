@@ -390,6 +390,8 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(imPkg.NewService))
 	must(container.Invoke(registerIMAdapterFactories))
 	must(container.Provide(handler.NewIMHandler))
+	must(container.Provide(repository.NewWeChatOAPreauthRepository))
+	must(container.Provide(handler.NewWeChatOAHandler))
 	must(container.Provide(handler.NewEmbedChannelHandler))
 	must(container.Provide(handler.NewGuestLinkChannelHandler))
 	must(container.Provide(handler.NewWeKnoraCloudHandler))

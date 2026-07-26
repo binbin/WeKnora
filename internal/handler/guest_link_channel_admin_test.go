@@ -68,6 +68,7 @@ func (f *adminGuestLinkSvc) Get(
 func (f *adminGuestLinkSvc) Update(
 	_ context.Context, tenantID uint64, id string, req *types.GuestLinkChannel,
 	enabled, showSuggested, allowWebSearch, allowFileUpload *bool,
+	rateLimitPerMinute, rateLimitPerDay *int,
 ) (*types.GuestLinkChannel, error) {
 	gl, ok := f.byID[id]
 	if !ok || gl.TenantID != tenantID {
@@ -86,6 +87,12 @@ func (f *adminGuestLinkSvc) Update(
 	}
 	if allowFileUpload != nil {
 		gl.AllowFileUpload = *allowFileUpload
+	}
+	if rateLimitPerMinute != nil {
+		gl.RateLimitPerMinute = *rateLimitPerMinute
+	}
+	if rateLimitPerDay != nil {
+		gl.RateLimitPerDay = *rateLimitPerDay
 	}
 	return gl, nil
 }
