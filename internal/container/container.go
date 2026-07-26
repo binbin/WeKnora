@@ -69,6 +69,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/im/slack"
 	"github.com/Tencent/WeKnora/internal/im/telegram"
 	"github.com/Tencent/WeKnora/internal/im/wechat"
+	"github.com/Tencent/WeKnora/internal/im/wechat_oa"
 	"github.com/Tencent/WeKnora/internal/im/wecom"
 	"github.com/Tencent/WeKnora/internal/im/yunzhijia"
 	"github.com/Tencent/WeKnora/internal/infrastructure/docparser"
@@ -1555,7 +1556,10 @@ func registerWebSearchProviders(registry *infra_web_search.Registry) {
 // registerIMAdapterFactories registers adapter factories for each IM platform
 // and loads enabled channels from the database. Each platform's factory lives
 // in its own subpackage to keep this file focused on wiring.
-func registerIMAdapterFactories(imService *imPkg.Service) {
+func registerIMAdapterFactories(
+	imService *imPkg.Service,
+	tenantRepo interfaces.TenantRepository,
+) {
 	imService.RegisterAdapterFactory("wecom", wecom.NewFactory())
 	imService.RegisterAdapterFactory("feishu", feishu.NewFactory(feishu.RegionFeishu))
 	// Lark is Feishu's international cloud: same adapter, different host/tenant.
@@ -1565,6 +1569,22 @@ func registerIMAdapterFactories(imService *imPkg.Service) {
 	imService.RegisterAdapterFactory("dingtalk", dingtalk.NewFactory())
 	imService.RegisterAdapterFactory("mattermost", mattermost.NewFactory())
 	imService.RegisterAdapterFactory("wechat", wechat.NewFactory())
+	imService.RegisterAdapterFactory("wechat_oa", wechat_oa.NewFactory(
+		func(ctx context.Context, tenantID uint64) (wechat_oa.CloudClient, error) {
+			tenant, err := tenantRepo.GetTenantByID(ctx, tenantID)
+			if err != nil || tenant == nil {
+				return nil, fmt.Errorf("wechat_oa: load tenant: %w", err)
+			}
+			if tenant.Credentials == nil {
+				return nil, fmt.Errorf("wechat_oa: WeKnoraCloud credentials not configured")
+			}
+			creds := tenant.Credentials.GetWeKnoraCloud()
+			if creds == nil {
+				return nil, fmt.Errorf("wechat_oa: WeKnoraCloud credentials not configured")
+			}
+			return wechat_oa.NewHTTPCloudClient("", creds.AppID, creds.AppSecret, nil), nil
+		},
+	))
 	imService.RegisterAdapterFactory("qqbot", qqbot.NewFactory())
 	imService.RegisterAdapterFactory("yunzhijia", yunzhijia.NewFactory())
 
