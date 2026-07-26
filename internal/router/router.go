@@ -90,6 +90,7 @@ type RouterParams struct {
 	EmbedChannelHandler          *handler.EmbedChannelHandler
 	EmbedChannelService          interfaces.EmbedChannelService
 	GuestLinkChannelHandler      *handler.GuestLinkChannelHandler
+	AgentPublishAPIKeyHandler    *handler.AgentPublishAPIKeyHandler
 	RedisClient                  *redis.Client
 	DataSourceHandler            *handler.DataSourceHandler
 	DataSourceCredentialsHandler *handler.DataSourceCredentialsHandler
@@ -274,6 +275,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterIMChannelRoutes(v1, params.IMHandler, params.WeChatOAHandler, rbacGuards)
 		RegisterEmbedChannelRoutes(v1, params.EmbedChannelHandler, rbacGuards)
 		RegisterGuestLinkChannelRoutes(v1, params.GuestLinkChannelHandler, rbacGuards)
+		RegisterAgentPublishAPIKeyRoutes(v1, params.AgentPublishAPIKeyHandler, rbacGuards)
 		RegisterDataSourceRoutes(v1, params.DataSourceHandler, params.DataSourceCredentialsHandler, rbacGuards)
 		RegisterWeKnoraCloudRoutes(v1, params.WeKnoraCloudHandler, rbacGuards)
 		RegisterWikiPageRoutes(v1, params.WikiPageHandler, rbacGuards)
@@ -1481,6 +1483,28 @@ func RegisterGuestLinkChannelRoutes(r *gin.RouterGroup, guestLinkHandler *handle
 		guestLinks.GET("/:id", g.Viewer(), guestLinkHandler.GetGuestLink)
 		guestLinks.PUT("/:id", g.OwnerOrSystemAdmin(), guestLinkHandler.UpdateGuestLink)
 		guestLinks.DELETE("/:id", g.OwnerOrSystemAdmin(), guestLinkHandler.DeleteGuestLink)
+	}
+}
+
+// RegisterAgentPublishAPIKeyRoutes registers authenticated admin routes for
+// agent-bound publish API keys. Guards match guest-link channel management:
+// apiKeyManageChannels + Viewer for list, OwnerOrSystemAdmin for mutations.
+func RegisterAgentPublishAPIKeyRoutes(
+	r *gin.RouterGroup,
+	publishHandler *handler.AgentPublishAPIKeyHandler,
+	g *rbacGuards,
+) {
+	if publishHandler == nil {
+		return
+	}
+	group := g.apiKeyGroup(
+		r.Group("/agents/:id/publish-api-keys"),
+		apiKeyManageChannels(apiKeyFullAccess()),
+	)
+	{
+		group.GET("", g.Viewer(), publishHandler.List)
+		group.POST("", g.OwnerOrSystemAdmin(), publishHandler.Create)
+		group.DELETE("/:key_id", g.OwnerOrSystemAdmin(), publishHandler.Delete)
 	}
 }
 
