@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-07-26
+
+### New Features
+
+- **NEW**: **Product rebrand to TreeRAG** — user-facing product name and Go identifiers
+  renamed to TreeRAG; module path, Cloud host, `weknoracloud` wire values, and
+  `X-WeKnora-OA-*` HMAC headers remain unchanged for compatibility.
+- **NEW**: **Publish-channel API access** — agent-bound `wkpub_` keys with OpenAI-compatible
+  `POST /api/v1/chat/completions` (non-stream + SSE), admin CRUD, console doc page at
+  `/platform/docs/openapi-chat`.
+- **NEW**: **WeChat Official Account (`wechat_oa`) Cloud relay (P0)** — admin QR bind via
+  TreeRAG Cloud third-party pre-auth, HMAC message relay, text Q&A; publish cards split
+  into 公众号 / 企业微信 / 个人微信.
+
+### Improvements
+
+- **IMPROVED**: Docs / Wiki / ROADMAP updated for shipped publish API and WeChat OA;
+  Docker workflow cancels in-progress main builds on new pushes.
+
 ## [0.7.0] - 2026-07-17
 
 ### New Features
