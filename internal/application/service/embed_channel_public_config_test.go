@@ -91,14 +91,16 @@ func TestPublicConfigIncludesCapabilityFlags(t *testing.T) {
 		agentService: &stubAgentForEmbed{
 			agent: &types.CustomAgent{
 				Config: types.CustomAgentConfig{
-					KBSelectionMode:  "all",
-					WebSearchEnabled: true,
+					KBSelectionMode:    "all",
+					WebSearchEnabled:   true,
+					ImageUploadEnabled: true,
 				},
 			},
 		},
 	}
 	cfg := svc.PublicConfig(context.Background(), &types.EmbedChannel{
 		ID:             "ch-cap",
+		TenantID:       42,
 		AgentID:        "agent-cap",
 		AllowWebSearch: true,
 		WidgetPosition: "top-left",
@@ -109,8 +111,44 @@ func TestPublicConfigIncludesCapabilityFlags(t *testing.T) {
 	if !cfg.AgentWebSearchEnabled {
 		t.Fatalf("agent_web_search_enabled = false, want true")
 	}
+	if !cfg.AgentImageUploadEnabled {
+		t.Fatalf("agent_image_upload_enabled = false, want true")
+	}
 	if cfg.WidgetPosition != "top-left" {
 		t.Fatalf("widget_position = %q, want top-left", cfg.WidgetPosition)
+	}
+}
+
+func TestPublicConfigGuestLinkFollowsAgentImageUpload(t *testing.T) {
+	svc := &embedChannelService{
+		agentService: &stubAgentForEmbed{
+			agent: &types.CustomAgent{
+				Config: types.CustomAgentConfig{
+					ImageUploadEnabled: true,
+					WebSearchEnabled:   true,
+				},
+			},
+		},
+	}
+	cfg := svc.PublicConfig(context.Background(), &types.EmbedChannel{
+		ID:              "guest-1",
+		TenantID:        7,
+		AgentID:         "agent-1",
+		AllowFileUpload: false,
+		AllowWebSearch:  false,
+		PublishToken:    types.GuestLinkSessionSecretPrefix + "secret",
+	})
+	if !cfg.AgentImageUploadEnabled {
+		t.Fatal("agent_image_upload_enabled = false, want true")
+	}
+	if !cfg.AllowFileUpload {
+		t.Fatal("allow_file_upload should follow agent image upload for guest links")
+	}
+	if !cfg.AgentWebSearchEnabled {
+		t.Fatal("agent_web_search_enabled = false, want true")
+	}
+	if !cfg.AllowWebSearch {
+		t.Fatal("allow_web_search should follow agent web search for guest links")
 	}
 }
 

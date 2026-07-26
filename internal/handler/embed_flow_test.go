@@ -278,6 +278,29 @@ func TestPatchEmbedChatPayloadStripsAttachmentsWhenUploadDisabled(t *testing.T) 
 	}
 }
 
+func TestPatchEmbedChatPayloadKeepsAttachmentsForGuestLinkWhenChannelFlagOff(t *testing.T) {
+	ch := &types.EmbedChannel{
+		AgentID:         "agent-1",
+		AllowFileUpload: false,
+		PublishToken:    types.GuestLinkSessionSecretPrefix + "test_secret",
+	}
+	body := `{"query":"hello","images":[{"data":"x"}],"attachment_uploads":[{"file_name":"a.pdf"}],"attachment_ids":["doc-1"]}`
+
+	patched, err := patchEmbedChatPayload(strings.NewReader(body), ch, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(patched, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"images", "attachment_uploads", "attachment_ids"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("%s should be kept for guest-mapped channels even when allow_file_upload is false", key)
+		}
+	}
+}
+
 func TestPatchEmbedChatPayloadKeepsAttachmentIDsWhenUploadAllowed(t *testing.T) {
 	ch := &types.EmbedChannel{AgentID: "agent-1", AllowFileUpload: true}
 	body := `{"query":"hello","attachment_ids":["doc-1","doc-2"]}`

@@ -153,30 +153,12 @@
         <h4 class="setting-drawer__section-title">{{ $t('guestLinkPublish.sectionCapabilities') }}</h4>
 
         <div class="settings-group">
-          <div class="setting-row">
+          <div class="setting-row setting-row--last">
             <div class="setting-info">
               <label>{{ $t('guestLinkPublish.showSuggestedQuestions') }}</label>
             </div>
             <div class="setting-control">
               <t-switch v-model="form.show_suggested_questions" size="small" />
-            </div>
-          </div>
-
-          <div class="setting-row">
-            <div class="setting-info">
-              <label>{{ $t('guestLinkPublish.allowWebSearch') }}</label>
-            </div>
-            <div class="setting-control">
-              <t-switch v-model="form.allow_web_search" size="small" />
-            </div>
-          </div>
-
-          <div class="setting-row setting-row--last">
-            <div class="setting-info">
-              <label>{{ $t('guestLinkPublish.allowFileUpload') }}</label>
-            </div>
-            <div class="setting-control">
-              <t-switch v-model="form.allow_file_upload" size="small" />
             </div>
           </div>
         </div>
@@ -260,8 +242,6 @@ const defaultForm = () => ({
   rate_limit_per_minute: 30,
   rate_limit_per_day: 10000,
   show_suggested_questions: true,
-  allow_web_search: false,
-  allow_file_upload: false,
   page_title: '',
   default_locale: '' as EmbedLocaleTag,
   primary_color: getDefaultPrimaryColor(),
@@ -404,8 +384,6 @@ function openSettings(): void {
     lastLimitedDay.value = form.rate_limit_per_day
   }
   form.show_suggested_questions = gl.show_suggested_questions !== false
-  form.allow_web_search = gl.allow_web_search === true
-  form.allow_file_upload = gl.allow_file_upload === true
   form.page_title = gl.page_title || ''
   form.default_locale = (gl.default_locale || '') as EmbedLocaleTag
   form.primary_color = gl.primary_color || getDefaultPrimaryColor()
@@ -433,8 +411,6 @@ async function saveForm(): Promise<void> {
       rate_limit_per_minute: rateLimitPerMinute,
       rate_limit_per_day: rateLimitPerDay,
       show_suggested_questions: form.show_suggested_questions,
-      allow_web_search: form.allow_web_search,
-      allow_file_upload: form.allow_file_upload,
       page_title: form.page_title.trim() || form.name.trim(),
       default_locale: form.default_locale || '',
       primary_color: form.primary_color,
@@ -502,6 +478,10 @@ async function handleDelete(): Promise<void> {
   font-size: 12px;
   line-height: 1.5;
   color: var(--td-text-color-placeholder);
+}
+
+.form-desc--warn {
+  color: var(--td-warning-color);
 }
 
 .guest-link-create-form {

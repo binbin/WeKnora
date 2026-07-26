@@ -2657,6 +2657,14 @@ export default {
     showSuggestedQuestions: 'Suggested questions',
     allowWebSearch: 'Show web search toggle',
     allowFileUpload: 'Show file upload',
+    allowFileUploadDesc:
+      'When enabled, visitors can upload images and document attachments. Requires the bound agent to support image upload.',
+    allowFileUploadFollowAgent:
+      'Guest-link upload follows the agent image-upload setting; no separate channel toggle is required.',
+    fileUploadFollowOn: 'Following agent (on)',
+    fileUploadFollowOff: 'Agent upload off',
+    agentImageUploadDisabledHint:
+      'This agent does not have image upload enabled. Visitors will not see the upload button until you enable it in agent settings.',
     pageTitle: 'Page title',
     pageTitlePlaceholder: 'AI Assistant',
     defaultLocale: 'Default locale',

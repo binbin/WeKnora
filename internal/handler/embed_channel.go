@@ -716,9 +716,19 @@ func patchEmbedChatPayload(body io.Reader, ch *types.EmbedChannel, agentMode boo
 	if v, ok := payload["web_search_enabled"].(bool); ok {
 		clientWebSearch = v
 	}
-	// Channel allow_web_search only exposes the visitor toggle; the client must opt in.
-	payload["web_search_enabled"] = ch.AllowWebSearch && clientWebSearch
-	if !ch.AllowFileUpload {
+	// Channel allow_web_search only exposes the visitor toggle for embed
+	// channels; the client must opt in. Guest short links follow the agent
+	// WebSearchEnabled flag (enforced in session QA), so channel rows that
+	// still have allow_web_search=false do not block the visitor toggle.
+	if types.IsGuestLinkMappedChannel(ch) {
+		payload["web_search_enabled"] = clientWebSearch
+	} else {
+		payload["web_search_enabled"] = ch.AllowWebSearch && clientWebSearch
+	}
+	// Embed channels keep an explicit allow_file_upload gate. Guest short links
+	// (/w/:slug) follow the agent ImageUploadEnabled check in session QA, so
+	// legacy allow_file_upload=false rows do not strip visitor uploads here.
+	if !ch.AllowFileUpload && !types.IsGuestLinkMappedChannel(ch) {
 		delete(payload, "images")
 		delete(payload, "attachment_uploads")
 		delete(payload, "attachment_ids")

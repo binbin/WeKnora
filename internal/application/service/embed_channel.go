@@ -242,6 +242,10 @@ func (s *embedChannelService) LookupForEmbed(
 }
 
 func (s *embedChannelService) PublicConfig(ctx context.Context, ch *types.EmbedChannel) types.EmbedChannelPublicConfig {
+	// Public bootstrap (/w/:slug, embed exchange) often has no auth tenant in
+	// ctx. Channel rows always carry TenantID — inject it so GetAgentByID can
+	// resolve ImageUploadEnabled / web-search / KB presets for visitors.
+	ctx = contextWithChannelTenant(ctx, ch)
 	kbIDs := s.resolveKnowledgeBaseIDs(ctx, ch)
 	displayTitle, agentName, agentAvatar := s.resolveDisplayMeta(ctx, ch)
 	agentWebSearchEnabled := false
@@ -249,6 +253,14 @@ func (s *embedChannelService) PublicConfig(ctx context.Context, ch *types.EmbedC
 	if agent, err := s.agentService.GetAgentByID(ctx, ch.AgentID); err == nil && agent != nil {
 		agentWebSearchEnabled = agent.Config.WebSearchEnabled
 		agentImageUploadEnabled = agent.Config.ImageUploadEnabled
+	}
+	allowFileUpload := ch.AllowFileUpload
+	allowWebSearch := ch.AllowWebSearch
+	// Guest short links have no separate site operator: visitor capabilities
+	// follow the bound agent so channel toggles are unused for /w/:slug.
+	if types.IsGuestLinkMappedChannel(ch) {
+		allowFileUpload = agentImageUploadEnabled
+		allowWebSearch = agentWebSearchEnabled
 	}
 	return types.EmbedChannelPublicConfig{
 		ChannelID:               ch.ID,
@@ -265,12 +277,24 @@ func (s *embedChannelService) PublicConfig(ctx context.Context, ch *types.EmbedC
 		ShowSuggestedQuestions:  ch.ShowSuggestedQuestions,
 		AllowedOrigins:          ch.AllowedOriginsList(),
 		WidgetPosition:          types.NormalizeEmbedWidgetPosition(ch.WidgetPosition),
-		AllowWebSearch:          ch.AllowWebSearch,
-		AllowFileUpload:         ch.AllowFileUpload,
+		AllowWebSearch:          allowWebSearch,
+		AllowFileUpload:         allowFileUpload,
 		AgentWebSearchEnabled:   agentWebSearchEnabled,
 		AgentImageUploadEnabled: agentImageUploadEnabled,
 		DefaultLocale:           types.NormalizeEmbedDefaultLocale(ch.DefaultLocale),
 	}
+}
+
+// contextWithChannelTenant ensures channel-scoped lookups work on public
+// surfaces that never authenticate a tenant principal.
+func contextWithChannelTenant(ctx context.Context, ch *types.EmbedChannel) context.Context {
+	if ch == nil || ch.TenantID == 0 {
+		return ctx
+	}
+	if _, ok := types.TenantIDFromContext(ctx); ok {
+		return ctx
+	}
+	return context.WithValue(ctx, types.TenantIDContextKey, ch.TenantID)
 }
 
 func (s *embedChannelService) EmbedChunk(

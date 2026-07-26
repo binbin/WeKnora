@@ -1622,6 +1622,7 @@
                 :agent-id="debugAgentId"
                 :agent-mode="agentMode"
                 :disabled-reason="debugDisabledReason"
+                :image-upload-enabled="formData.config.image_upload_enabled === true"
               />
             </aside>
               </div>

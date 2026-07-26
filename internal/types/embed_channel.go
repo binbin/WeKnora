@@ -39,6 +39,17 @@ type EmbedChannel struct {
 
 func (EmbedChannel) TableName() string { return "embed_channels" }
 
+// GuestLinkSessionSecretPrefix is stored on guest_link_channels.session_secret
+// and copied into EmbedChannel.PublishToken by AsEmbedChannel. Embed publish
+// tokens use "em_" instead, so this prefix identifies guest-mapped channels.
+const GuestLinkSessionSecretPrefix = "gls_"
+
+// IsGuestLinkMappedChannel reports whether ch was projected from a guest link
+// (/w/:slug) rather than a real embed_channels row.
+func IsGuestLinkMappedChannel(ch *EmbedChannel) bool {
+	return ch != nil && strings.HasPrefix(ch.PublishToken, GuestLinkSessionSecretPrefix)
+}
+
 func (ch *EmbedChannel) BeforeCreate(tx *gorm.DB) error {
 	if ch.ID == "" {
 		ch.ID = uuid.New().String()
