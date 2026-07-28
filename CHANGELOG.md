@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.3] - 2026-07-28
+
+### Improvements
+
+- **IMPROVED**: **Default auth policy is invite-only** — public registration
+  closed by default (`DISABLE_REGISTRATION=true`); ordinary users cannot
+  self-create workspaces; public registration defaults to `tenantless`.
+- **IMPROVED**: **Empty-install bootstrap** — when no users exist yet, the
+  first public registration is still allowed, creates a home workspace, and
+  promotes that account to system admin so a fresh deploy is operable
+  without a pre-existing invite.
+
 ## [0.8.2] - 2026-07-28
 
 ### Bug Fixes
