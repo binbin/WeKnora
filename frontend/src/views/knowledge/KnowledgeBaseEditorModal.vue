@@ -465,7 +465,7 @@ import KbCreateContextualGuide from '@/components/KbCreateContextualGuide.vue'
 import { KB_EDITOR_FOCUS_SECTION_EVENT, markContextualGuideDone } from '@/config/contextualGuides'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { createKnowledgeBase, getKnowledgeBaseById, listKnowledgeFiles, updateKnowledgeBase, rebuildKBIndex } from '@/api/knowledge-base'
-import { listOrgUnits } from '@/api/org-unit'
+import { getOrgUnitVisibility, listOrgUnits } from '@/api/org-unit'
 import { updateKBConfig, type KBModelConfigRequest } from '@/api/initialization'
 import { type ModelConfig } from '@/api/model'
 import { useChatResourcesStore } from '@/stores/chatResources'
@@ -819,10 +819,15 @@ const loadAllModels = async (force = false) => {
 
 const loadOrgHierarchyFlag = async () => {
   try {
-    const units = await listOrgUnits(false)
-    hasOrgHierarchy.value = units.length > 0
+    const visibility = await getOrgUnitVisibility()
+    hasOrgHierarchy.value = !!visibility?.has_hierarchy
   } catch {
-    hasOrgHierarchy.value = false
+    try {
+      const units = await listOrgUnits(false)
+      hasOrgHierarchy.value = units.length > 0
+    } catch {
+      hasOrgHierarchy.value = false
+    }
   }
 }
 

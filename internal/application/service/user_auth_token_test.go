@@ -83,6 +83,9 @@ func (s *stubUserRepoForAuth) RevokeSystemAdmin(context.Context, string, string)
 func (s *stubUserRepoForAuth) SearchUsers(context.Context, string, int) ([]*types.User, error) {
 	return nil, nil
 }
+func (s *stubUserRepoForAuth) CountUsers(context.Context) (int64, error) {
+	return int64(len(s.users)), nil
+}
 
 func newAuthTestUserService(tokenRepo *stubAuthTokenRepo) *userService {
 	return &userService{

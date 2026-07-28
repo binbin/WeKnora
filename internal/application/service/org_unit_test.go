@@ -16,15 +16,19 @@ type stubOrgUnitRepo struct {
 }
 
 func (r *stubOrgUnitRepo) Create(context.Context, *types.OrgUnit) error { return nil }
-func (r *stubOrgUnitRepo) GetByID(_ context.Context, _ uint64, id string) (*types.OrgUnit, error) {
+func (r *stubOrgUnitRepo) GetByID(_ context.Context, tenantID uint64, id string) (*types.OrgUnit, error) {
 	unit, ok := r.units[id]
-	if !ok {
+	if !ok || unit == nil || unit.TenantID != tenantID {
 		return nil, apprepo.ErrOrgUnitNotFound
 	}
 	return unit, nil
 }
 func (r *stubOrgUnitRepo) GetByIDGlobal(_ context.Context, id string) (*types.OrgUnit, error) {
-	return r.GetByID(context.Background(), 0, id)
+	unit, ok := r.units[id]
+	if !ok || unit == nil {
+		return nil, apprepo.ErrOrgUnitNotFound
+	}
+	return unit, nil
 }
 func (r *stubOrgUnitRepo) Update(context.Context, *types.OrgUnit) error { return nil }
 func (r *stubOrgUnitRepo) Delete(context.Context, uint64, string) error  { return nil }
@@ -53,20 +57,28 @@ func (r *stubOrgUnitRepo) ListRoots(_ context.Context, tenantID uint64) ([]*type
 	}
 	return out, nil
 }
-func (r *stubOrgUnitRepo) CountByTenant(context.Context, uint64) (int64, error) {
-	return int64(len(r.units)), nil
+func (r *stubOrgUnitRepo) CountByTenant(_ context.Context, tenantID uint64) (int64, error) {
+	var count int64
+	for _, unit := range r.units {
+		if unit != nil && unit.TenantID == tenantID {
+			count++
+		}
+	}
+	return count, nil
 }
 func (r *stubOrgUnitRepo) CountChildren(context.Context, uint64, string) (int64, error) {
 	return 0, nil
 }
 func (r *stubOrgUnitRepo) ListByPathPrefix(
 	_ context.Context,
-	_ uint64,
+	tenantID uint64,
 	pathPrefix string,
 ) ([]*types.OrgUnit, error) {
 	out := make([]*types.OrgUnit, 0)
 	for _, unit := range r.units {
-		if unit != nil && strings.HasPrefix(unit.Path, pathPrefix) {
+		if unit != nil &&
+			unit.TenantID == tenantID &&
+			strings.HasPrefix(unit.Path, pathPrefix) {
 			out = append(out, unit)
 		}
 	}
@@ -784,5 +796,67 @@ func TestListPlatformTreeIncludesLegacyTenantTrees(t *testing.T) {
 	}
 	if len(legacy.Children) != 1 || legacy.Children[0].ID != "legacy-child" {
 		t.Fatalf("legacy children=%#v", legacy.Children)
+	}
+}
+
+// Platform-catalog roots (tenant_id=0) must still drive invite UI when the
+// actor is browsing a business workspace with no in-tenant OrgUnits.
+func TestOrgUnitPlatformCatalogInviteHierarchy(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"platform-root": {
+				ID: "platform-root", TenantID: types.PlatformOrgTenantID,
+				ParentID: "", Path: "/platform-root/", Depth: 0,
+				Name: "人社厅",
+			},
+			"platform-child": {
+				ID: "platform-child", TenantID: types.PlatformOrgTenantID,
+				ParentID: "platform-root",
+				Path:     "/platform-root/platform-child/",
+				Depth:    1,
+				Name:     "赤峰市",
+			},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	workspaceTenant := uint64(10000)
+
+	has, err := svc.HasHierarchy(context.Background(), workspaceTenant)
+	if err != nil {
+		t.Fatalf("HasHierarchy: %v", err)
+	}
+	if !has {
+		t.Fatal("platform catalog must count as hierarchy for workspace tenant")
+	}
+
+	ownerCtx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleOwner,
+	)
+	units, err := svc.ListInviteableOrgUnits(
+		ownerCtx, workspaceTenant, "", types.TenantRoleContributor,
+	)
+	if err != nil {
+		t.Fatalf("ListInviteableOrgUnits: %v", err)
+	}
+	if len(units) != 2 {
+		t.Fatalf("want platform forest, got %#v", units)
+	}
+
+	ok, err := svc.CanInviteToOrgUnit(
+		ownerCtx, workspaceTenant, "", "platform-child",
+		types.TenantRoleContributor,
+	)
+	if err != nil || !ok {
+		t.Fatalf("CanInviteToOrgUnit platform child: ok=%v err=%v", ok, err)
+	}
+
+	flat, err := svc.ListFlat(ownerCtx, workspaceTenant)
+	if err != nil {
+		t.Fatalf("ListFlat: %v", err)
+	}
+	if len(flat) != 2 {
+		t.Fatalf("ListFlat should surface platform catalog, got %#v", flat)
 	}
 }

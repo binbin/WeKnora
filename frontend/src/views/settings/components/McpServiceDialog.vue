@@ -403,7 +403,7 @@ import {
   type MCPTestResult,
   type MCPOAuthTokenState,
 } from '@/api/mcp-service'
-import { listOrgUnits } from '@/api/org-unit'
+import { getOrgUnitVisibility, listOrgUnits } from '@/api/org-unit'
 import { useAuthStore } from '@/stores/auth'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
 import McpTestResultBody from './McpTestResultBody.vue'
@@ -444,10 +444,15 @@ const canShareMCP = computed(
 
 const loadOrgHierarchyFlag = async () => {
   try {
-    const units = await listOrgUnits(false)
-    hasOrgHierarchy.value = units.length > 0
+    const visibility = await getOrgUnitVisibility()
+    hasOrgHierarchy.value = !!visibility?.has_hierarchy
   } catch {
-    hasOrgHierarchy.value = false
+    try {
+      const units = await listOrgUnits(false)
+      hasOrgHierarchy.value = units.length > 0
+    } catch {
+      hasOrgHierarchy.value = false
+    }
   }
 }
 

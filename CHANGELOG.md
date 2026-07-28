@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.5] - 2026-07-28
+
+### Bug Fixes
+
+- **FIXED**: **Invite share-link missing 所属组织** — platform catalog org
+  units (`tenant_id=0`) now count as hierarchy for workspace tenants, so
+  member invite / share-link UIs show and validate 所属组织 when roots
+  were created by system admins in the shared forest.
+
 ## [0.8.4] - 2026-07-28
 
 ### Bug Fixes

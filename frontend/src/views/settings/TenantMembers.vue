@@ -615,6 +615,7 @@ import {
   type TenantInvitation,
 } from '@/api/tenant/invitations'
 import {
+  getOrgUnitVisibility,
   getStoredOrgUnitId,
   listInviteableOrgUnits,
   listOrgUnits,
@@ -752,10 +753,17 @@ const transferOrgUnitOptions = computed(() =>
 
 async function refreshHierarchyFlag() {
   try {
-    const allUnits = await listOrgUnits(false)
-    hasOrgHierarchy.value = allUnits.length > 0
+    // Prefer visibility.has_hierarchy so platform catalog (tenant_id=0)
+    // is detected even when the workspace tenant itself has no rows.
+    const visibility = await getOrgUnitVisibility()
+    hasOrgHierarchy.value = !!visibility?.has_hierarchy
   } catch {
-    hasOrgHierarchy.value = false
+    try {
+      const allUnits = await listOrgUnits(false)
+      hasOrgHierarchy.value = allUnits.length > 0
+    } catch {
+      hasOrgHierarchy.value = false
+    }
   }
 }
 

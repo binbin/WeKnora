@@ -111,8 +111,9 @@ func (s *orgUnitService) Get(
 	return unit, nil
 }
 
-// resolveUnit loads an OrgUnit by tenant scope, falling back to a global
-// lookup for system admins (platform catalog + legacy in-tenant trees).
+// resolveUnit loads an OrgUnit by tenant scope. Platform catalog nodes
+// (tenant_id=0) are shared across workspaces, so a miss on the business
+// tenant falls back there before the system-admin global lookup.
 func (s *orgUnitService) resolveUnit(
 	ctx context.Context,
 	tenantID uint64,
@@ -122,11 +123,24 @@ func (s *orgUnitService) resolveUnit(
 	if err == nil {
 		return unit, nil
 	}
-	if !errors.Is(err, apprepo.ErrOrgUnitNotFound) ||
-		!types.IsSystemAdminActor(ctx) {
+	if !errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 		return nil, err
 	}
-	return s.repo.GetByIDGlobal(ctx, id)
+	if tenantID != types.PlatformOrgTenantID {
+		platformUnit, platformErr := s.repo.GetByID(
+			ctx, types.PlatformOrgTenantID, id,
+		)
+		if platformErr == nil {
+			return platformUnit, nil
+		}
+		if !errors.Is(platformErr, apprepo.ErrOrgUnitNotFound) {
+			return nil, platformErr
+		}
+	}
+	if types.IsSystemAdminActor(ctx) {
+		return s.repo.GetByIDGlobal(ctx, id)
+	}
+	return nil, err
 }
 
 func (s *orgUnitService) Update(
@@ -226,7 +240,7 @@ func (s *orgUnitService) listUnitsForActor(
 	tenantID uint64,
 ) ([]*types.OrgUnit, error) {
 	if isUnscopedOrgInviter(ctx) {
-		return s.repo.ListByTenant(ctx, tenantID)
+		return s.listUnitsIncludingPlatform(ctx, tenantID)
 	}
 	home, err := s.resolveActorHomeOrgUnit(ctx, tenantID)
 	if err != nil {
@@ -236,9 +250,52 @@ func (s *orgUnitService) listUnitsForActor(
 		return nil, err
 	}
 	if home == nil {
-		return s.repo.ListByTenant(ctx, tenantID)
+		return s.listUnitsIncludingPlatform(ctx, tenantID)
 	}
 	return s.repo.ListByPathPrefix(ctx, home.TenantID, home.Path)
+}
+
+// listUnitsIncludingPlatform merges the workspace tenant tree with the
+// shared platform catalog (tenant_id=0). Super-admin roots land in the
+// catalog; invite/member UIs still run under a business tenant_id and
+// must see those nodes or 所属组织 disappears.
+func (s *orgUnitService) listUnitsIncludingPlatform(
+	ctx context.Context,
+	tenantID uint64,
+) ([]*types.OrgUnit, error) {
+	units, err := s.repo.ListByTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if tenantID == types.PlatformOrgTenantID {
+		return units, nil
+	}
+	platform, err := s.repo.ListByTenant(ctx, types.PlatformOrgTenantID)
+	if err != nil {
+		return nil, err
+	}
+	if len(platform) == 0 {
+		return units, nil
+	}
+	seen := make(map[string]struct{}, len(units)+len(platform))
+	out := make([]*types.OrgUnit, 0, len(units)+len(platform))
+	for _, unit := range units {
+		if unit == nil {
+			continue
+		}
+		seen[unit.ID] = struct{}{}
+		out = append(out, unit)
+	}
+	for _, unit := range platform {
+		if unit == nil {
+			continue
+		}
+		if _, exists := seen[unit.ID]; exists {
+			continue
+		}
+		out = append(out, unit)
+	}
+	return out, nil
 }
 
 // ListPlatformTree returns the full admin forest: platform catalog roots
@@ -541,7 +598,7 @@ func (s *orgUnitService) ResolveActiveOrgUnit(
 
 	requestedID = strings.TrimSpace(requestedID)
 	if requestedID != "" {
-		requested, err := s.repo.GetByID(ctx, tenantID, requestedID)
+		requested, err := s.resolveUnit(ctx, tenantID, requestedID)
 		if err != nil {
 			if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 				return "", apperrors.NewBadRequestError("invalid X-Org-Unit-ID")
@@ -731,7 +788,18 @@ func (s *orgUnitService) HasHierarchy(
 	if err != nil {
 		return false, err
 	}
-	return count > 0, nil
+	if count > 0 {
+		return true, nil
+	}
+	// Platform catalog is the shared forest for all workspaces.
+	if tenantID == types.PlatformOrgTenantID {
+		return false, nil
+	}
+	platformCount, err := s.repo.CountByTenant(ctx, types.PlatformOrgTenantID)
+	if err != nil {
+		return false, err
+	}
+	return platformCount > 0, nil
 }
 
 // ListInviteableOrgUnits returns units the actor may assign when inviting.
@@ -754,7 +822,7 @@ func (s *orgUnitService) ListInviteableOrgUnits(
 				"current org unit is required to list inviteable organizations",
 			)
 		}
-		all, err := s.repo.ListByTenant(ctx, tenantID)
+		all, err := s.listUnitsIncludingPlatform(ctx, tenantID)
 		if err != nil {
 			return nil, err
 		}
@@ -769,7 +837,7 @@ func (s *orgUnitService) ListInviteableOrgUnits(
 		})
 		return all, nil
 	}
-	actor, err := s.repo.GetByID(ctx, tenantID, actorOrgUnitID)
+	actor, err := s.resolveUnit(ctx, tenantID, actorOrgUnitID)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
@@ -787,7 +855,7 @@ func (s *orgUnitService) ListInviteableOrgUnits(
 		out = append(out, actor)
 	}
 
-	descendants, err := s.repo.ListByPathPrefix(ctx, tenantID, actor.Path)
+	descendants, err := s.repo.ListByPathPrefix(ctx, actor.TenantID, actor.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -860,8 +928,7 @@ func (s *orgUnitService) CanInviteToOrgUnit(
 		if !isUnscopedOrgInviter(ctx) {
 			return false, nil
 		}
-		_, err := s.repo.GetByID(ctx, tenantID, targetOrgUnitID)
-		if err != nil {
+		if _, err := s.resolveUnit(ctx, tenantID, targetOrgUnitID); err != nil {
 			if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 				return false, nil
 			}
