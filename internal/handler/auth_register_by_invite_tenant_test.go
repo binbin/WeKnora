@@ -39,6 +39,12 @@ func (s *invitedRegistrationUserService) GenerateTokens(context.Context, *types.
 	return "access", "refresh", nil
 }
 
+func (s *invitedRegistrationUserService) BuildLoginMemberships(
+	context.Context, *types.User, *types.Tenant,
+) []types.Membership {
+	return []types.Membership{{TenantID: 42, Role: types.TenantRoleViewer}}
+}
+
 type invitedRegistrationInvitationService struct {
 	interfaces.TenantInvitationService
 	acceptErr error

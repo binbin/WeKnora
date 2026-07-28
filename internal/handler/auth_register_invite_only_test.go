@@ -15,23 +15,38 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// stubRegisterUserService is a UserService whose ONLY useful method is
-// Register; every other call panics. Using an interface embedding plus a
-// targeted override keeps the test focused on the Register handler's
-// branching logic without dragging in the entire user service surface.
+// stubRegisterUserService is a UserService whose ONLY useful methods are
+// Register / CountUsers / ListSystemAdmins / UpdateUser; every other call
+// panics via the embedded nil interface.
 type stubRegisterUserService struct {
 	interfaces.UserService
-	register func(ctx context.Context, req *types.RegisterRequest) (*types.User, error)
+	userCount      int64
+	adminCount     int64
+	register       func(ctx context.Context, req *types.RegisterRequest) (*types.User, error)
+	updatedAdmin   bool
+	lastUpdated    *types.User
 }
 
 func (s *stubRegisterUserService) Register(ctx context.Context, req *types.RegisterRequest) (*types.User, error) {
 	return s.register(ctx, req)
 }
 
-// errorCapture mirrors gin's default ErrorHandler behaviour for tests:
-// when a handler calls c.Error(), we surface it as an HTTP response so the
-// recorder reflects the real client-visible status. The production
-// middleware does the same thing in middleware/error_handler.go.
+func (s *stubRegisterUserService) CountUsers(context.Context) (int64, error) {
+	return s.userCount, nil
+}
+
+func (s *stubRegisterUserService) ListSystemAdmins(
+	context.Context, int, int,
+) ([]*types.User, int64, error) {
+	return nil, s.adminCount, nil
+}
+
+func (s *stubRegisterUserService) UpdateUser(_ context.Context, user *types.User) error {
+	s.updatedAdmin = user != nil && user.IsSystemAdmin
+	s.lastUpdated = user
+	return nil
+}
+
 func errorCapture() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
@@ -52,6 +67,7 @@ func newRegisterTestRouter(h *AuthHandler) *gin.Engine {
 	r := gin.New()
 	r.Use(errorCapture())
 	r.POST("/auth/register", h.Register)
+	r.GET("/auth/config", h.GetAuthConfig)
 	return r
 }
 
@@ -65,8 +81,6 @@ func doRegister(t *testing.T, r *gin.Engine, body any) *httptest.ResponseRecorde
 	return w
 }
 
-// validRegisterBody returns a payload that passes parameter validation, so
-// each test is exercising the gate logic and not the body parser.
 func validRegisterBody() map[string]string {
 	return map[string]string{
 		"username": "alice",
@@ -76,12 +90,9 @@ func validRegisterBody() map[string]string {
 }
 
 func TestRegister_InviteOnlyRejects(t *testing.T) {
-	// PR 3 (#1303): when auth.registration_mode=invite_only, Register
-	// must respond 403 BEFORE touching the user service. The frontend
-	// already hides the sign-up link via /auth/config; this is the
-	// server-side enforcement for direct API hits.
 	called := false
 	us := &stubRegisterUserService{
+		userCount: 1, // not empty install
 		register: func(context.Context, *types.RegisterRequest) (*types.User, error) {
 			called = true
 			return &types.User{ID: "u1"}, nil
@@ -100,17 +111,66 @@ func TestRegister_InviteOnlyRejects(t *testing.T) {
 	}
 }
 
-func TestRegister_SelfServeAllowsRegistration(t *testing.T) {
-	// Default registration_mode keeps PR 1 behaviour intact: the gate
-	// is dormant and the request reaches the user service. We don't
-	// exercise the real service here — just confirm the gate let it
-	// through by observing the stub being invoked.
+func TestRegister_InviteOnlyAllowsEmptyInstallBootstrap(t *testing.T) {
 	called := false
 	us := &stubRegisterUserService{
+		userCount:  0,
+		adminCount: 0,
 		register: func(_ context.Context, req *types.RegisterRequest) (*types.User, error) {
 			called = true
 			if req.TenantProvisioning != types.TenantProvisioningCreatePersonal {
-				t.Fatalf("default provisioning = %q, want create_personal", req.TenantProvisioning)
+				t.Fatalf("bootstrap provisioning = %q, want create_personal", req.TenantProvisioning)
+			}
+			return &types.User{ID: "u1", Email: "alice@example.com"}, nil
+		},
+	}
+	h := NewAuthHandler(&config.Config{
+		Auth: &config.AuthConfig{
+			RegistrationMode:  config.AuthRegistrationModeInviteOnly,
+			DefaultTenantMode: config.AuthDefaultTenantModeTenantless,
+		},
+	}, us, nil, nil, nil)
+
+	w := doRegister(t, newRegisterTestRouter(h), validRegisterBody())
+	if w.Code != http.StatusCreated {
+		t.Fatalf("empty install must allow bootstrap register, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatal("UserService.Register should have been invoked")
+	}
+	if !us.updatedAdmin || us.lastUpdated == nil || !us.lastUpdated.IsSystemAdmin {
+		t.Fatal("bootstrap first user must be promoted to system admin")
+	}
+}
+
+func TestGetAuthConfig_EmptyInstallReportsSelfServe(t *testing.T) {
+	us := &stubRegisterUserService{userCount: 0}
+	h := NewAuthHandler(&config.Config{
+		Auth: &config.AuthConfig{RegistrationMode: config.AuthRegistrationModeInviteOnly},
+	}, us, nil, nil, nil)
+	r := newRegisterTestRouter(h)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/auth/config", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["registration_mode"] != config.AuthRegistrationModeSelfServe {
+		t.Fatalf("empty install config mode=%v, want self_serve", payload["registration_mode"])
+	}
+}
+
+func TestRegister_SelfServeAllowsRegistration(t *testing.T) {
+	called := false
+	us := &stubRegisterUserService{
+		userCount: 1,
+		register: func(_ context.Context, req *types.RegisterRequest) (*types.User, error) {
+			called = true
+			if req.TenantProvisioning != types.TenantProvisioningTenantless {
+				t.Fatalf("default provisioning = %q, want tenantless", req.TenantProvisioning)
 			}
 			return &types.User{ID: "u1", Email: "alice@example.com"}, nil
 		},
@@ -130,6 +190,7 @@ func TestRegister_SelfServeAllowsRegistration(t *testing.T) {
 
 func TestRegister_TenantlessProvisioningFromConfig(t *testing.T) {
 	us := &stubRegisterUserService{
+		userCount: 1,
 		register: func(_ context.Context, req *types.RegisterRequest) (*types.User, error) {
 			if req.TenantProvisioning != types.TenantProvisioningTenantless {
 				t.Fatalf("provisioning = %q, want tenantless", req.TenantProvisioning)
@@ -150,20 +211,24 @@ func TestRegister_TenantlessProvisioningFromConfig(t *testing.T) {
 	}
 }
 
-func TestRegister_NilAuthConfigDoesNotPanic(t *testing.T) {
-	// Defensive: a nil Auth section means the operator hasn't set the
-	// registration mode at all, which must not crash and must keep the
-	// legacy "registration enabled" behaviour. Mirrors the nil guard in
-	// the handler so a config-loading bug doesn't take the server down.
+func TestRegister_NilAuthConfigBlocksWhenUsersExist(t *testing.T) {
+	// Nil Auth falls back to invite_only; with existing users, public
+	// registration must be rejected.
+	called := false
 	us := &stubRegisterUserService{
+		userCount: 1,
 		register: func(_ context.Context, _ *types.RegisterRequest) (*types.User, error) {
-			return &types.User{ID: "u1", Email: "alice@example.com"}, nil
+			called = true
+			return &types.User{ID: "u1"}, nil
 		},
 	}
 	h := NewAuthHandler(&config.Config{}, us, nil, nil, nil)
 
 	w := doRegister(t, newRegisterTestRouter(h), validRegisterBody())
-	if w.Code != http.StatusCreated {
-		t.Fatalf("nil Auth config must fall back to allow, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("nil Auth with existing users must be invite_only, got %d body=%s", w.Code, w.Body.String())
+	}
+	if called {
+		t.Fatal("Register must not be called")
 	}
 }

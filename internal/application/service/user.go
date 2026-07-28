@@ -569,6 +569,11 @@ func (s *userService) UpdateUser(ctx context.Context, user *types.User) error {
 	return s.userRepo.UpdateUser(ctx, user)
 }
 
+// CountUsers returns the total number of registered accounts.
+func (s *userService) CountUsers(ctx context.Context) (int64, error) {
+	return s.userRepo.CountUsers(ctx)
+}
+
 // ListSystemAdmins lists users with IsSystemAdmin=true. Thin pass-through
 // to the repository; the handler enforces SystemAdmin gating, so the
 // service does not duplicate the role check here.

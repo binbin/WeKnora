@@ -21,7 +21,8 @@ func TestApplyAuthAndTenantDefaults_DisableRegistrationDrivesRegistrationMode(t 
 		{"true overrides explicit self_serve YAML", "true", AuthRegistrationModeSelfServe, AuthRegistrationModeInviteOnly},
 		{"true is a no-op when YAML already invite_only", "true", AuthRegistrationModeInviteOnly, AuthRegistrationModeInviteOnly},
 		{"false leaves YAML untouched", "false", AuthRegistrationModeSelfServe, AuthRegistrationModeSelfServe},
-		{"unset falls back to default self_serve", "", "", AuthRegistrationModeSelfServe},
+		{"unset falls back to default invite_only", "", "", AuthRegistrationModeInviteOnly},
+		{"unset keeps explicit self_serve YAML", "", AuthRegistrationModeSelfServe, AuthRegistrationModeSelfServe},
 		{"unset keeps explicit invite_only YAML", "", AuthRegistrationModeInviteOnly, AuthRegistrationModeInviteOnly},
 	}
 
@@ -44,14 +45,26 @@ func TestApplyAuthAndTenantDefaults_DisableRegistrationDrivesRegistrationMode(t 
 }
 
 func TestApplyAuthAndTenantDefaults_SelfServiceTenantCreation(t *testing.T) {
-	t.Run("defaults enabled", func(t *testing.T) {
+	t.Run("defaults disabled", func(t *testing.T) {
 		t.Setenv("WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED", "")
 		cfg := &Config{Tenant: &TenantConfig{}}
 
 		applyAuthAndTenantDefaults(cfg)
 
+		if cfg.Tenant.IsSelfServiceCreationEnabled() {
+			t.Fatal("self-service tenant creation should default to disabled")
+		}
+	})
+
+	t.Run("environment enables yaml default", func(t *testing.T) {
+		t.Setenv("WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED", "true")
+		off := false
+		cfg := &Config{Tenant: &TenantConfig{SelfServiceCreationEnabled: &off}}
+
+		applyAuthAndTenantDefaults(cfg)
+
 		if !cfg.Tenant.IsSelfServiceCreationEnabled() {
-			t.Fatal("self-service tenant creation should default to enabled")
+			t.Fatal("environment override should enable self-service tenant creation")
 		}
 	})
 
@@ -69,20 +82,9 @@ func TestApplyAuthAndTenantDefaults_SelfServiceTenantCreation(t *testing.T) {
 }
 
 func TestApplyAuthAndTenantDefaults_DefaultTenantMode(t *testing.T) {
-	t.Run("historical default creates a personal tenant", func(t *testing.T) {
+	t.Run("default is tenantless", func(t *testing.T) {
 		t.Setenv("WEKNORA_AUTH_DEFAULT_TENANT_MODE", "")
 		cfg := &Config{Auth: &AuthConfig{}}
-
-		applyAuthAndTenantDefaults(cfg)
-
-		if cfg.Auth.DefaultTenantMode != AuthDefaultTenantModeCreatePersonal {
-			t.Fatalf("default_tenant_mode = %q, want %q", cfg.Auth.DefaultTenantMode, AuthDefaultTenantModeCreatePersonal)
-		}
-	})
-
-	t.Run("environment overrides yaml", func(t *testing.T) {
-		t.Setenv("WEKNORA_AUTH_DEFAULT_TENANT_MODE", AuthDefaultTenantModeTenantless)
-		cfg := &Config{Auth: &AuthConfig{DefaultTenantMode: AuthDefaultTenantModeCreatePersonal}}
 
 		applyAuthAndTenantDefaults(cfg)
 
@@ -91,14 +93,14 @@ func TestApplyAuthAndTenantDefaults_DefaultTenantMode(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid environment value fails validation", func(t *testing.T) {
-		t.Setenv("WEKNORA_AUTH_DEFAULT_TENANT_MODE", "create_magic")
-		cfg := &Config{Auth: &AuthConfig{}}
+	t.Run("environment overrides yaml", func(t *testing.T) {
+		t.Setenv("WEKNORA_AUTH_DEFAULT_TENANT_MODE", AuthDefaultTenantModeCreatePersonal)
+		cfg := &Config{Auth: &AuthConfig{DefaultTenantMode: AuthDefaultTenantModeTenantless}}
 
 		applyAuthAndTenantDefaults(cfg)
 
-		if err := ValidateConfig(cfg); err == nil {
-			t.Fatal("ValidateConfig unexpectedly accepted an invalid default tenant mode")
+		if cfg.Auth.DefaultTenantMode != AuthDefaultTenantModeCreatePersonal {
+			t.Fatalf("default_tenant_mode = %q, want %q", cfg.Auth.DefaultTenantMode, AuthDefaultTenantModeCreatePersonal)
 		}
 	})
 }

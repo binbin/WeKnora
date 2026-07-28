@@ -76,7 +76,7 @@ func NewAuthHandler(configInfo *config.Config,
 
 // resolveRegistrationMode returns the currently active registration mode.
 // Priority: DB system_settings > cfg (which already absorbed the legacy
-// DISABLE_REGISTRATION env coerce at startup) > "self_serve" hard default.
+// DISABLE_REGISTRATION env coerce at startup) > "invite_only" hard default.
 //
 // Centralised here so /auth/register and /auth/config stay in lock-step —
 // otherwise a SystemAdmin's UI edit could affect one path and not the other.
@@ -84,7 +84,7 @@ func (h *AuthHandler) resolveRegistrationMode(ctx context.Context) string {
 	// cfg-derived default: empty is impossible after applyAuthAndTenantDefaults,
 	// but be defensive in case AuthHandler was constructed before that ran
 	// (the NewAuthHandler guard already logged in that case).
-	def := config.AuthRegistrationModeSelfServe
+	def := config.AuthRegistrationModeInviteOnly
 	if h.configInfo != nil && h.configInfo.Auth != nil {
 		if m := strings.TrimSpace(h.configInfo.Auth.RegistrationMode); m != "" {
 			def = m
@@ -105,7 +105,7 @@ func (h *AuthHandler) resolveRegistrationMode(ctx context.Context) string {
 // public password registrations. Invitation registration never uses this
 // value: the invitation itself supplies the target tenant.
 func (h *AuthHandler) resolveDefaultTenantMode(ctx context.Context) types.TenantProvisioningMode {
-	def := config.AuthDefaultTenantModeCreatePersonal
+	def := config.AuthDefaultTenantModeTenantless
 	if h.configInfo != nil && h.configInfo.Auth != nil {
 		if mode := strings.TrimSpace(h.configInfo.Auth.DefaultTenantMode); mode != "" {
 			def = mode
@@ -120,10 +120,35 @@ func (h *AuthHandler) resolveDefaultTenantMode(ctx context.Context) types.Tenant
 			def,
 		)
 	}
-	if mode == config.AuthDefaultTenantModeTenantless {
-		return types.TenantProvisioningTenantless
+	if mode == config.AuthDefaultTenantModeCreatePersonal {
+		return types.TenantProvisioningCreatePersonal
 	}
-	return types.TenantProvisioningCreatePersonal
+	return types.TenantProvisioningTenantless
+}
+
+// resolveEffectiveRegistrationMode returns the mode the public API and
+// /auth/config should expose. When the deployment has zero users, the
+// first public registration is always allowed (bootstrap), even if the
+// configured mode is invite_only — otherwise no one could ever create
+// the initial system admin.
+func (h *AuthHandler) resolveEffectiveRegistrationMode(ctx context.Context) string {
+	if h.isEmptyDeployment(ctx) {
+		return config.AuthRegistrationModeSelfServe
+	}
+	return h.resolveRegistrationMode(ctx)
+}
+
+// isEmptyDeployment reports whether any user account exists yet.
+func (h *AuthHandler) isEmptyDeployment(ctx context.Context) bool {
+	if h.userService == nil {
+		return false
+	}
+	total, err := h.userService.CountUsers(ctx)
+	if err != nil {
+		logger.Warnf(ctx, "CountUsers for bootstrap check failed: %v", err)
+		return false
+	}
+	return total == 0
 }
 
 // Register godoc
@@ -142,13 +167,18 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	logger.Info(ctx, "Start user registration")
 
+	// Empty-install bootstrap: allow the very first public registration
+	// even when auth.registration_mode=invite_only, so a fresh deploy can
+	// create the initial system admin without a pre-existing invite.
+	isBootstrap := h.isEmptyDeployment(ctx)
+
 	// 当 auth.registration_mode=invite_only 时，public 注册被关闭。
-	// 优先级：DB system_settings > cfg.Auth.RegistrationMode > "self_serve"。
+	// 优先级：DB system_settings > cfg.Auth.RegistrationMode > "invite_only"。
 	// SystemAdmin 通过「全局设置」UI 实时切换 self_serve / invite_only，立即
 	// 生效，不需要重启服务。历史变量 DISABLE_REGISTRATION=true 仍在 config
 	// 启动阶段被等价提升为 invite_only（applyAuthAndTenantDefaults），
 	// 作为 cfg-default 进入 resolveRegistrationMode。
-	if h.resolveRegistrationMode(ctx) == config.AuthRegistrationModeInviteOnly {
+	if !isBootstrap && h.resolveRegistrationMode(ctx) == config.AuthRegistrationModeInviteOnly {
 		logger.Warn(ctx, "Registration rejected: auth.registration_mode=invite_only")
 		appErr := errors.NewForbiddenError("Registration is invite-only")
 		c.Error(appErr)
@@ -175,7 +205,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	req.Username = secutils.SanitizeForLog(req.Username)
 	req.Email = secutils.SanitizeForLog(req.Email)
-	req.TenantProvisioning = h.resolveDefaultTenantMode(ctx)
+	if isBootstrap {
+		// First user needs a home workspace to invite others into, even
+		// when the steady-state default is tenantless.
+		req.TenantProvisioning = types.TenantProvisioningCreatePersonal
+	} else {
+		req.TenantProvisioning = h.resolveDefaultTenantMode(ctx)
+	}
 	// Call service to register user
 	user, err := h.userService.Register(ctx, &req)
 	if err != nil {
@@ -183,6 +219,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		appErr := errors.NewBadRequestError(err.Error())
 		c.Error(appErr)
 		return
+	}
+
+	if isBootstrap {
+		h.promoteBootstrapSystemAdmin(ctx, user)
 	}
 
 	// Return success response
@@ -194,6 +234,28 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	logger.Infof(ctx, "User registered successfully: %s", secutils.SanitizeForLog(user.Email))
 	c.JSON(http.StatusCreated, response)
+}
+
+// promoteBootstrapSystemAdmin marks the first account as system admin when
+// the install still has none. Best-effort: registration already succeeded.
+func (h *AuthHandler) promoteBootstrapSystemAdmin(ctx context.Context, user *types.User) {
+	if user == nil || h.userService == nil {
+		return
+	}
+	_, total, err := h.userService.ListSystemAdmins(ctx, 0, 1)
+	if err != nil {
+		logger.Warnf(ctx, "bootstrap admin check failed for %s: %v", user.ID, err)
+		return
+	}
+	if total > 0 {
+		return
+	}
+	user.IsSystemAdmin = true
+	if err := h.userService.UpdateUser(ctx, user); err != nil {
+		logger.Warnf(ctx, "bootstrap promote system admin failed for %s: %v", user.ID, err)
+		return
+	}
+	logger.Infof(ctx, "bootstrap: promoted first user %s to system admin", user.ID)
 }
 
 // Login godoc
@@ -706,7 +768,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 func (h *AuthHandler) GetAuthConfig(c *gin.Context) {
 	// Same source-of-truth as Register's gate, so the UI hide-the-button
 	// signal can never disagree with the API enforcement signal.
-	mode := h.resolveRegistrationMode(c.Request.Context())
+	mode := h.resolveEffectiveRegistrationMode(c.Request.Context())
 	c.JSON(http.StatusOK, gin.H{
 		"success":           true,
 		"registration_mode": mode,

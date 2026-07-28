@@ -103,12 +103,12 @@ services:
       - COS_TEMP_REGION=${COS_TEMP_REGION:-}
 
       # 认证 / 租户 / RBAC / 审计
-      # 禁止新用户注册（生产建议 true）
-      - DISABLE_REGISTRATION=${DISABLE_REGISTRATION:-false}
-      # 公开注册后的默认空间策略：create_personal（默认，自动创建个人空间）/ tenantless
-      - WEKNORA_AUTH_DEFAULT_TENANT_MODE=${WEKNORA_AUTH_DEFAULT_TENANT_MODE:-create_personal}
-      # 是否允许普通用户登录后主动创建空间（默认 true；false 仅能邀请加入，超管不受影响）
-      - WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED=${WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED:-true}
+      # 禁止公开注册（默认 true → invite_only；空库首个注册仍可自举超管）
+      - DISABLE_REGISTRATION=${DISABLE_REGISTRATION:-true}
+      # 公开注册空间策略：tenantless（默认，不自动建个人空间）/ create_personal
+      - WEKNORA_AUTH_DEFAULT_TENANT_MODE=${WEKNORA_AUTH_DEFAULT_TENANT_MODE:-tenantless}
+      # 是否允许普通用户自建空间（默认 false；仅邀请加入，超管/平台 Key 不受影响）
+      - WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED=${WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED:-false}
       # 启用跨租户访问（需配合用户的 CanAccessAllTenants 权限；默认 false
       - WEKNORA_TENANT_ENABLE_CROSS_TENANT_ACCESS=${WEKNORA_TENANT_ENABLE_CROSS_TENANT_ACCESS:-false}
       # 新建空间默认存储配额（GB，默认 10）

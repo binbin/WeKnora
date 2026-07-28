@@ -268,17 +268,17 @@ type AuditConfig struct {
 // AuthConfig governs the user authentication entry points.
 type AuthConfig struct {
 	// RegistrationMode controls who may call POST /auth/register.
-	//   "self_serve" (default) — anyone may register; a new tenant is
-	//                            auto-created and the registrant becomes
-	//                            its Owner. Preserves existing behaviour.
-	//   "invite_only"          — public registration is rejected; new
+	//   "invite_only" (default) — public registration is rejected; new
 	//                            users only enter through the invitation
-	//                            flow added in PR 3.
+	//                            flow. An empty install still allows the
+	//                            first public registration as bootstrap.
+	//   "self_serve"           — anyone may register; tenant provisioning
+	//                            follows default_tenant_mode.
 	RegistrationMode string `yaml:"registration_mode" json:"registration_mode"`
 	// DefaultTenantMode controls public password-registration provisioning.
-	// create_personal preserves the historical one-user-one-workspace default;
-	// tenantless creates only the identity and waits for an invitation or an
-	// explicit self-service tenant creation.
+	// tenantless (default) creates only the identity and waits for an
+	// invitation or an explicit workspace provision; create_personal
+	// preserves the historical one-user-one-workspace behaviour.
 	DefaultTenantMode string `yaml:"default_tenant_mode" json:"default_tenant_mode"`
 }
 
@@ -795,14 +795,15 @@ func applyAgentEnvOverrides(cfg *Config) {
 // to enable RBAC or switch registration mode without editing config.yaml.
 //
 // Defaults:
-//   - auth.registration_mode  -> "self_serve" (preserves pre-RBAC behaviour)
-//   - auth.default_tenant_mode -> "create_personal" (preserves the
-//     historical registration behaviour)
+//   - auth.registration_mode  -> "invite_only" (public sign-up closed;
+//     empty installs still allow the first registration as bootstrap)
+//   - auth.default_tenant_mode -> "tenantless" (no auto personal workspace
+//     on ordinary public registration; invite flow supplies the tenant)
 //   - tenant.enable_rbac      -> true (enforce role checks unless an
 //     operator explicitly opts into the logging-only rollout window via
 //     config.yaml `enable_rbac: false` or `WEKNORA_TENANT_ENABLE_RBAC=false`).
-//   - tenant.self_service_creation_enabled -> true (preserves ordinary
-//     authenticated users' ability to create workspaces).
+//   - tenant.self_service_creation_enabled -> false (ordinary users join
+//     via invitation; they cannot create additional workspaces)
 //
 // Env overrides (when set and non-empty):
 //   - WEKNORA_AUTH_DEFAULT_TENANT_MODE ("create_personal"/"tenantless")
@@ -839,7 +840,7 @@ func applyAuthAndTenantDefaults(cfg *Config) {
 	}
 
 	if strings.TrimSpace(cfg.Auth.RegistrationMode) == "" {
-		cfg.Auth.RegistrationMode = AuthRegistrationModeSelfServe
+		cfg.Auth.RegistrationMode = AuthRegistrationModeInviteOnly
 	}
 	if value := strings.TrimSpace(os.Getenv("WEKNORA_AUTH_DEFAULT_TENANT_MODE")); value != "" {
 		cfg.Auth.DefaultTenantMode = value
