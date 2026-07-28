@@ -163,9 +163,13 @@ const currentOrgUnitLabel = computed(() => {
 async function reload() {
   loading.value = true
   try {
-    // 仅跨空间超管拉平台全林。isSystemAdmin 但已绑定当前空间的管理员
-    // 必须走空间内 ListTree，否则会绕过「从本级起管下级」的作用域。
-    const usePlatformForest = authStore.canAccessAllTenants === true
+    // System admins create top-level nodes in the platform catalog
+    // (tenant_id=0). Without scope=platform those roots never appear in
+    // the tree, so parent select stays empty and child creation is
+    // impossible. Cross-tenant operators need the same forest view.
+    const usePlatformForest =
+      authStore.isSystemAdmin === true ||
+      authStore.canAccessAllTenants === true
     const [units, mine] = await Promise.all([
       listOrgUnits(true, { platform: usePlatformForest }),
       listMyOrgUnitMemberships(),

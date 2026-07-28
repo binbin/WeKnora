@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.4] - 2026-07-28
+
+### Bug Fixes
+
+- **FIXED**: **System admin org-tree visibility** — Settings → 组织层级 now
+  loads the platform catalog (`scope=platform`) for system admins, so
+  root orgs created under `tenant_id=0` appear in the tree and can be
+  selected as parents when adding child units.
+
 ## [0.8.3] - 2026-07-28
 
 ### Improvements
