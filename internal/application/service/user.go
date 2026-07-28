@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -37,6 +38,12 @@ var (
 	// It is exported so HTTP handlers can translate the failure to a 400
 	// without exposing bcrypt or persistence errors.
 	ErrPasswordPolicy = errors.New("password must be 8-32 characters and contain at least one letter and one number")
+
+	// ErrChineseDisplayName is returned when the registration display name
+	// is not exactly 2–20 Han characters (no Latin/digits/punctuation).
+	ErrChineseDisplayName = errors.New(
+		"name must be 2-20 Chinese characters",
+	)
 )
 
 // ValidatePasswordPolicy keeps administrative password resets aligned with
@@ -59,6 +66,28 @@ func ValidatePasswordPolicy(password string) error {
 	}
 	if !hasLetter || !hasNumber {
 		return ErrPasswordPolicy
+	}
+	return nil
+}
+
+const (
+	chineseDisplayNameMinRunes = 2
+	chineseDisplayNameMaxRunes = 20
+)
+
+// ValidateChineseDisplayName enforces the registration name policy:
+// only Han characters, length 2–20 (rune count).
+func ValidateChineseDisplayName(name string) error {
+	name = strings.TrimSpace(name)
+	runeCount := utf8.RuneCountInString(name)
+	if runeCount < chineseDisplayNameMinRunes ||
+		runeCount > chineseDisplayNameMaxRunes {
+		return ErrChineseDisplayName
+	}
+	for _, runeValue := range name {
+		if !unicode.Is(unicode.Han, runeValue) {
+			return ErrChineseDisplayName
+		}
 	}
 	return nil
 }
@@ -117,6 +146,9 @@ func (s *userService) Register(ctx context.Context, req *types.RegisterRequest) 
 	// Validate input
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		return nil, errors.New("username, email and password are required")
+	}
+	if err := ValidateChineseDisplayName(req.Username); err != nil {
+		return nil, err
 	}
 
 	// Check if user already exists

@@ -448,13 +448,11 @@ const formRules = computed(() => ({
 const registerRules = computed(() => ({
   username: [
     { required: true, message: t('auth.usernameRequired'), type: 'error' },
-    { min: 2, message: t('auth.usernameMinLength'), type: 'error' },
-    { max: 20, message: t('auth.usernameMaxLength'), type: 'error' },
     {
-      pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/,
+      pattern: /^[\u4e00-\u9fff]{2,20}$/,
       message: t('auth.usernameInvalid'),
-      type: 'error'
-    }
+      type: 'error',
+    },
   ],
   email: [
     { required: true, message: t('auth.emailRequired'), type: 'error' },

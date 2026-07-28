@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.6] - 2026-07-28
+
+### Improvements
+
+- **IMPROVED**: **Registration display name** — username/姓名 accepts only
+  2–20 Chinese (Han) characters on both the registration form and the
+  server `Register` path (including invite-link signup).
+
 ## [0.8.5] - 2026-07-28
 
 ### Bug Fixes
