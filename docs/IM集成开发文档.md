@@ -580,7 +580,10 @@ Mattermost 为**自建部署**，当前仅支持 **Webhook** 模式：**出站 W
 **前置条件**
 
 1. 租户已配置 TreeRAG Cloud 凭证（设置页）
-2. 实例配置可达的公网 API 基址：`APP_EXTERNAL_URL`（或 `WECHAT_OA_CALLBACK_BASE_URL`）
+2. 实例配置可达的公网 API 基址：`APP_EXTERNAL_URL`（或 `WECHAT_OA_CALLBACK_BASE_URL`）。
+   不可为 `localhost` / `127.0.0.1`；Cloud 需能回调到：
+   - `POST {base}/api/v1/im/wechat_oa/binding/complete`
+   - `POST {base}/api/v1/im/callback/{channel_id}`
 3. Cloud 侧已开通微信开放平台第三方平台能力（本仓库只实现实例侧契约）
 
 **绑定步骤**

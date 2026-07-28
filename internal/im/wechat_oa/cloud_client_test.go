@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,5 +83,29 @@ func TestHTTPCloudClient_CreatePreAuthAndSendText(t *testing.T) {
 	}
 	if err := client.Unbind(ctx, "wxapp"); err != nil {
 		t.Fatalf("Unbind: %v", err)
+	}
+}
+
+func TestHTTPCloudClient_CreatePreAuth_RequiresCallbackSecret(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/oa/preauth", func(writer http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(writer).Encode(PreAuthResponse{
+			PreAuthID: "pa_1",
+			QRCodeURL: "https://example.com/qr.png",
+		})
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	client := NewHTTPCloudClient(server.URL, "app", "secret", server.Client())
+	_, err := client.CreatePreAuth(context.Background(), PreAuthRequest{
+		InstanceBaseURL: "https://inst.example",
+		TenantID:        1,
+		AgentID:         "ag1",
+		State:           "st1",
+	})
+	if err == nil || !strings.Contains(err.Error(), "callback_secret") {
+		t.Fatalf("expected callback_secret error, got %v", err)
 	}
 }

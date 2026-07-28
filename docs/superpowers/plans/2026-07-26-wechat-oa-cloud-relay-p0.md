@@ -66,7 +66,7 @@ Message:
 
 | Method | Path (under TreeRAGCloudBaseURL) | Purpose |
 |--------|----------------------------------|---------|
-| POST | `/api/v1/oa/preauth` | Body: `{instance_base_url,tenant_id,agent_id,state}` → `{preauth_id,qrcode_url,expires_at}` |
+| POST | `/api/v1/oa/preauth` | Body: `{instance_base_url,tenant_id,agent_id,state}` → `{preauth_id,qrcode_url,expires_at,callback_secret}` |
 | GET | `/api/v1/oa/preauth/{id}` | Sync status if Cloud→instance callback missed |
 | POST | `/api/v1/oa/bindings/{authorizer_appid}/unbind` | Disable Cloud binding |
 | POST | `/api/v1/oa/message/send` | Body: `{authorizer_appid,touser,msgtype,text:{content}}` |

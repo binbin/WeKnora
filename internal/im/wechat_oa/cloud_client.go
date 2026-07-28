@@ -89,6 +89,10 @@ func (client *HTTPCloudClient) CreatePreAuth(
 	if result.PreAuthID == "" || result.QRCodeURL == "" {
 		return nil, fmt.Errorf("wechat_oa cloud: empty preauth response")
 	}
+	// BindingComplete HMAC requires this secret; fail early if Cloud omitted it.
+	if strings.TrimSpace(result.CallbackSecret) == "" {
+		return nil, fmt.Errorf("wechat_oa cloud: missing callback_secret")
+	}
 	return &result, nil
 }
 

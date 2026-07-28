@@ -1335,6 +1335,21 @@ func (s *Service) GetChannelByIDAndTenant(channelID string, tenantID uint64) (*I
 	return &ch, nil
 }
 
+// GetChannelByBotIdentity finds an active channel by its bot_identity key.
+func (s *Service) GetChannelByBotIdentity(botIdentity string) (*IMChannel, error) {
+	botIdentity = strings.TrimSpace(botIdentity)
+	if botIdentity == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var channel IMChannel
+	if err := s.db.Where(
+		"bot_identity = ? AND deleted_at IS NULL", botIdentity,
+	).First(&channel).Error; err != nil {
+		return nil, err
+	}
+	return &channel, nil
+}
+
 // isDuplicate checks if a message has already been processed.
 //
 // Multi-instance mode (Redis available): uses Redis SetNX for cross-instance

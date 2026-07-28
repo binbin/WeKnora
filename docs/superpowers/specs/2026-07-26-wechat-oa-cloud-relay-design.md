@@ -58,8 +58,8 @@
 
 粉丝消息
   → 微信推送 Cloud 第三方 URL
-    → Cloud 规范化 + 签名
-      → 实例 /api/v1/im/callback/wechat_oa/{channel_id}
+  → Cloud 规范化 + 签名
+      → 实例 /api/v1/im/callback/{channel_id}
         → wechat_oa.Adapter → IM Service / Agent QA
           → SendReply → Cloud → 微信客服消息 API
 ```
@@ -98,7 +98,7 @@
 ## 扫码绑定流
 
 1. 用户在发布渠道点击「绑定公众号」。
-2. 实例校验：已配置 TreeRAG Cloud 凭证 + 可达回调基址（`PUBLIC_BASE_URL` 或 `WECHAT_OA_CALLBACK_BASE_URL`）；否则禁用并提示。
+2. 实例校验：已配置 TreeRAG Cloud 凭证 + 可达回调基址（`APP_EXTERNAL_URL` 或 `WECHAT_OA_CALLBACK_BASE_URL`）；否则禁用并提示。
 3. 实例 `POST` Cloud 预授权（租户、智能体、实例回调基址、一次性 `state`，TTL 约 30 分钟）。
 4. Cloud 调微信 `create_preauthcode`，返回授权二维码/链接给前端。
 5. 公众号管理员扫码确认权限集（消息、客服、素材等）。
@@ -122,7 +122,7 @@
 
 1. 微信推送到 Cloud；Cloud **5 秒内**回 `success`，再异步中转实例。
 2. Cloud 按 `authorizer_appid` 查 binding，构造 `RelayEvent`，HMAC 签名后  
-   `POST {instance}/api/v1/im/callback/wechat_oa/{channel_id}`。
+   `POST {instance}/api/v1/im/callback/{channel_id}`。
 3. `wechat_oa.Adapter` 转为 `im.IncomingMessage`，进入现有 IM 会话映射 / 限流 / Agent QA。
 4. 幂等键：微信 `MsgId` 或 Cloud `relay_event_id`，防止重试双答。
 
@@ -164,9 +164,9 @@
 建议管理 API（需登录 / 渠道管理能力）：
 
 - `POST /api/v1/agents/:id/wechat-oa/preauth` — 申请扫码
-- `GET /api/v1/wechat-oa/bindings/:id/status` — 轮询状态
+- `GET /api/v1/wechat-oa/preauth/:id` — 轮询状态
 - `POST /api/v1/im/wechat_oa/binding/complete` — Cloud 回调完成绑定（HMAC）
-- `POST /api/v1/im/callback/wechat_oa/:channel_id` — Cloud 消息中转（HMAC）
+- `POST /api/v1/im/callback/:channel_id` — Cloud 消息中转（HMAC；与其它 IM 共用路径）
 - 现有 IM 渠道 CRUD / toggle / delete 扩展支持 `wechat_oa`
 
 Cloud 侧（概念）：第三方回调 URL、预授权、发消息、素材代理、binding CRUD；细节在 Cloud 仓库实现，本仓库以 client 契约为准。

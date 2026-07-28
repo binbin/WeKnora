@@ -97,7 +97,7 @@
       </div>
 
       <!-- Step 1: Basic -->
-      <div v-if="wizardStep === 0" class="im-step-body">
+      <div v-if="currentWizardStepKey === 'basic'" class="im-step-body">
         <section class="setting-drawer__section im-drawer__section">
           <h4 class="setting-drawer__section-title">{{ $t('agentEditor.im.sectionChannel') }}</h4>
 
@@ -145,8 +145,8 @@
       </div>
 
       <!-- Step 2: Connection -->
-      <div v-else-if="wizardStep === 1" class="im-step-body">
-        <section v-if="formData.platform !== 'wechat' && formData.platform !== 'wechat_oa'" class="setting-drawer__section im-drawer__section">
+      <div v-else-if="currentWizardStepKey === 'connection'" class="im-step-body">
+        <section class="setting-drawer__section im-drawer__section">
           <h4 class="setting-drawer__section-title">{{ $t('agentEditor.im.sectionAccess') }}</h4>
 
           <div class="form-item">
@@ -187,7 +187,8 @@
           </div>
         </section>
 
-        <section class="setting-drawer__section im-drawer__section">
+        <section v-if="platformSupportsThread(formData.platform)"
+          class="setting-drawer__section im-drawer__section">
           <h4 class="setting-drawer__section-title">{{ $t('agentEditor.im.sectionSession') }}</h4>
           <div class="form-item">
             <label class="form-label required">{{ $t('agentEditor.im.sessionMode') }}</label>
@@ -199,7 +200,7 @@
               </button>
               <button type="button" class="option-chip"
                 :class="{ 'option-chip--active': formData.session_mode === 'thread' }"
-                :disabled="!platformSupportsThread(formData.platform)" @click="formData.session_mode = 'thread'">
+                @click="formData.session_mode = 'thread'">
                 {{ $t('agentEditor.im.sessionModeThread') }}
               </button>
             </div>
@@ -224,7 +225,7 @@
       </div>
 
       <!-- Step 3: File knowledge base -->
-      <div v-else-if="wizardStep === 2" class="im-step-body">
+      <div v-else-if="currentWizardStepKey === 'knowledge'" class="im-step-body">
         <section class="setting-drawer__section im-drawer__section">
           <h4 class="setting-drawer__section-title">{{ $t('agentEditor.im.sectionKnowledge') }}</h4>
           <div class="form-item">
@@ -239,7 +240,7 @@
       </div>
 
       <!-- Step 4: Credentials -->
-      <div v-else class="im-step-body">
+      <div v-else-if="currentWizardStepKey === 'credentials'" class="im-step-body">
         <section class="setting-drawer__section im-drawer__section">
           <h4 class="setting-drawer__section-title">{{ $t('agentEditor.im.sectionCredentials') }}</h4>
           <div class="drawer-form">
@@ -702,19 +703,6 @@ const editingEnabled = ref(true);
 const wizardStep = ref(0);
 const channelNameTouched = ref(false);
 
-const stepTitles = computed(() => [
-  t('agentEditor.im.stepBasic'),
-  t('agentEditor.im.stepConnection'),
-  t('agentEditor.im.stepKnowledge'),
-  t('agentEditor.im.stepCredentials'),
-]);
-
-const drawerStepDescription = computed(() => stepTitles.value[wizardStep.value] ?? '');
-
-const drawerConfirmText = computed(() =>
-  wizardStep.value < stepTitles.value.length - 1 ? t('common.next') : t('common.save'),
-);
-
 const platformOptions = computed(() => ([
   { value: 'wecom' as IMPlatform, label: t('agentEditor.im.wecom'), logo: wecomLogo },
   { value: 'feishu' as IMPlatform, label: t('agentEditor.im.feishu'), logo: feishuLogo },
@@ -728,6 +716,76 @@ const platformOptions = computed(() => ([
   { value: 'qqbot' as IMPlatform, label: t('agentEditor.im.qqbot'), logo: qqbotLogo },
   { value: 'yunzhijia' as IMPlatform, label: t('agentEditor.im.yunzhijia'), logo: yunzhijiaLogo },
 ]));
+
+// Knowledge base options for file-to-KB feature
+const knowledgeBases = ref<{ id: string; name: string }[]>([]);
+
+// WeChat QR code binding state
+const wechatQRContent = ref('');  // raw text to encode as QR code
+const wechatQRImgUrl = ref('');   // generated QR image URL
+const wechatQRCode = ref('');     // opaque token for polling status
+const wechatQRStatus = ref<string>('');
+const wechatLoading = ref(false);
+let wechatPollActive = false;
+let wechatPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+// WeChat OA Cloud preauth QR binding state
+const wechatOaQRImgUrl = ref('');
+const wechatOaPreauthId = ref('');
+const wechatOaQRStatus = ref<string>('');
+const wechatOaLoading = ref(false);
+let wechatOaPollActive = false;
+let wechatOaPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+const WECHAT_OA_POLL_INTERVAL_MS = 2000;
+
+const defaultCredentials = (): Record<string, any> => ({});
+
+const formData = ref({
+  target_agent_id: '',
+  platform: 'wecom' as IMPlatform,
+  name: '',
+  mode: 'websocket' as 'webhook' | 'websocket' | 'longpoll' | 'cloud_relay',
+  output_mode: 'stream' as 'stream' | 'full',
+  session_mode: 'user' as 'user' | 'thread',
+  knowledge_base_id: '',
+  credentials: defaultCredentials(),
+});
+
+type WizardStepKey = 'basic' | 'connection' | 'knowledge' | 'credentials';
+
+function isWechatFamilyPlatform(platform: string): boolean {
+  return platform === 'wechat' || platform === 'wechat_oa';
+}
+
+// WeChat family uses fixed mode/output and has no thread/file-ingest UX yet.
+const wizardStepKeys = computed((): WizardStepKey[] => {
+  if (isWechatFamilyPlatform(formData.value.platform)) {
+    return ['basic', 'credentials'];
+  }
+  return ['basic', 'connection', 'knowledge', 'credentials'];
+});
+
+const stepTitleByKey: Record<WizardStepKey, string> = {
+  basic: 'agentEditor.im.stepBasic',
+  connection: 'agentEditor.im.stepConnection',
+  knowledge: 'agentEditor.im.stepKnowledge',
+  credentials: 'agentEditor.im.stepCredentials',
+};
+
+const stepTitles = computed(() =>
+  wizardStepKeys.value.map((key) => t(stepTitleByKey[key])),
+);
+
+const currentWizardStepKey = computed(
+  (): WizardStepKey => wizardStepKeys.value[wizardStep.value] ?? 'basic',
+);
+
+const drawerStepDescription = computed(() => stepTitles.value[wizardStep.value] ?? '');
+
+const drawerConfirmText = computed(() =>
+  wizardStep.value < stepTitles.value.length - 1 ? t('common.next') : t('common.save'),
+);
 
 // Feishu and Lark are the same product on separate clouds, so each has its own
 // open platform console. Bots must be created on the one matching the channel.
@@ -764,41 +822,6 @@ async function handleDrawerConfirm() {
   }
   await handleSave();
 }
-
-// Knowledge base options for file-to-KB feature
-const knowledgeBases = ref<{ id: string; name: string }[]>([]);
-
-// WeChat QR code binding state
-const wechatQRContent = ref('');  // raw text to encode as QR code
-const wechatQRImgUrl = ref('');   // generated QR image URL
-const wechatQRCode = ref('');     // opaque token for polling status
-const wechatQRStatus = ref<string>('');
-const wechatLoading = ref(false);
-let wechatPollActive = false;
-let wechatPollTimer: ReturnType<typeof setTimeout> | null = null;
-
-// WeChat OA Cloud preauth QR binding state
-const wechatOaQRImgUrl = ref('');
-const wechatOaPreauthId = ref('');
-const wechatOaQRStatus = ref<string>('');
-const wechatOaLoading = ref(false);
-let wechatOaPollActive = false;
-let wechatOaPollTimer: ReturnType<typeof setTimeout> | null = null;
-
-const WECHAT_OA_POLL_INTERVAL_MS = 2000;
-
-const defaultCredentials = (): Record<string, any> => ({});
-
-const formData = ref({
-  target_agent_id: '',
-  platform: 'wecom' as IMPlatform,
-  name: '',
-  mode: 'websocket' as 'webhook' | 'websocket' | 'longpoll' | 'cloud_relay',
-  output_mode: 'stream' as 'stream' | 'full',
-  session_mode: 'user' as 'user' | 'thread',
-  knowledge_base_id: '',
-  credentials: defaultCredentials(),
-});
 
 const channelMenuOptions = (channel: IMChannel | IMChannelOverview) => ([
   {
@@ -861,6 +884,10 @@ watch(
     }
     if (!platformSupportsThread(p)) {
       formData.value.session_mode = 'user';
+    }
+    // Clamp step when switching to a shorter wizard (e.g. wechat family).
+    if (wizardStep.value >= wizardStepKeys.value.length) {
+      wizardStep.value = Math.max(0, wizardStepKeys.value.length - 1);
     }
   },
 );
@@ -1015,11 +1042,13 @@ async function startWeChatOABinding() {
     startWeChatOAPolling();
   } catch (err: any) {
     const message = err?.response?.data?.error || err?.message || '';
-    if (
-      message === 'weknoracloud_credentials_required' ||
-      message === 'callback_base_url_required'
+    if (message === 'weknoracloud_credentials_required') {
+      MessagePlugin.error(t('agentEditor.im.wechatOaNeedCredentials'));
+    } else if (
+      message === 'callback_base_url_required' ||
+      message === 'callback_base_url_invalid'
     ) {
-      MessagePlugin.error(t('agentEditor.im.wechatOaNeedCloud'));
+      MessagePlugin.error(t('agentEditor.im.wechatOaNeedCallback'));
     } else {
       MessagePlugin.error(message || t('common.operationFailed'));
     }

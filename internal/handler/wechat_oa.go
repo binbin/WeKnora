@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -24,9 +26,9 @@ import (
 
 // WeChatOAHandler manages OA pre-auth bind APIs and Cloud callbacks.
 type WeChatOAHandler struct {
-	imService   *im.Service
-	preauthRepo repository.WeChatOAPreauthRepository
-	tenantRepo  interfaces.TenantRepository
+	imService    *im.Service
+	preauthRepo  repository.WeChatOAPreauthRepository
+	tenantRepo   interfaces.TenantRepository
 	cloudFactory wechat_oa.CloudClientFactory
 }
 
@@ -76,6 +78,11 @@ func (handler *WeChatOAHandler) CreatePreAuth(c *gin.Context) {
 	baseURL := resolveOACallbackBaseURL()
 	if baseURL == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "callback_base_url_required"})
+		return
+	}
+	if err := validateOACallbackBaseURL(baseURL); err != nil {
+		logger.Warnf(ctx, "[WeChatOA] invalid callback base URL %q: %v", baseURL, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "callback_base_url_invalid"})
 		return
 	}
 
@@ -194,12 +201,6 @@ func (handler *WeChatOAHandler) BindingComplete(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "preauth not found"})
 		return
 	}
-	if time.Now().After(row.ExpiresAt) {
-		row.Status = "expired"
-		_ = handler.preauthRepo.Update(ctx, row)
-		c.JSON(http.StatusGone, gin.H{"error": "preauth expired"})
-		return
-	}
 
 	timestamp := c.GetHeader("X-WeKnora-OA-Timestamp")
 	signature := c.GetHeader("X-WeKnora-OA-Signature")
@@ -207,6 +208,19 @@ func (handler *WeChatOAHandler) BindingComplete(c *gin.Context) {
 		row.CallbackSecret, timestamp, rawBody, signature, time.Now(), 5*time.Minute,
 	); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "verification failed"})
+		return
+	}
+
+	// Idempotent: Cloud retries after a successful bind must return the same channel.
+	if row.Status == "bound" && row.ChannelID != "" {
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{"channel_id": row.ChannelID}})
+		return
+	}
+
+	if time.Now().After(row.ExpiresAt) && row.Status != "bound" {
+		row.Status = "expired"
+		_ = handler.preauthRepo.Update(ctx, row)
+		c.JSON(http.StatusGone, gin.H{"error": "preauth expired"})
 		return
 	}
 
@@ -229,6 +243,11 @@ func (handler *WeChatOAHandler) BindingComplete(c *gin.Context) {
 	if name == "" {
 		name = "微信公众号"
 	}
+	if handler.imService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "im service unavailable"})
+		return
+	}
+
 	channel := &im.IMChannel{
 		TenantID:    row.TenantID,
 		AgentID:     row.AgentID,
@@ -239,20 +258,24 @@ func (handler *WeChatOAHandler) BindingComplete(c *gin.Context) {
 		OutputMode:  "full",
 		Credentials: types.JSON(credsJSON),
 	}
-	if handler.imService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "im service unavailable"})
-		return
-	}
 	if err := handler.imService.CreateChannel(channel); err != nil {
-		logger.Errorf(ctx, "[WeChatOA] CreateChannel: %v", err)
 		if strings.HasPrefix(err.Error(), "duplicate_bot:") {
-			c.JSON(http.StatusConflict, gin.H{
-				"error": strings.TrimPrefix(err.Error(), "duplicate_bot: "),
-			})
+			existing, resolveErr := handler.resolveDuplicateOAChannel(
+				ctx, row, req.AuthorizerAppID, name, types.JSON(credsJSON),
+			)
+			if resolveErr != nil {
+				logger.Errorf(ctx, "[WeChatOA] resolve duplicate: %v", resolveErr)
+				c.JSON(http.StatusConflict, gin.H{
+					"error": strings.TrimPrefix(err.Error(), "duplicate_bot: "),
+				})
+				return
+			}
+			channel = existing
+		} else {
+			logger.Errorf(ctx, "[WeChatOA] CreateChannel: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create channel"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create channel"})
-		return
 	}
 
 	row.Status = "bound"
@@ -264,11 +287,71 @@ func (handler *WeChatOAHandler) BindingComplete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"channel_id": channel.ID}})
 }
 
+// resolveDuplicateOAChannel handles Cloud retries and same-agent reauth.
+// Same tenant+agent: refresh credentials and return the existing channel.
+// Otherwise: conflict (OA already bound elsewhere).
+func (handler *WeChatOAHandler) resolveDuplicateOAChannel(
+	ctx context.Context,
+	row *types.WeChatOAPreauth,
+	authorizerAppID, name string,
+	credsJSON types.JSON,
+) (*im.IMChannel, error) {
+	botKey := "wechat_oa:" + strings.TrimSpace(authorizerAppID)
+	existing, err := handler.imService.GetChannelByBotIdentity(botKey)
+	if err != nil || existing == nil {
+		return nil, fmt.Errorf("duplicate channel not found for %s: %w", botKey, err)
+	}
+	if existing.TenantID != row.TenantID || existing.AgentID != row.AgentID {
+		return nil, fmt.Errorf(
+			"authorizer already bound to another agent/channel %s", existing.ID,
+		)
+	}
+	existing.Name = name
+	existing.Credentials = credsJSON
+	existing.Enabled = true
+	existing.Mode = "cloud_relay"
+	existing.OutputMode = "full"
+	if err := handler.imService.UpdateChannel(existing); err != nil {
+		return nil, fmt.Errorf("refresh existing channel: %w", err)
+	}
+	logger.Infof(
+		ctx,
+		"[WeChatOA] reauth/idempotent bind reused channel=%s authorizer=%s",
+		existing.ID,
+		authorizerAppID,
+	)
+	return existing, nil
+}
+
 func resolveOACallbackBaseURL() string {
 	if value := strings.TrimRight(strings.TrimSpace(os.Getenv("WECHAT_OA_CALLBACK_BASE_URL")), "/"); value != "" {
 		return value
 	}
 	return strings.TrimRight(strings.TrimSpace(os.Getenv("APP_EXTERNAL_URL")), "/")
+}
+
+// validateOACallbackBaseURL rejects URLs Cloud cannot call back to
+// (localhost / loopback / missing host).
+func validateOACallbackBaseURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("scheme must be http or https")
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		return fmt.Errorf("missing host")
+	}
+	lower := strings.ToLower(host)
+	if lower == "localhost" || lower == "0.0.0.0" {
+		return fmt.Errorf("host %q is not reachable from TreeRAG Cloud", host)
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return fmt.Errorf("loopback address %q is not reachable from TreeRAG Cloud", host)
+	}
+	return nil
 }
 
 func randomHex(byteLen int) (string, error) {

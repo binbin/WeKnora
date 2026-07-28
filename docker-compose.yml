@@ -86,8 +86,10 @@ services:
       # - WEKNORA_TRUSTED_PROXIES=${WEKNORA_TRUSTED_PROXIES:-}
       # 启动时自动执行数据库迁移；设为 false 禁用，默认启用
       - AUTO_MIGRATE=${AUTO_MIGRATE:-true}
-      # 本地存储后端生成下载链接用的外部可达 URL（IM 渠道 local 后端必填）
-      # - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-}
+      # 外部可达 URL：IM local 存储链接 + 微信公众号 Cloud 回调基址（扫码绑定必填）
+      - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-}
+      # 可选：仅覆盖微信公众号回调基址（留空则用 APP_EXTERNAL_URL）
+      - WECHAT_OA_CALLBACK_BASE_URL=${WECHAT_OA_CALLBACK_BASE_URL:-}
       # 前端外部 origin，用于邀请链接等绝对 URL（留空走 host-relative）
       - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-}
       # ========== 对象存储 - 腾讯云 COS ==========
