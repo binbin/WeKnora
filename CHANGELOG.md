@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.2] - 2026-07-28
+
+### Bug Fixes
+
+- **FIXED**: **WeChat OA Cloud bind hardening** — reject localhost / loopback
+  callback bases so TreeRAG Cloud can reach the instance; require
+  `callback_secret` from Cloud preauth; idempotent binding / same-agent reauth
+  reuses the existing channel instead of failing on Cloud retries.
+- **FIXED**: WeChat OA QR bind polling in `IMChannelPanel` — restore broken
+  template nesting and complete missing preauth start/stop/poll so opening
+  create no longer throws `ReferenceError`.
+
+### Improvements
+
+- **IMPROVED**: Docker Compose wires `APP_EXTERNAL_URL` and optional
+  `WECHAT_OA_CALLBACK_BASE_URL` for OA Cloud callbacks; wizard steps for
+  `wechat_oa` skip irrelevant connection fields.
+
 ## [0.8.1] - 2026-07-26
 
 ### Bug Fixes
