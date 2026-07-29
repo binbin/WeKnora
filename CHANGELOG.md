@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.13] - 2026-07-30
+
+### Improvements
+
+- **IMPROVED**: **SystemAdmin password reset discovery** — space member
+  list shows a reset-password action for system admins; system settings
+  copy clarifies any registered user can be reset by email.
+
 ## [0.8.12] - 2026-07-29
 
 ### Improvements

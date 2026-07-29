@@ -6941,6 +6941,9 @@ export default {
       confirm: "제거",
       success: "멤버를 제거했습니다",
     },
+    passwordReset: {
+      button: "비밀번호 재설정",
+    },
     leave: {
       button: "워크스페이스 떠나기",
       confirmTitle: "이 워크스페이스에서 나가시겠어요?",

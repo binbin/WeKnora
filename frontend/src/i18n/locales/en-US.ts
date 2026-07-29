@@ -4062,7 +4062,8 @@ export default {
       },
       passwordReset: {
         label: 'Reset user password',
-        description: 'Set a new password for another user who cannot sign in. A successful reset invalidates all of that user\'s current sessions, so they must sign in again with the new password.',
+        description:
+          'Set a new password for any registered user on the platform (by email). A successful reset invalidates all of that user\'s current sessions, so they must sign in again with the new password.',
         action: 'Reset password',
         dialogTitle: 'Reset another user\'s password',
         warning: 'This is a high-risk action. Verify the user email carefully. You cannot reset your own password here.',
@@ -7066,6 +7067,9 @@ export default {
       confirmBody: 'Are you sure you want to remove {name} from this workspace? They will lose access immediately.',
       confirm: 'Remove',
       success: 'Member removed',
+    },
+    passwordReset: {
+      button: 'Reset password',
     },
     leave: {
       button: 'Leave Workspace',

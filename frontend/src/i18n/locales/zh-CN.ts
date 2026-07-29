@@ -2978,10 +2978,12 @@ export default {
       },
       passwordReset: {
         label: "重置用户密码",
-        description: "为忘记密码的其他用户设置新密码。重置成功后，该用户当前所有登录会话都会失效，需要使用新密码重新登录。",
+        description:
+          "为平台上任意已注册用户设置新密码（按邮箱）。重置成功后，该用户当前所有登录会话都会失效，需要使用新密码重新登录。",
         action: "重置密码",
         dialogTitle: "重置其他用户的密码",
-        warning: "这是高风险操作。请核对用户邮箱；出于安全考虑，不能在这里重置自己的密码。",
+        warning:
+          "这是高风险操作。请核对用户邮箱；出于安全考虑，不能在这里重置自己的密码。",
         emailLabel: "用户邮箱",
         emailPlaceholder: "输入需要重置密码的用户邮箱",
         newPasswordLabel: "新密码",
@@ -7112,6 +7114,9 @@ export default {
       confirmBody: "确定要将 {name} 从当前空间中移除吗？该用户会立即失去访问权限。",
       confirm: "移除",
       success: "已移除成员",
+    },
+    passwordReset: {
+      button: "重置密码",
     },
     leave: {
       button: "退出空间",

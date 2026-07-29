@@ -395,6 +395,20 @@
               <template #joined_at="{ row }">{{ formatDate(row.joined_at) }}</template>
               <template #actions="{ row }">
                 <t-tooltip
+                  v-if="canResetMemberPassword(row)"
+                  :content="$t('tenantMember.passwordReset.button')"
+                  placement="top"
+                >
+                  <t-button
+                    shape="square"
+                    variant="text"
+                    size="small"
+                    @click.stop="openMemberPasswordReset(row)"
+                  >
+                    <template #icon><t-icon name="lock-on" /></template>
+                  </t-button>
+                </t-tooltip>
+                <t-tooltip
                   v-if="canTransferMemberRow(row)"
                   :content="$t('tenantMember.transferOrgUnit')"
                   placement="top"
@@ -592,6 +606,75 @@
         </div>
       </div>
     </t-drawer>
+
+    <!-- SystemAdmin-only: reset another user's password (platform-wide API). -->
+    <t-dialog
+      v-model:visible="passwordResetVisible"
+      :header="$t('system.globalSettings.passwordReset.dialogTitle')"
+      width="440px"
+      placement="center"
+      :confirm-btn="{
+        content: $t('system.globalSettings.passwordReset.confirmBtn'),
+        theme: 'danger',
+        loading: passwordResetSubmitting,
+      }"
+      :cancel-btn="{
+        content: $t('common.cancel'),
+        variant: 'outline',
+      }"
+      :close-on-overlay-click="!passwordResetSubmitting"
+      :close-btn="!passwordResetSubmitting"
+      @confirm="submitMemberPasswordReset"
+      @close="resetMemberPasswordForm"
+    >
+      <t-alert
+        theme="warning"
+        :message="$t('system.globalSettings.passwordReset.warning')"
+        style="margin-bottom: 16px"
+      />
+      <t-form
+        ref="passwordResetFormRef"
+        :data="passwordResetForm"
+        :rules="passwordResetRules"
+        label-align="top"
+      >
+        <t-form-item
+          :label="$t('system.globalSettings.passwordReset.emailLabel')"
+          name="email"
+        >
+          <t-input
+            v-model="passwordResetForm.email"
+            readonly
+            disabled
+          />
+        </t-form-item>
+        <t-form-item
+          :label="$t('system.globalSettings.passwordReset.newPasswordLabel')"
+          name="newPassword"
+        >
+          <t-input
+            v-model="passwordResetForm.newPassword"
+            type="password"
+            autocomplete="new-password"
+            :disabled="passwordResetSubmitting"
+            :placeholder="$t('system.globalSettings.passwordReset.newPasswordPlaceholder')"
+          />
+        </t-form-item>
+        <t-form-item
+          :label="$t('system.globalSettings.passwordReset.confirmPasswordLabel')"
+          name="confirmPassword"
+        >
+          <t-input
+            v-model="passwordResetForm.confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            :disabled="passwordResetSubmitting"
+            :placeholder="$t('system.globalSettings.passwordReset.confirmPasswordPlaceholder')"
+            @enter="submitMemberPasswordReset"
+          />
+        </t-form-item>
+      </t-form>
+    </t-dialog>
   </div>
 </template>
 
@@ -599,7 +682,9 @@
 import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MessagePlugin } from 'tdesign-vue-next'
+import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { resetUserPassword } from '@/api/system'
 import {
   listMembers,
   updateMemberRole,
@@ -857,6 +942,110 @@ const canViewAudit = computed(
     authStore.canAccessAllTenants === true,
 )
 const currentUserId = computed(() => authStore.user?.id ?? '')
+
+/** SystemAdmin may reset any other registered user's password. */
+function canResetMemberPassword(row: TenantMember): boolean {
+  return (
+    authStore.isSystemAdmin === true &&
+    !!row.email?.trim() &&
+    row.user_id !== currentUserId.value
+  )
+}
+
+const passwordResetVisible = ref(false)
+const passwordResetSubmitting = ref(false)
+const passwordResetFormRef = ref<FormInstanceFunctions>()
+const passwordResetForm = reactive({
+  email: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+const passwordResetRules: Record<string, FormRule[]> = {
+  email: [
+    {
+      required: true,
+      message: t('system.globalSettings.passwordReset.validation.emailRequired'),
+      trigger: 'blur',
+    },
+  ],
+  newPassword: [
+    {
+      required: true,
+      message: t('system.globalSettings.passwordReset.validation.passwordRequired'),
+      trigger: 'blur',
+    },
+    {
+      min: 8,
+      message: t('system.globalSettings.passwordReset.validation.passwordLength'),
+      trigger: 'blur',
+    },
+    {
+      max: 32,
+      message: t('system.globalSettings.passwordReset.validation.passwordLength'),
+      trigger: 'blur',
+    },
+    {
+      pattern: /[a-zA-Z]/,
+      message: t('system.globalSettings.passwordReset.validation.passwordLetter'),
+      trigger: 'blur',
+    },
+    {
+      pattern: /\d/,
+      message: t('system.globalSettings.passwordReset.validation.passwordNumber'),
+      trigger: 'blur',
+    },
+  ],
+  confirmPassword: [
+    {
+      required: true,
+      message: t('system.globalSettings.passwordReset.validation.confirmRequired'),
+      trigger: 'blur',
+    },
+    {
+      validator: (value: string) => value === passwordResetForm.newPassword,
+      message: t('system.globalSettings.passwordReset.validation.passwordMismatch'),
+      trigger: 'blur',
+    },
+  ],
+}
+
+function resetMemberPasswordForm() {
+  passwordResetForm.email = ''
+  passwordResetForm.newPassword = ''
+  passwordResetForm.confirmPassword = ''
+  passwordResetFormRef.value?.clearValidate?.()
+}
+
+async function openMemberPasswordReset(row: TenantMember) {
+  if (!canResetMemberPassword(row)) return
+  resetMemberPasswordForm()
+  passwordResetForm.email = row.email.trim()
+  passwordResetVisible.value = true
+  await nextTick()
+  passwordResetFormRef.value?.clearValidate?.()
+}
+
+async function submitMemberPasswordReset() {
+  if (passwordResetSubmitting.value) return
+  const valid = await passwordResetFormRef.value?.validate?.()
+  if (valid !== true) return
+  passwordResetSubmitting.value = true
+  try {
+    await resetUserPassword({
+      email: passwordResetForm.email.trim(),
+      new_password: passwordResetForm.newPassword,
+    })
+    MessagePlugin.success(t('system.globalSettings.passwordReset.success'))
+    passwordResetVisible.value = false
+  } catch (error: unknown) {
+    const message =
+      (error as { message?: string })?.message ||
+      t('system.globalSettings.passwordReset.failed')
+    MessagePlugin.error(message)
+  } finally {
+    passwordResetSubmitting.value = false
+  }
+}
 
 // Use the active tenant id from the auth store; the route only allows
 // :id == active tenant (auth middleware enforces membership), so we
