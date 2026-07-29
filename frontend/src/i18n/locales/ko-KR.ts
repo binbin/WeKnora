@@ -1923,6 +1923,19 @@ export default {
     registerError: "가입 오류, 나중에 다시 시도해주세요",
     forgotPasswordNotAvailable:
       "비밀번호 찾기 기능을 현재 사용할 수 없습니다. 관리자에게 문의해주세요",
+    changePassword: {
+      menu: "비밀번호 변경",
+      title: "비밀번호 변경",
+      oldPasswordLabel: "현재 비밀번호",
+      oldPasswordPlaceholder: "현재 비밀번호를 입력하세요",
+      oldPasswordRequired: "현재 비밀번호를 입력하세요",
+      newPasswordLabel: "새 비밀번호",
+      confirmPasswordLabel: "새 비밀번호 확인",
+      confirmBtn: "변경 확인",
+      reloginHint: "변경 후 새 비밀번호로 다시 로그인해야 합니다",
+      success: "비밀번호가 변경되었습니다. 다시 로그인해 주세요",
+      failed: "비밀번호 변경에 실패했습니다",
+    },
     workspaceOnboarding: {
       title: "작업 공간 선택",
       description: "아직 참여한 공간이 없습니다. 새 공간을 만들거나 관리자의 초대를 수락하세요.",

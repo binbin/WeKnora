@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.14] - 2026-07-30
+
+### Improvements
+
+- **IMPROVED**: **Self-service change password** — user menu exposes
+  change-password (old password required); success revokes sessions and
+  returns to login. Completes admin reset + self-service password flows.
+
 ## [0.8.13] - 2026-07-30
 
 ### Improvements

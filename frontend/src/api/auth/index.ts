@@ -415,6 +415,28 @@ export async function logout(): Promise<{ success: boolean; message?: string }> 
   }
 }
 
+export interface ChangePasswordRequest {
+  old_password: string
+  new_password: string
+}
+
+/**
+ * 修改当前用户密码。成功后服务端会吊销全部会话，调用方需引导重新登录。
+ */
+export async function changePassword(
+  data: ChangePasswordRequest,
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    await post('/api/v1/auth/change-password', data)
+    return { success: true }
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || t('auth.changePassword.failed'),
+    }
+  }
+}
+
 /**
  * 验证Token有效性
  */
