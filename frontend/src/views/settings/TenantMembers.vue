@@ -52,15 +52,6 @@
       </div>
       <p class="section-description">
         {{ $t('tenantMember.sectionDescription') }}
-        <a
-          class="doc-link"
-          href="https://github.com/Tencent/WeKnora/blob/main/docs/RBAC%E8%AF%B4%E6%98%8E.md"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {{ $t('tenantMember.learnRbacGuide') }}
-          <t-icon name="link" class="link-icon" />
-        </a>
       </p>
     </div>
 
@@ -200,7 +191,8 @@
                 <template #prefix-icon><t-icon name="search" /></template>
               </t-input>
             </div>
-            <t-popup v-if="canManage" v-model="invitePopupVisible" trigger="click" placement="bottom-end"
+            <!-- 邮箱邀请入口已隐藏；保留邀请链接入口。 -->
+            <t-popup v-if="false" v-model="invitePopupVisible" trigger="click" placement="bottom-end"
               destroy-on-close overlay-class-name="member-invite-popup-overlay">
               <t-button theme="primary" variant="outline" shape="square" size="small" class="members-list-add-btn"
                 :title="$t('tenantMember.add.button')" :aria-label="$t('tenantMember.add.button')">
