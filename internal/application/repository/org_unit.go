@@ -336,8 +336,10 @@ func (r *orgUnitRepository) TransferMember(
 	member *types.OrgUnitMember,
 ) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Clear every prior binding for this user (platform catalog and
+		// workspace tenants share the single-membership product rule).
 		if err := tx.
-			Where("tenant_id = ? AND user_id = ?", member.TenantID, member.UserID).
+			Where("user_id = ?", member.UserID).
 			Delete(&types.OrgUnitMember{}).Error; err != nil {
 			return err
 		}

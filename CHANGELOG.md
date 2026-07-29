@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.8] - 2026-07-29
+
+### Bug Fixes
+
+- **FIXED**: **Member list 所属组织 empty for platform org tree** — binding
+  users to catalog units (`tenant_id=0`) now succeeds from a workspace
+  context, and member enrichment reads those platform memberships so the
+  所属组织 column shows real names instead of blank dashes.
+
 ## [0.8.7] - 2026-07-29
 
 ### Improvements

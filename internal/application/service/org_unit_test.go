@@ -199,8 +199,14 @@ func (r *stubOrgUnitRepo) RemoveMembersByTenantUser(
 func (r *stubOrgUnitRepo) TransferMember(
 	_ context.Context, member *types.OrgUnitMember,
 ) error {
-	_ = r.RemoveMembersByTenantUser(context.Background(), member.TenantID, member.UserID)
-	r.members = append(r.members, member)
+	kept := r.members[:0]
+	for _, membership := range r.members {
+		if membership == nil || membership.UserID == member.UserID {
+			continue
+		}
+		kept = append(kept, membership)
+	}
+	r.members = append(kept, member)
 	return nil
 }
 
@@ -858,5 +864,50 @@ func TestOrgUnitPlatformCatalogInviteHierarchy(t *testing.T) {
 	}
 	if len(flat) != 2 {
 		t.Fatalf("ListFlat should surface platform catalog, got %#v", flat)
+	}
+}
+
+func TestTransferMemberAcceptsPlatformCatalogUnit(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"platform-child": {
+				ID: "platform-child", TenantID: types.PlatformOrgTenantID,
+				ParentID: "platform-root",
+				Path:     "/platform-root/platform-child/",
+				Depth:    1,
+				Name:     "赤峰市",
+			},
+			"platform-root": {
+				ID: "platform-root", TenantID: types.PlatformOrgTenantID,
+				ParentID: "", Path: "/platform-root/", Depth: 0,
+				Name: "人社厅",
+			},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	ownerCtx := context.WithValue(
+		context.Background(),
+		types.TenantRoleContextKey,
+		types.TenantRoleOwner,
+	)
+	member, err := svc.TransferMember(
+		ownerCtx, 10000, "user-1", "platform-child",
+	)
+	if err != nil {
+		t.Fatalf("TransferMember platform unit: %v", err)
+	}
+	if member.OrgUnitID != "platform-child" {
+		t.Fatalf("org_unit_id=%q", member.OrgUnitID)
+	}
+	if member.TenantID != types.PlatformOrgTenantID {
+		t.Fatalf("membership tenant_id=%d want platform", member.TenantID)
+	}
+
+	listed, err := svc.ListUserMemberships(ownerCtx, 10000, "user-1")
+	if err != nil {
+		t.Fatalf("ListUserMemberships: %v", err)
+	}
+	if len(listed) != 1 || listed[0].OrgUnitID != "platform-child" {
+		t.Fatalf("workspace list must include platform binding, got %#v", listed)
 	}
 }

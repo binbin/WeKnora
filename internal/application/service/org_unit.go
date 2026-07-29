@@ -431,7 +431,8 @@ func (s *orgUnitService) AddMember(
 	isPrimary bool,
 ) (*types.OrgUnitMember, error) {
 	_ = isPrimary // product semantics: new memberships are always primary
-	if _, err := s.repo.GetByID(ctx, tenantID, orgUnitID); err != nil {
+	unit, err := s.resolveUnit(ctx, tenantID, orgUnitID)
+	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
 		}
@@ -442,12 +443,13 @@ func (s *orgUnitService) AddMember(
 		return nil, apperrors.NewValidationError("user_id is required")
 	}
 
-	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	// Single-membership model spans platform catalog + workspace tenant.
+	memberships, err := s.repo.ListUserMembershipsByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	for _, membership := range memberships {
-		if membership != nil && membership.OrgUnitID == orgUnitID {
+		if membership != nil && membership.OrgUnitID == unit.ID {
 			return membership, nil
 		}
 	}
@@ -462,8 +464,8 @@ func (s *orgUnitService) AddMember(
 	now := time.Now()
 	member := &types.OrgUnitMember{
 		ID:        uuid.New().String(),
-		OrgUnitID: orgUnitID,
-		TenantID:  tenantID,
+		OrgUnitID: unit.ID,
+		TenantID:  unit.TenantID,
 		UserID:    userID,
 		IsPrimary: true,
 		CreatedAt: now,
@@ -482,7 +484,8 @@ func (s *orgUnitService) TransferMember(
 	toOrgUnitID string,
 ) (*types.OrgUnitMember, error) {
 	toOrgUnitID = strings.TrimSpace(toOrgUnitID)
-	if _, err := s.repo.GetByID(ctx, tenantID, toOrgUnitID); err != nil {
+	unit, err := s.resolveUnit(ctx, tenantID, toOrgUnitID)
+	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
 		}
@@ -493,20 +496,20 @@ func (s *orgUnitService) TransferMember(
 		return nil, apperrors.NewValidationError("user_id is required")
 	}
 
-	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	memberships, err := s.repo.ListUserMembershipsByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	if len(memberships) == 1 && memberships[0] != nil &&
-		memberships[0].OrgUnitID == toOrgUnitID {
+		memberships[0].OrgUnitID == unit.ID {
 		return memberships[0], nil
 	}
 
 	now := time.Now()
 	member := &types.OrgUnitMember{
 		ID:        uuid.New().String(),
-		OrgUnitID: toOrgUnitID,
-		TenantID:  tenantID,
+		OrgUnitID: unit.ID,
+		TenantID:  unit.TenantID,
 		UserID:    userID,
 		IsPrimary: true,
 		CreatedAt: now,
@@ -524,7 +527,7 @@ func (s *orgUnitService) RemoveMember(
 	orgUnitID string,
 	userID string,
 ) error {
-	if _, err := s.repo.GetByID(ctx, tenantID, orgUnitID); err != nil {
+	if _, err := s.resolveUnit(ctx, tenantID, orgUnitID); err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return apperrors.NewNotFoundError("org unit not found")
 		}
@@ -544,7 +547,7 @@ func (s *orgUnitService) ListMembers(
 	tenantID uint64,
 	orgUnitID string,
 ) ([]*types.OrgUnitMember, error) {
-	if _, err := s.repo.GetByID(ctx, tenantID, orgUnitID); err != nil {
+	if _, err := s.resolveUnit(ctx, tenantID, orgUnitID); err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
 		}
@@ -558,7 +561,43 @@ func (s *orgUnitService) ListUserMemberships(
 	tenantID uint64,
 	userID string,
 ) ([]*types.OrgUnitMember, error) {
-	return s.repo.ListUserMemberships(ctx, tenantID, userID)
+	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	if err != nil {
+		return nil, err
+	}
+	// Platform-catalog bindings (tenant_id=0) must surface when browsing a
+	// business workspace — otherwise 空间成员 has no 所属组织 values.
+	if tenantID == types.PlatformOrgTenantID {
+		return memberships, nil
+	}
+	platformMembers, platformErr := s.repo.ListUserMemberships(
+		ctx, types.PlatformOrgTenantID, userID,
+	)
+	if platformErr != nil {
+		return nil, platformErr
+	}
+	if len(platformMembers) == 0 {
+		return memberships, nil
+	}
+	seen := make(map[string]struct{}, len(memberships)+len(platformMembers))
+	out := make([]*types.OrgUnitMember, 0, len(memberships)+len(platformMembers))
+	for _, membership := range memberships {
+		if membership == nil {
+			continue
+		}
+		seen[membership.OrgUnitID] = struct{}{}
+		out = append(out, membership)
+	}
+	for _, membership := range platformMembers {
+		if membership == nil {
+			continue
+		}
+		if _, exists := seen[membership.OrgUnitID]; exists {
+			continue
+		}
+		out = append(out, membership)
+	}
+	return out, nil
 }
 
 func (s *orgUnitService) SetPrimary(
@@ -567,13 +606,14 @@ func (s *orgUnitService) SetPrimary(
 	userID string,
 	orgUnitID string,
 ) error {
-	if _, err := s.repo.GetByID(ctx, tenantID, orgUnitID); err != nil {
+	unit, err := s.resolveUnit(ctx, tenantID, orgUnitID)
+	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return apperrors.NewNotFoundError("org unit not found")
 		}
 		return err
 	}
-	if err := s.repo.SetPrimary(ctx, tenantID, userID, orgUnitID); err != nil {
+	if err := s.repo.SetPrimary(ctx, unit.TenantID, userID, unit.ID); err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitMemberNotFound) {
 			return apperrors.NewNotFoundError("org unit member not found")
 		}
