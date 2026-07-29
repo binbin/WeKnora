@@ -178,19 +178,25 @@ func (s *userService) Register(ctx context.Context, req *types.RegisterRequest) 
 	}
 
 	var createdTenant *types.Tenant
+	tenantWasCreated := false
 	if provisioning == types.TenantProvisioningCreatePersonal {
-		// Note: RetrieverEngines is left empty - system will use defaults
-		// from RETRIEVE_DRIVER env.
-		tenant := &types.Tenant{
-			Name:        fmt.Sprintf("%s's Workspace", secutils.SanitizeForLog(req.Username)),
-			Description: "Default workspace",
-			Status:      "active",
-		}
-
-		createdTenant, err = s.tenantService.CreateTenant(ctx, tenant)
-		if err != nil {
-			logger.Errorf(ctx, "Failed to create workspace")
-			return nil, errors.New("failed to create workspace")
+		// Single shared workspace: reuse the deployment tenant when one
+		// already exists. Only the empty install creates the first space,
+		// with a neutral name — never "{user}'s Workspace".
+		if existing := s.findSharedDeploymentTenant(ctx); existing != nil {
+			createdTenant = existing
+		} else {
+			tenant := &types.Tenant{
+				Name:        "默认空间",
+				Description: "Shared workspace",
+				Status:      "active",
+			}
+			createdTenant, err = s.tenantService.CreateTenant(ctx, tenant)
+			if err != nil {
+				logger.Errorf(ctx, "Failed to create workspace")
+				return nil, errors.New("failed to create workspace")
+			}
+			tenantWasCreated = true
 		}
 	}
 
@@ -212,7 +218,7 @@ func (s *userService) Register(ctx context.Context, req *types.RegisterRequest) 
 	err = s.userRepo.CreateUser(ctx, user)
 	if err != nil {
 		logger.Errorf(ctx, "Failed to create user: %v", err)
-		if createdTenant != nil {
+		if tenantWasCreated && createdTenant != nil {
 			if rollbackErr := s.tenantService.DeleteTenant(ctx, createdTenant.ID); rollbackErr != nil {
 				logger.Errorf(ctx, "Failed to roll back tenant %d after user creation failure: %v", createdTenant.ID, rollbackErr)
 			}
@@ -220,17 +226,25 @@ func (s *userService) Register(ctx context.Context, req *types.RegisterRequest) 
 		return nil, errors.New("failed to create user")
 	}
 
-	// Bootstrap an Owner membership so the registrant has full control over
-	// the tenant their account just created. Failure here only logs — the
-	// user record exists and the auth middleware's orphan-tenant recovery
-	// path will recreate the membership on next login.
+	// First workspace → Owner. Joining the shared workspace → Contributor
+	// (admins promote later). Failure rolls back only a freshly created tenant.
 	if createdTenant != nil && s.memberService != nil {
-		if _, err := s.memberService.EnsureOwner(ctx, user.ID, createdTenant.ID); err != nil {
-			logger.Errorf(ctx, "Failed to create owner membership for user %s tenant %d: %v",
-				user.ID, createdTenant.ID, err)
+		var memberErr error
+		if tenantWasCreated {
+			_, memberErr = s.memberService.EnsureOwner(ctx, user.ID, createdTenant.ID)
+		} else {
+			_, memberErr = s.memberService.AddMember(
+				ctx, user.ID, createdTenant.ID, types.TenantRoleContributor, nil,
+			)
+		}
+		if memberErr != nil {
+			logger.Errorf(ctx, "Failed to create membership for user %s tenant %d: %v",
+				user.ID, createdTenant.ID, memberErr)
 			_ = s.userRepo.DeleteUser(ctx, user.ID)
-			_ = s.tenantService.DeleteTenant(ctx, createdTenant.ID)
-			return nil, errors.New("failed to finalise workspace ownership")
+			if tenantWasCreated {
+				_ = s.tenantService.DeleteTenant(ctx, createdTenant.ID)
+			}
+			return nil, errors.New("failed to finalise workspace membership")
 		}
 	}
 
@@ -749,112 +763,91 @@ func (s *userService) GenerateTokens(
 }
 
 // resolveLoginTenantID picks the tenant whose ID should be encoded in a
-// freshly minted access token. The contract:
+// freshly minted access token.
 //
-//  1. If the user has no LastActiveTenantID preference set (or it points
-//     at home), return home — the historical behaviour. A tenantless user
-//     with an active membership adopts their earliest membership instead;
-//     this repairs partial invitation/admin-assignment flows.
-//  2. Otherwise validate the preference: the tenant must still exist and
-//     the user must still have an active membership (or be a cross-tenant
-//     superuser). Validation failure logs a warning, best-effort clears
-//     the stale preference (so we don't waste a DB round-trip on every
-//     subsequent login), and falls back to home.
+// Product rule: the deployment uses ONE shared workspace. Login never
+// provisions a per-user "personal home" tenant, and never clears the
+// user's workspace id without replacing it with the shared one.
 //
-// This is intentionally a private method on userService so it can reach
-// memberService / tenantService / userRepo. Errors from the validation
-// path never fail login; the worst case is the user lands in home.
+// Resolution order:
+//  1. Valid LastActiveTenantID when the user still has membership
+//     (or is a cross-tenant superuser)
+//  2. Earliest active membership (also repairs TenantID == 0)
+//  3. The single shared tenant already in the deployment
+//  4. Platform OrgUnit workspace binding (reuse only; see org_workspace)
+//
+// After resolving, TenantID is persisted as the shared workspace id and
+// system admins without a membership row are granted Admin so RBAC works.
 func (s *userService) resolveLoginTenantID(ctx context.Context, user *types.User) uint64 {
 	if user == nil {
 		return 0
 	}
 
-	// Cross-tenant / platform admins never keep a personal home workspace.
-	if user.IsSystemAdmin || user.CanAccessAllTenants {
-		return s.resolveAdminLoginTenantID(ctx, user)
+	if tenantID := s.resolvePreferredLoginTenant(ctx, user); tenantID > 0 {
+		s.persistResolvedTenantAsHome(ctx, user, tenantID)
+		s.ensureSharedWorkspaceMembership(ctx, user, tenantID)
+		return tenantID
 	}
 
-	if s.orgWorkspaceService != nil {
-		if tenantID, err := s.orgWorkspaceService.EnsureWorkspaceForUser(ctx, user.ID); err != nil {
-			logger.Warnf(ctx,
-				"resolveLoginTenantID: org workspace ensure failed for user %s: %v",
-				user.ID, err,
-			)
-		} else if tenantID > 0 {
-			s.persistResolvedTenantAsHome(ctx, user, tenantID)
-			return tenantID
-		}
+	if tenantID := s.resolveSharedDeploymentTenantID(ctx); tenantID > 0 {
+		s.persistResolvedTenantAsHome(ctx, user, tenantID)
+		s.ensureSharedWorkspaceMembership(ctx, user, tenantID)
+		return tenantID
 	}
 
-	pref := user.Preferences.LastActiveTenantID
-	if pref == nil || *pref == 0 || *pref == user.TenantID {
-		return s.homeOrFirstMembershipTenant(ctx, user)
-	}
-	preferred := *pref
-
-	// Tenant must still exist.
-	if s.tenantService != nil {
-		if _, err := s.tenantService.GetTenantByID(ctx, preferred); err != nil {
-			logger.Warnf(ctx,
-				"resolveLoginTenantID: preferred tenant %d not loadable for user %s, "+
-					"clearing preference and falling back to home: %v",
-				preferred, user.ID, err)
-			s.clearLastActiveTenantPreference(ctx, user)
-			return s.homeOrFirstMembershipTenant(ctx, user)
-		}
-	}
-
-	// Membership (or cross-tenant superuser) must still be valid. Mirrors
-	// the gate in SwitchTenant so the two entry points stay consistent.
-	if !user.CanAccessAllTenants {
-		if s.memberService == nil {
-			logger.Warnf(ctx,
-				"resolveLoginTenantID: member service unavailable; falling back to home for user %s",
-				user.ID)
-			return user.TenantID
-		}
-		member, err := s.memberService.GetMembership(ctx, user.ID, preferred)
-		if err != nil || member == nil || member.Status != types.TenantMemberStatusActive {
-			logger.Warnf(ctx,
-				"resolveLoginTenantID: user %s no longer has active membership in tenant %d, "+
-					"clearing preference and falling back to home (err=%v)",
-				user.ID, preferred, err)
-			s.clearLastActiveTenantPreference(ctx, user)
-			return s.homeOrFirstMembershipTenant(ctx, user)
-		}
-	}
-
-	return preferred
+	return 0
 }
 
-// resolveAdminLoginTenantID picks a workspace for platform/cross-tenant
-// admins who must not own a personal home space. Prefer the earliest
-// platform root OrgUnit workspace; fall back to earliest tenant; keep
-// LastActive when still valid.
-func (s *userService) resolveAdminLoginTenantID(
+func (s *userService) resolvePreferredLoginTenant(
 	ctx context.Context,
 	user *types.User,
 ) uint64 {
-	s.clearPersonalHomeTenant(ctx, user)
-
 	pref := user.Preferences.LastActiveTenantID
-	if pref != nil && *pref > 0 && s.tenantService != nil {
-		if _, err := s.tenantService.GetTenantByID(ctx, *pref); err == nil {
-			return *pref
+	if pref != nil && *pref > 0 && *pref != user.TenantID {
+		preferred := *pref
+		if s.tenantService != nil {
+			if _, err := s.tenantService.GetTenantByID(ctx, preferred); err != nil {
+				logger.Warnf(ctx,
+					"resolveLoginTenantID: preferred tenant %d not loadable for user %s, clearing: %v",
+					preferred, user.ID, err,
+				)
+				s.clearLastActiveTenantPreference(ctx, user)
+			} else if user.CanAccessAllTenants {
+				return preferred
+			} else if s.memberService != nil {
+				member, err := s.memberService.GetMembership(ctx, user.ID, preferred)
+				if err == nil && member != nil &&
+					member.Status == types.TenantMemberStatusActive {
+					return preferred
+				}
+				logger.Warnf(ctx,
+					"resolveLoginTenantID: user %s has no membership in preferred tenant %d, clearing",
+					user.ID, preferred,
+				)
+				s.clearLastActiveTenantPreference(ctx, user)
+			}
 		}
-		s.clearLastActiveTenantPreference(ctx, user)
 	}
 
+	if home := s.homeOrFirstMembershipTenant(ctx, user); home > 0 {
+		return home
+	}
+	return 0
+}
+
+// resolveSharedDeploymentTenantID returns the deployment's single shared
+// workspace. Prefer an already-bound platform org workspace, else the
+// earliest existing tenant. Never creates a personal workspace here.
+func (s *userService) resolveSharedDeploymentTenantID(ctx context.Context) uint64 {
 	if s.orgWorkspaceService != nil {
 		if tenantID, err := s.orgWorkspaceService.EnsureFirstPlatformWorkspace(ctx); err != nil {
 			logger.Warnf(ctx,
-				"resolveAdminLoginTenantID: first platform workspace failed: %v", err,
+				"resolveSharedDeploymentTenantID: platform workspace failed: %v", err,
 			)
 		} else if tenantID > 0 {
 			return tenantID
 		}
 	}
-
 	if s.tenantService == nil {
 		return 0
 	}
@@ -877,20 +870,47 @@ func (s *userService) resolveAdminLoginTenantID(
 	return earliest.ID
 }
 
-func (s *userService) clearPersonalHomeTenant(
+// ensureSharedWorkspaceMembership grants system admins an Admin seat in
+// the shared workspace when they have no membership row. Ordinary users
+// must join via invite; we do not invent personal Ownership for them.
+func (s *userService) ensureSharedWorkspaceMembership(
 	ctx context.Context,
 	user *types.User,
+	tenantID uint64,
 ) {
-	if user == nil || user.TenantID == 0 || s.userRepo == nil {
+	if user == nil || tenantID == 0 || s.memberService == nil {
 		return
 	}
-	user.TenantID = 0
-	if err := s.userRepo.UpdateUser(ctx, user); err != nil {
+	member, err := s.memberService.GetMembership(ctx, user.ID, tenantID)
+	if err == nil && member != nil && member.Status == types.TenantMemberStatusActive {
+		return
+	}
+	if !user.IsSystemAdmin && !user.CanAccessAllTenants {
+		return
+	}
+	if _, err := s.memberService.AddMember(
+		ctx, user.ID, tenantID, types.TenantRoleAdmin, nil,
+	); err != nil {
 		logger.Warnf(ctx,
-			"clearPersonalHomeTenant: failed to clear home for user %s: %v",
-			user.ID, err,
+			"ensureSharedWorkspaceMembership: add admin seat failed user=%s tenant=%d: %v",
+			user.ID, tenantID, err,
 		)
 	}
+}
+
+// findSharedDeploymentTenant returns the single shared workspace row when
+// the deployment already has one. Used by registration to avoid creating
+// per-user personal tenants.
+func (s *userService) findSharedDeploymentTenant(ctx context.Context) *types.Tenant {
+	tenantID := s.resolveSharedDeploymentTenantID(ctx)
+	if tenantID == 0 || s.tenantService == nil {
+		return nil
+	}
+	tenant, err := s.tenantService.GetTenantByID(ctx, tenantID)
+	if err != nil || tenant == nil {
+		return nil
+	}
+	return tenant
 }
 
 func (s *userService) persistResolvedTenantAsHome(

@@ -2867,8 +2867,8 @@ export default {
             "自助注册模式。self_serve = 任何人可注册账号；invite_only = 关闭公网注册，" +
             "仅 Owner/Admin 可邀请。修改后立即生效，但谨慎对待 self_serve（公网会接受 spam）。",
           default_tenant_mode:
-            "公开注册后的空间初始化策略。create_personal 会自动创建个人空间并授予 Owner；" +
-            "tenantless 仅创建账户，用户需要接受邀请或主动创建空间。只影响之后注册的用户。",
+            "公开注册后的空间策略。create_personal 会加入全局共享空间；" +
+            "tenantless 仅创建账户，用户需要接受邀请后再进入。只影响之后注册的用户。",
         },
         ssrf: {
           whitelist:
@@ -2914,8 +2914,8 @@ export default {
             invite_only: "仅邀请（关闭公网注册）",
           },
           default_tenant_mode: {
-            create_personal: "自动创建个人空间",
-            tenantless: "不自动创建空间",
+            create_personal: "加入全局共享空间",
+            tenantless: "不自动加入空间",
           },
         },
       },

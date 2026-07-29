@@ -148,39 +148,47 @@ func (s *orgWorkspaceService) ensureWorkspaceForRoot(
 	if s.tenantService == nil {
 		return 0, fmt.Errorf("tenant service unavailable")
 	}
-	name := strings.TrimSpace(root.Name)
-	if name == "" {
-		name = "组织"
+	// Single shared workspace: never mint a new tenant per org root.
+	// Bind the earliest existing tenant, or fail closed if none exist yet
+	// (empty install should create the workspace via registration bootstrap).
+	tenants, listErr := s.tenantService.ListTenants(ctx)
+	if listErr != nil {
+		return 0, fmt.Errorf("list tenants for org workspace: %w", listErr)
 	}
-	workspaceName := fmt.Sprintf("%s的空间", name)
-	created, err := s.tenantService.CreateTenant(ctx, &types.Tenant{
-		Name:        workspaceName,
-		Description: fmt.Sprintf("Auto-provisioned workspace for org %s", root.ID),
-	})
-	if err != nil {
-		return 0, fmt.Errorf("create org workspace: %w", err)
+	if len(tenants) == 0 || tenants[0] == nil {
+		return 0, fmt.Errorf("no shared workspace available to bind org %s", root.ID)
+	}
+	earliest := tenants[0]
+	for _, tenant := range tenants[1:] {
+		if tenant == nil {
+			continue
+		}
+		if earliest == nil || tenant.CreatedAt.Before(earliest.CreatedAt) {
+			earliest = tenant
+		}
+	}
+	if earliest == nil {
+		return 0, fmt.Errorf("no shared workspace available to bind org %s", root.ID)
 	}
 	if s.workspaceRepo != nil {
 		now := time.Now()
 		if bindErr := s.workspaceRepo.Create(ctx, &types.OrgUnitWorkspace{
 			RootOrgUnitID: root.ID,
-			TenantID:      created.ID,
+			TenantID:      earliest.ID,
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		}); bindErr != nil {
-			logger.Errorf(ctx,
-				"failed to bind org %s to tenant %d: %v",
-				root.ID, created.ID, bindErr,
+			logger.Warnf(ctx,
+				"failed to bind org %s to shared tenant %d: %v",
+				root.ID, earliest.ID, bindErr,
 			)
-			_ = s.tenantService.DeleteTenant(ctx, created.ID)
-			return 0, bindErr
 		}
 	}
 	logger.Infof(ctx,
-		"provisioned workspace tenant=%d for platform root org=%s name=%q",
-		created.ID, root.ID, workspaceName,
+		"bound platform root org=%s to shared workspace tenant=%d",
+		root.ID, earliest.ID,
 	)
-	return created.ID, nil
+	return earliest.ID, nil
 }
 
 func (s *orgWorkspaceService) syncOrgTreeMembers(

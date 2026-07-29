@@ -8,18 +8,8 @@
       </div>
       <template v-if="!uiStore.sidebarCollapsed">
         <div class="user-info">
-          <!-- 多空间 / superuser：首行空间名，次行 username · 角色。单空间：昵称 + 邮箱。 -->
-          <template v-if="showTenantIdentityLine">
-            <div class="user-tenant-name" :title="activeTenantName">{{ activeTenantName }}</div>
-            <div class="user-tenant-meta">
-              <span v-if="userName && userName !== activeTenantName" class="user-tenant-meta-name">{{ userName }}</span>
-              <span v-if="(userName && userName !== activeTenantName) && currentRoleLabel"
-                class="user-tenant-meta-sep">·</span>
-              <t-icon v-if="currentRoleIcon" :name="currentRoleIcon" size="12px" class="user-tenant-meta-icon" />
-              <span v-if="currentRoleLabel" class="user-tenant-meta-role">{{ currentRoleLabel }}</span>
-            </div>
-          </template>
-          <template v-else>
+          <!-- 全局单空间：始终展示昵称 + 邮箱，不展示空间名 / 切换入口。 -->
+          <template>
             <div class="user-name">{{ userName }}</div>
             <div class="user-email">{{ userEmail }}</div>
           </template>
@@ -50,15 +40,11 @@
           </div>
         </div>
 
-        <div v-if="userName" ref="tenantMenuItemRef" class="dropdown-tenant-panel" :class="{
-          'is-open': tenantSubmenuOpen,
-          'is-clickable': showTenantSwitcher,
-        }" @mouseenter="showTenantSwitcher && showTenantSubmenu()"
-          @mouseleave="showTenantSwitcher && scheduleHideTenantSubmenu()">
-          <t-icon name="system-sum" class="menu-icon" aria-hidden="true" />
+        <div v-if="userName" class="dropdown-tenant-panel">
+          <t-icon name="usergroup" class="menu-icon" aria-hidden="true" />
           <div class="dropdown-tenant-panel-main">
-            <span class="dropdown-tenant-panel-name" :title="activeTenantName || userName">
-              {{ activeTenantName || userName }}
+            <span class="dropdown-tenant-panel-name" :title="userName">
+              {{ userName }}
             </span>
             <div v-if="currentRoleLabel" class="dropdown-tenant-panel-role">
               <t-icon v-if="currentRoleIcon" :name="currentRoleIcon" size="12px"
@@ -66,8 +52,6 @@
               <span>{{ currentRoleLabel }}</span>
             </div>
           </div>
-          <t-icon v-if="showTenantSwitcher" name="swap" class="dropdown-tenant-panel-trail"
-            :title="$t('tenant.switcher.menuLabel')" />
         </div>
         <div class="menu-divider"></div>
         <!-- QuickNav 入口与 Settings 的最低角色对齐：models/websearch
@@ -127,52 +111,6 @@
       </div>
     </Transition>
 
-    <!-- Tenant switcher floating panel — shares the same teleport rationale
-         as the IM submenu. Data comes from authStore.memberships, kept fresh via
-         GET /auth/me when the submenu opens (throttled) and after invite/create. -->
-    <Teleport to="body">
-      <div v-if="tenantSubmenuOpen" class="tenant-submenu-floating" :style="tenantSubmenuStyle"
-        @mouseenter="showTenantSubmenu" @mouseleave="scheduleHideTenantSubmenu">
-        <div class="tenant-submenu-header">
-          {{ $t('tenant.switcher.menuLabel') }}
-        </div>
-        <div class="tenant-submenu-list">
-          <div v-for="m in switchableMemberships" :key="m.tenant_id" class="tenant-submenu-item"
-            :class="{ 'is-current': isCurrentTenant(m.tenant_id) }" @click="switchToTenant(m)">
-            <div class="tenant-submenu-item-avatar" :class="{ 'is-current': isCurrentTenant(m.tenant_id) }">
-              {{ tenantInitial(m) }}
-              <!-- Home 标识：home tenant 行的 avatar 右下角加一个小 home
-                   icon。比起在 meta 行单独立一个「我的」pill，这里更省地、
-                   也保持各行徽标列对齐。 -->
-              <span v-if="isHomeTenant(m.tenant_id)" class="tenant-submenu-item-home-dot"
-                :title="$t('tenant.switcher.homeTooltip')">
-                <t-icon name="home" size="9px" />
-              </span>
-            </div>
-            <!-- 两行布局：第一行是 tenant 名（拿满剩余宽度，避免被徽标截断
-                 — 之前 home + 当前 两个徽标在同一行时，长 tenant 名直接
-                 被压成省略号）；第二行 role（带角色图标） + 「当前」徽标。
-                 home 徽标已挪到 tenant 名首字母 avatar 角落，不再在 meta
-                 行额外占位，避免徽标列宽不齐。 -->
-            <div class="tenant-submenu-item-info">
-              <span class="tenant-submenu-item-name">{{ tenantDisplayName(m) }}</span>
-              <div class="tenant-submenu-item-meta">
-                <span class="tenant-submenu-item-role">
-                  <t-icon v-if="roleIcon(m.role)" :name="roleIcon(m.role)" size="12px"
-                    class="tenant-submenu-item-role-icon" />
-                  {{ formatRole(m.role) }}
-                </span>
-                <span v-if="isCurrentTenant(m.tenant_id)" class="tenant-submenu-item-badge">{{
-                  $t('tenant.switcher.currentBadge') }}</span>
-              </div>
-            </div>
-          </div>
-          <div v-if="switchableMemberships.length === 0" class="tenant-submenu-empty">
-            {{ $t('tenant.switcher.empty') }}
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -184,13 +122,7 @@ import { useAuthStore } from '@/stores/auth'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { getCurrentUser, logout as logoutApi, userInfoFromApi } from '@/api/auth'
 import { useI18n } from 'vue-i18n'
-import {
-  navigateAfterTenantSwitch,
-  persistLastActiveTenantPreference,
-  stashTenantSwitchToast,
-} from '@/utils/tenantSwitch'
-import { useRoleLabel, useHomeTenant } from '@/composables/useRoleLabel'
-import { getRootZoom, rectToCssPx, cssViewportSize } from '@/utils/zoom'
+import { useRoleLabel } from '@/composables/useRoleLabel'
 import { openNewUserGuide } from '@/config/contextualGuides'
 
 const { t } = useI18n()
@@ -199,28 +131,9 @@ const router = useRouter()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
 const { formatRole, roleIcon } = useRoleLabel()
-const { homeTenantId, isHomeTenantActive, isHomeTenant } = useHomeTenant()
 
-// 顶部用户卡片展示的空间名 / 当前角色：跟着 tenant 切换器实时变。
-// activeTenantName 优先用切换器选中的名字（含 fallback 到 home tenant 名字），
-// 单空间用户也能正常显示自己的 home tenant 名。
-const activeTenantName = computed(() => {
-  return (
-    authStore.selectedTenantName ||
-    authStore.tenant?.name ||
-    ''
-  )
-})
 const currentRoleLabel = computed(() => formatRole(authStore.currentTenantRole))
 const currentRoleIcon = computed(() => roleIcon(authStore.currentTenantRole))
-
-// 单空间用户（memberships <= 1 且非 superuser）= 永远 home + owner，第三
-// 行就是 user-email 信息的重复，没必要占视觉空间；只对多空间 / superuser
-// 渲染。
-const showTenantIdentityLine = computed(() => {
-  if (authStore.canAccessAllTenants) return true
-  return (authStore.memberships ?? []).length > 1
-})
 
 // 与 Settings.vue 的 SECTION_MIN_ROLE 同步；这里只挂 quickNav 直接跳转的
 // 那几项。MCP 已迁至侧栏独立页，不再出现在用户菜单快捷入口。
@@ -234,11 +147,7 @@ const canSeeQuickNav = (key: string): boolean => {
 }
 
 const menuRef = ref<HTMLElement>()
-const tenantMenuItemRef = ref<HTMLElement>()
 const menuVisible = ref(false)
-const tenantSubmenuOpen = ref(false)
-const tenantSubmenuStyle = ref<Record<string, string>>({})
-let tenantSubmenuHideTimer: ReturnType<typeof setTimeout> | null = null
 
 // 用户信息
 const userInfo = ref({
@@ -291,162 +200,6 @@ const handleSystemAdmin = () => {
   menuVisible.value = false
   uiStore.openSettings('system-global')
   router.push({ path: '/platform/settings', query: { section: 'system-global' } })
-}
-
-// Hover-driven submenu controls. A small hide delay tolerates the pointer
-// slipping off briefly onto the gap between menu item and submenu pane.
-const closeAll = () => {
-  tenantSubmenuOpen.value = false
-  menuVisible.value = false
-}
-
-// ---------- Tenant switcher submenu ----------
-//
-// Same hover-driven submenu pattern; data comes from
-// authStore.memberships (refreshed from /auth/me when the submenu opens and
-// after membership-changing actions). PR 4 of #1303 relaxed the X-Tenant-ID
-// gate in middleware/auth.go to accept active membership rows, so flipping
-// authStore.selectedTenantId here is enough — the next page reload re-issues
-// every request with the new header and the server resolves the role server-side.
-type Membership = {
-  tenant_id: number
-  tenant_name?: string
-  role: string
-}
-
-// switchableMemberships is the curated list shown in the dropdown. We keep
-// the active tenant in there (with a "Current" badge) so the user has a
-// single place to glance at "where am I right now"; clicking the current
-// row is a no-op (handled in switchToTenant).
-const switchableMemberships = computed<Membership[]>(() => {
-  return authStore.memberships ?? []
-})
-
-// Rendered whenever the user has at least one membership — even single-
-// tenant users need this submenu to discover the "create new workspace"
-// entry at the bottom. Multi-tenant users additionally use it to switch
-// between memberships. Cross-tenant superusers keep using the sidebar
-// TenantSelector for the "any tenant in the system" case, so we don't
-// double-show that here.
-const showTenantSwitcher = computed(() => {
-  return switchableMemberships.value.length >= 1
-})
-
-const isCurrentTenant = (id: number) => {
-  const active = authStore.effectiveTenantId
-  return active != null && Number(active) === Number(id)
-}
-
-const tenantDisplayName = (m: Membership) =>
-  m.tenant_name && m.tenant_name.trim() !== '' ? m.tenant_name : `#${m.tenant_id}`
-
-const tenantInitial = (m: Membership) => {
-  const name = tenantDisplayName(m).trim()
-  return (name.charAt(0) || '?').toUpperCase()
-}
-
-const switchToTenant = (m: Membership) => {
-  if (isCurrentTenant(m.tenant_id)) {
-    closeAll()
-    return
-  }
-  // 始终把激活空间写进 selectedTenantId，让 request.ts 永远附 X-Tenant-ID。
-  // 历史实现里「切回 home 就清 override」会让请求落回 JWT 编码的空间，
-  // 而 JWT 在 last_active != home 的会话里恰好是 peer 空间（见
-  // userService.resolveLoginTenantID），结果切回 home 反而原地不动。
-  // 服务端持久化偏好仍然按 home/peer 区分：home 时清空 last_active，
-  // 让下次干净重登能正确回到 home。
-  const home = homeTenantId.value
-  const switchingToHome = home !== null && home === m.tenant_id
-  authStore.setSelectedTenant(m.tenant_id, tenantDisplayName(m))
-  closeAll()
-  // Toast 在 reload 后由 App.vue 弹出（直接在这里弹会被 hard reload 干掉）。
-  stashTenantSwitchToast({
-    name: tenantDisplayName(m),
-    role: formatRole(m.role) || undefined,
-    roleEnum: m.role || undefined,
-  })
-  // Persist "last active tenant" preference (switching to home clears
-  // it). Hard reload so every cached store / open SSE stream / in-flight
-  // request gets re-keyed under the new tenant; navigateAfterTenantSwitch
-  // redirects to the platform home so tenant-scoped resource paths don't
-  // white-screen. Race the persist against the existing 400ms grace
-  // window so most writes complete before the page tears down.
-  const persist = persistLastActiveTenantPreference(switchingToHome ? null : m.tenant_id)
-  Promise.race([persist, new Promise((r) => setTimeout(r, 400))])
-    .finally(() => navigateAfterTenantSwitch())
-}
-
-let lastTenantSubmenuMembershipRefresh = 0
-const TENANT_SUBMENU_MEMBERSHIP_REFRESH_MS = 2000
-
-const showTenantSubmenu = () => {
-  if (tenantSubmenuHideTimer) {
-    clearTimeout(tenantSubmenuHideTimer)
-    tenantSubmenuHideTimer = null
-  }
-  positionTenantSubmenu()
-  tenantSubmenuOpen.value = true
-  clampFloatingToViewport('.tenant-submenu-floating', tenantSubmenuStyle)
-  const now = Date.now()
-  if (now - lastTenantSubmenuMembershipRefresh >= TENANT_SUBMENU_MEMBERSHIP_REFRESH_MS) {
-    lastTenantSubmenuMembershipRefresh = now
-    void authStore.refreshFromAuthMe()
-  }
-}
-
-const scheduleHideTenantSubmenu = () => {
-  if (tenantSubmenuHideTimer) clearTimeout(tenantSubmenuHideTimer)
-  tenantSubmenuHideTimer = setTimeout(() => {
-    tenantSubmenuOpen.value = false
-    tenantSubmenuHideTimer = null
-  }, 180)
-}
-
-const positionTenantSubmenu = () => {
-  const el = tenantMenuItemRef.value
-  if (!el) return
-  // Submenu is rendered with `position: fixed` under the root zoom — see
-  // `.tenant-submenu-floating` styles. Anchor coords come from a visual-pixel
-  // rect; normalize to CSS pixels before writing them back to CSS.
-  const zoom = getRootZoom()
-  const rect = rectToCssPx(el.getBoundingClientRect(), zoom)
-  const { width: vw } = cssViewportSize(zoom)
-  const PANEL_WIDTH = 264
-  const GAP = 8
-  const MARGIN = 8
-
-  let left = rect.right + GAP
-  if (left + PANEL_WIDTH + MARGIN > vw) {
-    left = Math.max(MARGIN, rect.left - PANEL_WIDTH - GAP)
-  }
-
-  const top = Math.max(MARGIN, rect.top)
-
-  tenantSubmenuStyle.value = {
-    left: `${left}px`,
-    top: `${top}px`,
-  }
-}
-
-// Anchor the floating submenu just to the right of the hovered menu item,
-// clamped to the viewport so it stays visible near the screen edge.
-const clampFloatingToViewport = (selector: string, target: { value: Record<string, string> }) => {
-  requestAnimationFrame(() => {
-    const panel = document.querySelector(selector) as HTMLElement | null
-    if (!panel) return
-    const MARGIN = 8
-    // `offsetHeight` and `target.value.top` are CSS pixels; `innerHeight` is
-    // visual pixels under root zoom. Normalize the latter to keep the
-    // comparison in one coordinate system.
-    const { height: vh } = cssViewportSize()
-    const h = panel.offsetHeight
-    const currentTop = parseFloat(target.value.top || '0') || 0
-    const maxTop = vh - h - MARGIN
-    if (currentTop > maxTop) {
-      target.value = { ...target.value, top: `${Math.max(MARGIN, maxTop)}px` }
-    }
-  })
 }
 
 const reopenGuide = () => {
@@ -531,11 +284,7 @@ const loadUserInfo = async () => {
 const handleClickOutside = (e: MouseEvent) => {
   const target = e.target as Node
   if (menuRef.value && menuRef.value.contains(target)) return
-  // Tenant submenu is teleported to body, so it's not inside menuRef.
-  const tenantFloating = document.querySelector('.tenant-submenu-floating')
-  if (tenantFloating && tenantFloating.contains(target)) return
   menuVisible.value = false
-  tenantSubmenuOpen.value = false
 }
 
 onMounted(() => {

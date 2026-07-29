@@ -48,8 +48,7 @@
             </div>
         </t-tooltip>
 
-        <!-- 空间选择器：仅在用户可切换空间时显示 -->
-        <TenantSelector v-if="canAccessAllTenants && !uiStore.sidebarCollapsed" />
+        <!-- 空间选择器已下线：全局单空间，不再在侧栏切换 -->
 
         <!-- 折叠时右侧拖拽展开手柄 -->
         <div v-if="uiStore.sidebarCollapsed" class="sidebar-drag-handle" @mousedown="onDragHandleMouseDown" />
@@ -249,7 +248,6 @@ import { useUIStore } from '@/stores/ui';
 import { useCommandPaletteStore } from '@/stores/commandPalette';
 import { MessagePlugin, DialogPlugin, Icon as TIcon } from "tdesign-vue-next";
 import UserMenu from '@/components/UserMenu.vue';
-import TenantSelector from '@/components/TenantSelector.vue';
 import { useI18n } from 'vue-i18n';
 
 const chatResources = useChatResourcesStore();
@@ -357,9 +355,6 @@ const isBatchIndeterminate = computed(() =>
 const batchDisplayCount = computed(() =>
     isAllBatchSelected.value ? total.value : batchSelectedIds.value.length
 )
-
-// 是否可以访问所有空间
-const canAccessAllTenants = computed(() => authStore.canAccessAllTenants);
 
 // 是否处于知识库详情页（不包括全局聊天）
 const isInKnowledgeBase = computed<boolean>(() => {
