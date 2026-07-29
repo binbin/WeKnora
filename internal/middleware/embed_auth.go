@@ -120,9 +120,7 @@ func EmbedAuth(
 		}
 
 		origin := requestOrigin(c)
-		hostOrigin := HostOrigin(c)
-		sameHost := origin != "" && hostOrigin != "" && strings.EqualFold(origin, hostOrigin)
-		if !sameHost && !originAllowed(origin, ch.AllowedOriginsList()) {
+		if !SameHostRequest(c) && !originAllowed(origin, ch.AllowedOriginsList()) {
 			logger.Warnf(c.Request.Context(), "[embed_auth] origin %q not allowed for channel %s", origin, channelID)
 			c.JSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
 			c.Abort()
@@ -262,7 +260,11 @@ func OriginAllowed(origin string, allowed []string) bool {
 // still report the browser-facing origin used for same-host checks.
 func HostOrigin(c *gin.Context) string {
 	scheme := "http"
-	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+	proto := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto"))
+	if comma := strings.IndexByte(proto, ','); comma >= 0 {
+		proto = strings.TrimSpace(proto[:comma])
+	}
+	if c.Request.TLS != nil || strings.EqualFold(proto, "https") {
 		scheme = "https"
 	}
 	host := strings.TrimSpace(c.GetHeader("X-Forwarded-Host"))
@@ -277,6 +279,32 @@ func HostOrigin(c *gin.Context) string {
 		return ""
 	}
 	return scheme + "://" + host
+}
+
+// SameHostRequest reports whether the browser Origin/Referer matches this
+// request's public host. Scheme mismatches are tolerated so nested reverse
+// proxies that rewrite X-Forwarded-Proto to the inner hop's http scheme
+// still pass (host equality is what blocks cross-origin abuse).
+func SameHostRequest(c *gin.Context) bool {
+	return sameHostOrigin(requestOrigin(c), HostOrigin(c))
+}
+
+func sameHostOrigin(origin, hostOrigin string) bool {
+	if origin == "" || hostOrigin == "" {
+		return false
+	}
+	if strings.EqualFold(origin, hostOrigin) {
+		return true
+	}
+	originURL, originErr := url.Parse(origin)
+	hostURL, hostErr := url.Parse(hostOrigin)
+	if originErr != nil || hostErr != nil {
+		return false
+	}
+	if originURL.Host == "" || hostURL.Host == "" {
+		return false
+	}
+	return strings.EqualFold(originURL.Host, hostURL.Host)
 }
 
 // EmbedChannelFromContext returns the authenticated embed channel, if any.

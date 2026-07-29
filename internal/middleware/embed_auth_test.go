@@ -265,6 +265,42 @@ func TestHostOriginForwardedHostChainUsesFirst(t *testing.T) {
 	}
 }
 
+func TestHostOriginForwardedProtoChainUsesFirst(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.Host = "app.example.com"
+	c.Request.Header.Set("X-Forwarded-Proto", "https, http")
+
+	got := HostOrigin(c)
+	want := "https://app.example.com"
+	if got != want {
+		t.Fatalf("HostOrigin() = %q, want %q", got, want)
+	}
+}
+
+func TestSameHostOriginAllowsSchemeMismatch(t *testing.T) {
+	tests := []struct {
+		name       string
+		origin     string
+		hostOrigin string
+		want       bool
+	}{
+		{name: "exact match", origin: "https://a.example", hostOrigin: "https://a.example", want: true},
+		{name: "scheme mismatch same host", origin: "https://a.example", hostOrigin: "http://a.example", want: true},
+		{name: "cross host", origin: "https://evil.example", hostOrigin: "https://a.example", want: false},
+		{name: "empty origin", origin: "", hostOrigin: "https://a.example", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sameHostOrigin(tt.origin, tt.hostOrigin); got != tt.want {
+				t.Fatalf("sameHostOrigin(%q, %q) = %v, want %v",
+					tt.origin, tt.hostOrigin, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestExtractEmbedToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

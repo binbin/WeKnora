@@ -55,10 +55,7 @@ func (h *GuestLinkChannelHandler) BootstrapWebLink(c *gin.Context) {
 		return
 	}
 
-	origin := middleware.RequestOrigin(c)
-	hostOrigin := middleware.HostOrigin(c)
-	sameHost := origin != "" && hostOrigin != "" && strings.EqualFold(origin, hostOrigin)
-	if !sameHost {
+	if !middleware.SameHostRequest(c) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
 		return
 	}

@@ -7,6 +7,16 @@ window.__RUNTIME_CONFIG__ = {
 };
 EOF
 
+# Prefer the outer reverse-proxy scheme when present; otherwise use this hop's
+# $scheme. Nested TLS (host nginx → this container over http) must not rewrite
+# X-Forwarded-Proto to http or same-host bootstrap checks fail.
+cat > /etc/nginx/conf.d/00-forwarded-proto.map.conf <<'EOF'
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+EOF
+
 # 处理 nginx 配置
 export MAX_FILE_SIZE=${MAX_FILE_SIZE_MB}M
 export APP_HOST=${APP_HOST:-app}

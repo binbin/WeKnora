@@ -104,6 +104,27 @@ func TestBootstrapWebLinkSameHostSuccess(t *testing.T) {
 	}
 }
 
+func TestBootstrapWebLinkAllowsSchemeMismatchSameHost(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	gl := &types.GuestLinkChannel{
+		ID: "guest-1", TenantID: 7, AgentID: "agent-1", WebSlug: "abc123", Enabled: true,
+	}
+	h := newBootstrapHandler(gl, &bootstrapEmbedSvc{sessionToken: "ems_guest_token", expiresIn: 1800})
+
+	r := gin.New()
+	r.POST("/api/v1/embed/web/:slug/bootstrap", h.BootstrapWebLink)
+
+	// Nested TLS proxy: browser Origin is https, but the inner hop reports
+	// http via Host / missing X-Forwarded-Proto.
+	req := newBootstrapRequest("abc123", "https://app.example.com", "app.example.com")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+}
+
 func TestBootstrapWebLinkRejectsCrossOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	gl := &types.GuestLinkChannel{

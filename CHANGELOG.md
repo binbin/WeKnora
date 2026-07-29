@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.9] - 2026-07-29
+
+### Bug Fixes
+
+- **FIXED**: **Guest link /w/:slug bootstrap 403 behind nested TLS** —
+  frontend nginx now preserves the outer `X-Forwarded-Proto`, and same-host
+  checks tolerate https Origin vs http HostOrigin so the免登录窗口 channel
+  bootstraps correctly behind host nginx → frontend → app.
+
 ## [0.8.8] - 2026-07-29
 
 ### Bug Fixes
