@@ -547,6 +547,7 @@ func (h *KnowledgeBaseHandler) GetKnowledgeBase(c *gin.Context) {
 		logger.Warnf(c.Request.Context(), "Failed to fill KB counts for %s: %v", kb.ID, fillErr)
 	}
 	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+	enrichKBCanWrite(c.Request.Context(), h.orgUnitService, tenantID, kb)
 	storeView := h.resolveKBStoreView(c.Request.Context(), kb, tenantID)
 	var extras map[string]interface{}
 	if kb.TenantID != tenantID && permission != "" {
@@ -774,6 +775,34 @@ func enrichKBCreatorNames(ctx context.Context, userSvc interfaces.UserService, k
 		}
 		kb.CreatorName = pickUserDisplayName(u)
 	}
+}
+
+// enrichKBCanWrite sets request-scoped can_write for detail responses.
+// Cross-tenant KBs stay false — UI uses share permission for those.
+func enrichKBCanWrite(
+	ctx context.Context,
+	orgUnitSvc interfaces.OrgUnitService,
+	tenantID uint64,
+	kb *types.KnowledgeBase,
+) {
+	if kb == nil {
+		return
+	}
+	if kb.TenantID != tenantID {
+		kb.CanWrite = false
+		return
+	}
+	if orgUnitSvc == nil {
+		kb.CanWrite = true
+		return
+	}
+	activeID, _ := types.OrgUnitIDFromContext(ctx)
+	okWrite, err := orgUnitSvc.CanWriteKB(ctx, tenantID, activeID, kb.OrgUnitID)
+	if err != nil {
+		kb.CanWrite = false
+		return
+	}
+	kb.CanWrite = okWrite
 }
 
 // enrichKBOrgUnitNames 批量把 OrgUnitID 解析成展示名。listOrgUnits 对普通

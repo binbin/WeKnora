@@ -161,6 +161,11 @@ func (s *mcpServiceService) filterMCPByOrgUnit(
 	services []*types.MCPService,
 ) []*types.MCPService {
 	if s.orgUnitService == nil || len(services) == 0 {
+		for _, svc := range services {
+			if svc != nil {
+				svc.CanWrite = true
+			}
+		}
 		return services
 	}
 	activeID, _ := types.OrgUnitIDFromContext(ctx)
@@ -170,6 +175,7 @@ func (s *mcpServiceService) filterMCPByOrgUnit(
 			continue
 		}
 		if svc.IsBuiltin {
+			svc.CanWrite = true
 			filtered = append(filtered, svc)
 			continue
 		}
@@ -180,9 +186,19 @@ func (s *mcpServiceService) filterMCPByOrgUnit(
 			logger.Warnf(ctx, "org unit read check failed for mcp %s: %v", svc.ID, err)
 			continue
 		}
-		if ok {
-			filtered = append(filtered, svc)
+		if !ok {
+			continue
 		}
+		okWrite, writeErr := s.orgUnitService.CanWriteKB(
+			ctx, tenantID, activeID, svc.OrgUnitID,
+		)
+		if writeErr != nil {
+			logger.Warnf(ctx, "org unit write check failed for mcp %s: %v", svc.ID, writeErr)
+			svc.CanWrite = false
+		} else {
+			svc.CanWrite = okWrite
+		}
+		filtered = append(filtered, svc)
 	}
 	return filtered
 }

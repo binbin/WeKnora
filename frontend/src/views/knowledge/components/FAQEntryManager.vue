@@ -941,8 +941,10 @@ const currentSharedKb = computed(() =>
 const isViaShare = computed(() => !!currentSharedKb.value)
 
 // Content edit: Contributor+ in home tenant, or share editor when via share.
+// Ancestor OrgUnit shares set can_write=false.
 const canEdit = computed(() => {
   if (isViaShare.value) return orgStore.canEditKB(props.kbId, false)
+  if (kbInfo.value?.can_write === false) return false
   if (authStore.hasRole('contributor')) return true
   return orgStore.canEditKB(props.kbId, false)
 })
@@ -950,6 +952,7 @@ const canEdit = computed(() => {
 // KB settings / delete / share: Admin+ only (not creator-as-contributor).
 const canManage = computed(() => {
   if (isViaShare.value) return orgStore.canManageKB(props.kbId, false)
+  if (kbInfo.value?.can_write === false) return false
   return authStore.canManageKnowledgeBase
 })
 

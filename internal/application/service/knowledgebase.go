@@ -222,6 +222,11 @@ func (s *knowledgeBaseService) filterKBsByOrgUnit(
 	kbs []*types.KnowledgeBase,
 ) []*types.KnowledgeBase {
 	if s.orgUnitService == nil || len(kbs) == 0 {
+		for _, kb := range kbs {
+			if kb != nil {
+				kb.CanWrite = true
+			}
+		}
 		return kbs
 	}
 	activeID, _ := types.OrgUnitIDFromContext(ctx)
@@ -237,9 +242,19 @@ func (s *knowledgeBaseService) filterKBsByOrgUnit(
 			logger.Warnf(ctx, "org unit read check failed for kb %s: %v", kb.ID, err)
 			continue
 		}
-		if ok {
-			filtered = append(filtered, kb)
+		if !ok {
+			continue
 		}
+		okWrite, writeErr := s.orgUnitService.CanWriteKB(
+			ctx, tenantID, activeID, kb.OrgUnitID,
+		)
+		if writeErr != nil {
+			logger.Warnf(ctx, "org unit write check failed for kb %s: %v", kb.ID, writeErr)
+			kb.CanWrite = false
+		} else {
+			kb.CanWrite = okWrite
+		}
+		filtered = append(filtered, kb)
 	}
 	return filtered
 }

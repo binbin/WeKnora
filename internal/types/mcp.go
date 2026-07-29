@@ -42,6 +42,9 @@ type MCPService struct {
 	// service. Default false — subordinates cannot see it until opted in.
 	// Write stays self-only (same as knowledge bases).
 	ShareWithDescendants bool `json:"share_with_descendants" gorm:"default:false"`
+	// CanWrite is request-scoped: true when the active OrgUnit may mutate
+	// this service. Not persisted.
+	CanWrite bool `json:"can_write" gorm:"-"`
 	CreatedAt            time.Time      `json:"created_at"`
 	UpdatedAt            time.Time      `json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `json:"deleted_at" gorm:"index"`

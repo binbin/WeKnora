@@ -43,6 +43,8 @@ export interface MCPService {
   // Org-unit visibility (same as knowledge bases).
   org_unit_id?: string
   share_with_descendants?: boolean
+  // Request-scoped: false for ancestor-shared read-only services.
+  can_write?: boolean
   // Per-field "configured?" map embedded on the main response (server-side
   // dto.MCPServiceResponse.Credentials). Drives the CredentialResource card
   // without a follow-up GET. Absent for builtin services.

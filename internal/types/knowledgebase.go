@@ -155,6 +155,10 @@ type KnowledgeBase struct {
 	// 下级看到祖先「共享给下级」的库时，listOrgUnits 往往只返回本级子树，
 	// 无法解析祖先名；由 handler 按 ID 直查补上，避免分段标题回退成当前组织名。
 	OrgUnitName string `yaml:"-"                       json:"org_unit_name,omitempty" gorm:"-"`
+	// CanWrite is request-scoped: true when the active OrgUnit may mutate
+	// this KB (self-only). Ancestor-shared read-only KBs are false so the
+	// UI can hide upload / settings / delete. Not persisted.
+	CanWrite bool `yaml:"-" json:"can_write" gorm:"-"`
 }
 
 // KnowledgeBaseConfig represents the knowledge base configuration

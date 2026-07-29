@@ -242,8 +242,10 @@ const isViaShare = computed(() => !!currentSharedKb.value);
 
 // Content edit: Contributor+ in home tenant, or share editor/admin when
 // viewing via organization share. Viewers stay read-only.
+// Ancestor OrgUnit shares (share_with_descendants) set can_write=false.
 const canEdit = computed(() => {
   if (isViaShare.value) return orgStore.canEditKB(kbId.value, false);
+  if (kbInfo.value?.can_write === false) return false;
   if (authStore.hasRole('contributor')) return true;
   return orgStore.canEditKB(kbId.value, false);
 });
@@ -251,6 +253,7 @@ const canEdit = computed(() => {
 // KB settings / delete: Admin+ or system admin only (not KB creator alone).
 const canManage = computed(() => {
   if (isViaShare.value) return orgStore.canManageKB(kbId.value, false);
+  if (kbInfo.value?.can_write === false) return false;
   return authStore.canManageKnowledgeBase;
 });
 

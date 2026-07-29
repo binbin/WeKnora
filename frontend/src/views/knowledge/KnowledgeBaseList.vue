@@ -860,6 +860,9 @@ interface KB {
   org_unit_id?: string;
   org_unit_name?: string;
   share_with_descendants?: boolean;
+  // Request-scoped write flag from list/get: false for ancestor-shared
+  // read-only KBs (share_with_descendants).
+  can_write?: boolean;
 }
 
 const kbs = ref<KB[]>([])
@@ -1498,13 +1501,17 @@ const handleSettings = (kb: KB) => {
 // Legacy KBs created before PR 5 have an empty creator_id; treat
 // those as tenant-owned (Admin+ may manage) so existing KBs aren't
 // suddenly unmanageable for everyone.
-function canManageKBCard(_kb: KB): boolean {
+function canManageKBCard(kb: KB): boolean {
+  // Ancestor-shared read-only: hide settings / delete even for Admin+.
+  if (kb.can_write === false) return false
   // KB settings / delete: Admin+ or system admin only (not creator-as-contributor).
   return authStore.canManageKnowledgeBase
 }
 
-function canDuplicateKBCard(_kb: any): boolean {
-  // Duplicate creates a new KB — same gate as create.
+function canDuplicateKBCard(kb: KB): boolean {
+  // Duplicate creates a new KB — same gate as create, but still requires
+  // write on the source so read-only shared cards don't offer copy-as-edit.
+  if (kb.can_write === false) return false
   return authStore.canManageKnowledgeBase
 }
 

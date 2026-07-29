@@ -33,11 +33,11 @@
             `service-card--${service.transport_type || 'unknown'}`,
             {
               'service-card--builtin': service.is_builtin,
-              'service-card--clickable': isServiceCardClickable(),
+              'service-card--clickable': isServiceCardClickable(service),
             },
           ]"
-          :role="isServiceCardClickable() ? 'button' : undefined"
-          :tabindex="isServiceCardClickable() ? 0 : undefined"
+          :role="isServiceCardClickable(service) ? 'button' : undefined"
+          :tabindex="isServiceCardClickable(service) ? 0 : undefined"
           @click="onServiceCardClick($event, service)"
           @keydown.enter="onServiceCardClick($event, service)"
         >
@@ -162,10 +162,15 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const isServiceCardClickable = () => authStore.hasRole('admin')
+const isServiceCardClickable = (service?: MCPService) => {
+  if (!authStore.hasRole('admin')) return false
+  // Ancestor-shared read-only MCP: no edit entry via card click.
+  if (service && service.can_write === false) return false
+  return true
+}
 
 const onServiceCardClick = (event: Event, service: MCPService) => {
-  if (!isServiceCardClickable()) return
+  if (!isServiceCardClickable(service)) return
   if (event.type === 'keydown') {
     const ke = event as KeyboardEvent
     if (ke.key !== 'Enter' && ke.key !== ' ') return
@@ -240,7 +245,7 @@ const handleDelete = (service: MCPService) => {
 // 测试连接已挪到编辑抽屉的 footer，不再放在外层菜单里 — 单一入口减少
 // 用户疑惑（"为什么有两个测试入口，结果一样吗？"）。
 const getServiceOptions = (service: MCPService) => {
-  if (!authStore.hasRole('admin')) {
+  if (!authStore.hasRole('admin') || service.can_write === false) {
     return []
   }
   return [

@@ -37,6 +37,8 @@ type MCPServiceResponse struct {
 	IsBuiltin            bool                     `json:"is_builtin"`
 	OrgUnitID            string                   `json:"org_unit_id"`
 	ShareWithDescendants bool                     `json:"share_with_descendants"`
+	// CanWrite mirrors types.MCPService.CanWrite for UI mutation gating.
+	CanWrite bool `json:"can_write"`
 	CreatedAt            time.Time                `json:"created_at"`
 	UpdatedAt            time.Time                `json:"updated_at"`
 	// Credentials is the per-field "configured?" map. Embedded on the main
@@ -91,6 +93,7 @@ func NewMCPServiceResponse(ctx context.Context, svc *types.MCPService) *MCPServi
 		IsBuiltin:            svc.IsBuiltin,
 		OrgUnitID:            svc.OrgUnitID,
 		ShareWithDescendants: svc.ShareWithDescendants,
+		CanWrite:             svc.CanWrite,
 		CreatedAt:            svc.CreatedAt,
 		UpdatedAt:            svc.UpdatedAt,
 	}

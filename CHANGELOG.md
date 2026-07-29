@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.12] - 2026-07-29
+
+### Improvements
+
+- **IMPROVED**: **Hide edit/upload on read-only shared KB/MCP** — list and
+  detail responses now include `can_write`; when an OrgUnit only has
+  ancestor read (`share_with_descendants`), the UI hides settings, upload,
+  delete, and MCP edit/toggle actions.
+
 ## [0.8.11] - 2026-07-29
 
 ### Bug Fixes
