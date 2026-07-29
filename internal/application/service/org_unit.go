@@ -681,7 +681,7 @@ func (s *orgUnitService) ResolveActiveOrgUnit(
 	if userID == "" || types.IsSyntheticUserID(userID) {
 		return "", nil
 	}
-	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	memberships, err := s.ListUserMemberships(ctx, tenantID, userID)
 	if err != nil {
 		return "", err
 	}
@@ -729,7 +729,9 @@ func (s *orgUnitService) ListAncestorIDs(
 	tenantID uint64,
 	orgUnitID string,
 ) ([]string, error) {
-	unit, err := s.repo.GetByID(ctx, tenantID, orgUnitID)
+	// Platform catalog nodes live under tenant_id=0; resolveUnit falls
+	// back so descendant KB/MCP share checks still see the path.
+	unit, err := s.resolveUnit(ctx, tenantID, orgUnitID)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, apperrors.NewNotFoundError("org unit not found")
@@ -1072,29 +1074,15 @@ func (s *orgUnitService) resolveActorHomeOrgUnit(
 	if userID == "" || types.IsSyntheticUserID(userID) {
 		return nil, nil
 	}
-	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, userID)
+	memberships, err := s.ListUserMemberships(ctx, tenantID, userID)
 	if err != nil {
 		return nil, err
-	}
-	// Platform-catalog memberships (tenant_id=0) cover users bound before
-	// workspace provisioning; merge when the business tenant has none.
-	if len(memberships) == 0 && tenantID != types.PlatformOrgTenantID {
-		platformMembers, platformErr := s.repo.ListUserMemberships(
-			ctx, types.PlatformOrgTenantID, userID,
-		)
-		if platformErr != nil {
-			return nil, platformErr
-		}
-		memberships = platformMembers
 	}
 	homeID := primaryOrgUnitIDFromMemberships(memberships)
 	if homeID == "" {
 		return nil, ErrActorOrgUnitRequired
 	}
-	unit, err := s.repo.GetByID(ctx, tenantID, homeID)
-	if err != nil && tenantID != types.PlatformOrgTenantID {
-		unit, err = s.repo.GetByID(ctx, types.PlatformOrgTenantID, homeID)
-	}
+	unit, err := s.resolveUnit(ctx, tenantID, homeID)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return nil, ErrActorOrgUnitRequired
@@ -1222,7 +1210,7 @@ func (s *orgUnitService) AssertCanManageTenantMember(
 		return ErrActorOrgUnitRequired
 	}
 
-	actorUnit, err := s.repo.GetByID(ctx, tenantID, actorOrgUnitID)
+	actorUnit, err := s.resolveUnit(ctx, tenantID, actorOrgUnitID)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return ErrActorOrgUnitRequired
@@ -1231,7 +1219,7 @@ func (s *orgUnitService) AssertCanManageTenantMember(
 	}
 
 	targetUserID = strings.TrimSpace(targetUserID)
-	memberships, err := s.repo.ListUserMemberships(ctx, tenantID, targetUserID)
+	memberships, err := s.ListUserMemberships(ctx, tenantID, targetUserID)
 	if err != nil {
 		return err
 	}
@@ -1239,7 +1227,7 @@ func (s *orgUnitService) AssertCanManageTenantMember(
 	if targetOrgUnitID == "" {
 		return ErrMemberOutsideManageScope
 	}
-	targetUnit, err := s.repo.GetByID(ctx, tenantID, targetOrgUnitID)
+	targetUnit, err := s.resolveUnit(ctx, tenantID, targetOrgUnitID)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return ErrMemberOutsideManageScope

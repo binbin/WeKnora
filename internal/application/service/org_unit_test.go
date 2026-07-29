@@ -288,6 +288,54 @@ func TestOrgUnitAncestorReadSelfWrite(t *testing.T) {
 	}
 }
 
+func TestCanReadKB_PlatformCatalogAncestorShare(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"neimeng": {
+				ID: "neimeng", TenantID: types.PlatformOrgTenantID,
+				ParentID: "", Path: "/neimeng/", Depth: 0,
+				Name: "内蒙古自治区",
+			},
+			"renshe": {
+				ID: "renshe", TenantID: types.PlatformOrgTenantID,
+				ParentID: "neimeng", Path: "/neimeng/renshe/", Depth: 1,
+				Name: "人社厅",
+			},
+			"chifeng": {
+				ID: "chifeng", TenantID: types.PlatformOrgTenantID,
+				ParentID: "renshe", Path: "/neimeng/renshe/chifeng/",
+				Depth: 2, Name: "赤峰人社",
+			},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	ctx := context.Background()
+	const businessTenant uint64 = 10000
+
+	// Descendant under platform catalog must still resolve ancestors when
+	// the API tenant is the business workspace — otherwise shared KB/MCP
+	// from 人社厅 / 内蒙古自治区 are filtered out.
+	ancestors, err := svc.ListAncestorIDs(ctx, businessTenant, "chifeng")
+	if err != nil {
+		t.Fatalf("ListAncestorIDs: %v", err)
+	}
+	if len(ancestors) != 3 || ancestors[0] != "chifeng" || ancestors[2] != "neimeng" {
+		t.Fatalf("ancestors=%#v", ancestors)
+	}
+
+	ok, err := svc.CanReadKB(ctx, businessTenant, "chifeng", "renshe", true)
+	if err != nil {
+		t.Fatalf("CanReadKB: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected chifeng to read renshe shared KB")
+	}
+	ok, err = svc.CanReadKB(ctx, businessTenant, "chifeng", "neimeng", true)
+	if err != nil || !ok {
+		t.Fatalf("expected chifeng to read neimeng shared KB, ok=%v err=%v", ok, err)
+	}
+}
+
 func TestCanReadKB_ScopedAdminEmptyActiveDenied(t *testing.T) {
 	svc := newTestOrgUnitService()
 	tenantID := uint64(1)

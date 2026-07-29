@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.11] - 2026-07-29
+
+### Bug Fixes
+
+- **FIXED**: **Descendants cannot see parent-shared KB/MCP** — ancestor
+  resolution and active-org / member-scope lookups now use platform-catalog
+  fallback (`tenant_id=0`), so `share_with_descendants` resources bound to
+  nodes like 人社厅 / 内蒙古自治区 appear for下级组织 again.
+
 ## [0.8.10] - 2026-07-29
 
 ### Bug Fixes
