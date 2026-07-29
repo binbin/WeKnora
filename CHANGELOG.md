@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.7] - 2026-07-29
+
+### Improvements
+
+- **IMPROVED**: **Single shared workspace** — registration joins the
+  deployment's existing workspace (Contributor) instead of creating
+  per-user “{name}'s Workspace”; platform org roots bind to that shared
+  tenant; user menu / sidebar no longer expose space switching.
+
 ## [0.8.6] - 2026-07-28
 
 ### Improvements
