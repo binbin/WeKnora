@@ -602,6 +602,51 @@ func TestAdminCreateDeleteOrgUnitScope(t *testing.T) {
 	}
 }
 
+func TestCreateUnderPlatformParentFromBusinessTenant(t *testing.T) {
+	repo := &stubOrgUnitRepo{
+		units: map[string]*types.OrgUnit{
+			"neimeng": {
+				ID: "neimeng", TenantID: types.PlatformOrgTenantID,
+				ParentID: "", Path: "/neimeng/", Depth: 0,
+				Name: "内蒙古自治区",
+			},
+			"renshe": {
+				ID: "renshe", TenantID: types.PlatformOrgTenantID,
+				ParentID: "neimeng", Path: "/neimeng/renshe/", Depth: 1,
+				Name: "人社厅",
+			},
+		},
+		members: []*types.OrgUnitMember{
+			{
+				OrgUnitID: "renshe",
+				TenantID:  types.PlatformOrgTenantID,
+				UserID:    "admin-renshe",
+				IsPrimary: true,
+			},
+		},
+	}
+	svc := NewOrgUnitService(repo)
+	ctx := adminCtxWithHome("admin-renshe")
+
+	// Workspace-scoped create must resolve platform catalog parents —
+	// regression for "parent org unit not found" under 人社厅.
+	child, err := svc.Create(ctx, 10000, &types.CreateOrgUnitRequest{
+		Name: "自治区社保中心", ParentID: "renshe",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if child.TenantID != types.PlatformOrgTenantID {
+		t.Fatalf("tenant=%d, want platform catalog", child.TenantID)
+	}
+	if child.ParentID != "renshe" || child.Depth != 2 {
+		t.Fatalf("child=%#v", child)
+	}
+	if !strings.HasPrefix(child.Path, "/neimeng/renshe/") {
+		t.Fatalf("path=%q", child.Path)
+	}
+}
+
 func TestResolveMemberListScopeSelfAndDescendants(t *testing.T) {
 	repo := &stubOrgUnitRepo{
 		units: map[string]*types.OrgUnit{

@@ -56,10 +56,10 @@ func (s *orgUnitService) Create(
 		// Platform catalog roots always use tenant_id=0.
 		tenantID = types.PlatformOrgTenantID
 	} else if parentID != "" {
-		parent, err := s.repo.GetByID(ctx, tenantID, parentID)
-		if err != nil && types.IsSystemAdminActor(ctx) {
-			parent, err = s.repo.GetByIDGlobal(ctx, parentID)
-		}
+		// Platform catalog parents (tenant_id=0) are shared across
+		// workspaces; resolveUnit falls back there so tenant admins can
+		// add children under catalog nodes they manage.
+		parent, err := s.resolveUnit(ctx, tenantID, parentID)
 		if err != nil {
 			if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 				return nil, apperrors.NewNotFoundError("parent org unit not found")
@@ -1133,7 +1133,7 @@ func (s *orgUnitService) assertCanManageOrgUnitTarget(
 		}
 		return apperrors.NewForbiddenError(ErrOrgUnitOutsideManageScope.Error())
 	}
-	target, err := s.repo.GetByID(ctx, home.TenantID, targetID)
+	target, err := s.resolveUnit(ctx, tenantID, targetID)
 	if err != nil {
 		if errors.Is(err, apprepo.ErrOrgUnitNotFound) {
 			return apperrors.NewNotFoundError("org unit not found")

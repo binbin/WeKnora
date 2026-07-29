@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.10] - 2026-07-29
+
+### Bug Fixes
+
+- **FIXED**: **Add child under platform org returns parent not found** —
+  `Create` now resolves parents via `resolveUnit` (including
+  `tenant_id=0` catalog nodes), so workspace admins like 人社厅 can add
+  subordinates such as 自治区社保中心 without `parent org unit not found`.
+
 ## [0.8.9] - 2026-07-29
 
 ### Bug Fixes
