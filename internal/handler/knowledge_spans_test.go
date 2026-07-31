@@ -160,6 +160,20 @@ func TestKnowledgeSpansLastError_ClassifiesServerRestart(t *testing.T) {
 	a.Equal("SERVER_RESTART", got["code"])
 }
 
+func TestKnowledgeSpansLastError_ClassifiesHousekeepingRecovery(t *testing.T) {
+	now := time.Now()
+	got := knowledgeSpansLastError(2, 2, types.ParseStatusFailed,
+		"task stuck in processing > 2h10m0s, recovered by housekeeping", now, nil)
+	a := assert.New(t)
+	a.NotNil(got)
+	a.Equal("TASK_STUCK", got["error_code"])
+	a.Equal("TASK_STUCK", got["code"])
+	a.Equal(
+		"task stuck in processing > 2h10m0s, recovered by housekeeping",
+		got["error_message"],
+	)
+}
+
 func TestKnowledgeSpansLastError_SkipsRecoveryFallbackForHistoricalAttempt(t *testing.T) {
 	now := time.Now()
 	got := knowledgeSpansLastError(1, 2, types.ParseStatusFailed, "wiki ingest timed out", now, nil)

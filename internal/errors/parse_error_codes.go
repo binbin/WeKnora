@@ -56,6 +56,18 @@ const (
 	// timeout (whole task), not the docreader-call-level timeout.
 	ErrCodeTaskTimeout = "TASK_TIMEOUT"
 
+	// ErrCodeTaskStuck — housekeeping recovered a knowledge row that sat
+	// in pending/processing/finalizing with no span heartbeat and no
+	// queued task past the stale threshold. The original worker outcome
+	// was lost (crash, lost enqueue, hung call that never failed);
+	// this code surfaces the recovery itself so the UI does not show
+	// a generic UNKNOWN.
+	ErrCodeTaskStuck = "TASK_STUCK"
+
+	// ErrCodeServerRestart — Lite-mode startup reset flipped an in-memory
+	// orphaned processing row to failed after the process restarted.
+	ErrCodeServerRestart = "SERVER_RESTART"
+
 	// ErrCodeUnknown — fallback when a wrapped error doesn't classify.
 	// The full message is still recorded in error_detail so operators
 	// can debug; the UI shows a generic "see admin" hint.

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -143,7 +144,7 @@ func newHousekeepingSvcWithInspector(db *gorm.DB, inspector interfaces.TaskInspe
 		// default of 2h+10min is just a constant scale factor.
 		DocumentProcessTimeout: 1 * time.Hour,
 	}}
-	return NewHousekeepingService(db, cfg, inspector)
+	return NewHousekeepingService(db, cfg, inspector, nil)
 }
 
 // TestHousekeeping_RecoversAbandoned exercises the happy path: a
@@ -163,6 +164,32 @@ func TestHousekeeping_RecoversAbandoned(t *testing.T) {
 	).Row().Scan(&status, &errMsg))
 	assert.Equal(t, types.ParseStatusFailed, status)
 	assert.Contains(t, errMsg, "stuck in processing")
+	assert.Contains(t, errMsg, housekeepingRecoveredSuffix)
+}
+
+func TestHousekeeping_CancelsOpenSpansOnRecovery(t *testing.T) {
+	db := setupHousekeepingDB(t)
+	spanRepo := repository.NewKnowledgeSpanRepository(db)
+	cfg := &config.Config{KnowledgeBase: &config.KnowledgeBaseConfig{
+		DocumentProcessTimeout: 1 * time.Hour,
+	}}
+	svc := NewHousekeepingService(db, cfg, fakeTaskInspector{}, spanRepo)
+
+	stale := time.Now().Add(-3 * time.Hour)
+	insertKnowledge(t, db, "kid-open-span", types.ParseStatusProcessing, stale)
+	insertSpan(t, db, "kid-open-span", 1, "doc", types.SpanStatusRunning, stale)
+
+	svc.runSweep(context.Background())
+
+	var status, errCode, errMsg string
+	require.NoError(t, db.Raw(
+		`SELECT status, error_code, error_message FROM knowledge_processing_spans
+		 WHERE knowledge_id = ? AND span_id = ?`,
+		"kid-open-span", "doc",
+	).Row().Scan(&status, &errCode, &errMsg))
+	assert.Equal(t, types.SpanStatusCancelled, status)
+	assert.Equal(t, "TASK_STUCK", errCode)
+	assert.Contains(t, errMsg, housekeepingRecoveredSuffix)
 }
 
 func TestHousekeeping_RecoversPendingTaskMissingFromQueue(t *testing.T) {

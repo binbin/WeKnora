@@ -763,11 +763,7 @@ func knowledgeSpansLastError(
 	if currentAttempt != latestAttempt || parseStatus != types.ParseStatusFailed || knowledgeErrorMessage == "" {
 		return nil
 	}
-	errorCode := "UNKNOWN"
-	if strings.EqualFold(strings.TrimSpace(knowledgeErrorMessage),
-		"Task interrupted due to application restart") {
-		errorCode = "SERVER_RESTART"
-	}
+	errorCode := classifyKnowledgeRecoveryErrorCode(knowledgeErrorMessage)
 	return gin.H{
 		"stage":         "knowledge_processing",
 		"code":          errorCode,
@@ -777,6 +773,24 @@ func knowledgeSpansLastError(
 		"error_message": knowledgeErrorMessage,
 		"finished_at":   knowledgeUpdatedAt,
 	}
+}
+
+// classifyKnowledgeRecoveryErrorCode maps knowledge.error_message values
+// written by recovery paths (startup reset, housekeeping) onto stable
+// wire codes. Span-backed failures never reach here — they carry their
+// own error_code on the failed span row.
+func classifyKnowledgeRecoveryErrorCode(message string) string {
+	trimmed := strings.TrimSpace(message)
+	if strings.EqualFold(trimmed, "Task interrupted due to application restart") {
+		return errors.ErrCodeServerRestart
+	}
+	// Housekeeping appends the threshold dynamically
+	// ("task stuck in processing > 2h10m0s, recovered by housekeeping"),
+	// so match the stable suffix rather than the whole string.
+	if strings.Contains(trimmed, "recovered by housekeeping") {
+		return errors.ErrCodeTaskStuck
+	}
+	return errors.ErrCodeUnknown
 }
 
 // buildSpanTree assembles a flat list of span rows into a parent-child

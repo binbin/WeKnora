@@ -1,5 +1,3 @@
-// Package service: knowledge housekeeping.
-//
 // HousekeepingService periodically scans for knowledge rows that have been
 // stuck in "processing" longer than any reasonable execution window and
 // marks them as failed. This is the safety net that catches anything the
@@ -20,18 +18,27 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/config"
+	werrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 )
+
+// housekeepingRecoveredSuffix is the stable marker embedded in
+// knowledge.error_message when the sweep recovers a stuck row. The
+// spans API classifies last_error by this substring so the UI can map
+// it to TASK_STUCK instead of UNKNOWN.
+const housekeepingRecoveredSuffix = "recovered by housekeeping"
 
 // HousekeepingService runs background sweeps to recover stuck rows.
 type HousekeepingService struct {
@@ -46,6 +53,11 @@ type HousekeepingService struct {
 	// falls back to the span/updated_at heuristics alone.
 	inspector interfaces.TaskInspector
 
+	// spanRepo cancels open spans after a knowledge row is recovered so
+	// the timeline does not keep showing running bars for an aborted
+	// attempt. nil-safe for tests that only exercise the status flip.
+	spanRepo repository.KnowledgeSpanRepository
+
 	mu      sync.Mutex
 	started bool
 }
@@ -54,12 +66,16 @@ type HousekeepingService struct {
 // the cron — call Start in the application bootstrap so a misconfigured
 // cron schedule cannot prevent the rest of the service from coming up.
 func NewHousekeepingService(
-	db *gorm.DB, cfg *config.Config, inspector interfaces.TaskInspector,
+	db *gorm.DB,
+	cfg *config.Config,
+	inspector interfaces.TaskInspector,
+	spanRepo repository.KnowledgeSpanRepository,
 ) *HousekeepingService {
 	return &HousekeepingService{
 		db:        db,
 		cfg:       cfg,
 		inspector: inspector,
+		spanRepo:  spanRepo,
 		cron: cron.New(cron.WithSeconds(), cron.WithChain(
 			cron.Recover(cron.DefaultLogger),
 		)),
@@ -162,12 +178,13 @@ func (h *HousekeepingService) runSweep(ctx context.Context) {
 		for _, k := range stuck {
 			stuckIDs = append(stuckIDs, k.ID)
 		}
+		errMsg := housekeepingStuckMessage(threshold)
 		res := h.db.WithContext(ctx).Model(&types.Knowledge{}).
 			Where("id IN ? AND parse_status IN ?", stuckIDs,
 				[]string{types.ParseStatusPending, types.ParseStatusProcessing, types.ParseStatusFinalizing}).
 			Updates(map[string]interface{}{
 				"parse_status":           types.ParseStatusFailed,
-				"error_message":          "task stuck in processing > " + threshold.String() + ", recovered by housekeeping",
+				"error_message":          errMsg,
 				"pending_subtasks_count": 0,
 			})
 		if res.Error != nil {
@@ -175,6 +192,7 @@ func (h *HousekeepingService) runSweep(ctx context.Context) {
 		} else if res.RowsAffected > 0 {
 			logger.Infof(ctx, "[Housekeeping] recovered %d stuck knowledge rows (threshold=%s)",
 				res.RowsAffected, threshold)
+			h.cancelOpenSpansForRecovered(ctx, stuckIDs, errMsg)
 		}
 	}
 	if spanSkipped > 0 {
@@ -299,6 +317,48 @@ func (h *HousekeepingService) filterOutQueued(
 		out = append(out, k)
 	}
 	return out, skipped
+}
+
+// housekeepingStuckMessage builds the knowledge.error_message written when
+// the sweep recovers a stuck row. The threshold is dynamic; the
+// housekeepingRecoveredSuffix is stable so the spans API can classify it.
+func housekeepingStuckMessage(threshold time.Duration) string {
+	return fmt.Sprintf(
+		"task stuck in processing > %s, %s",
+		threshold, housekeepingRecoveredSuffix,
+	)
+}
+
+// cancelOpenSpansForRecovered mirrors the Lite-mode startup reset: after
+// flipping knowledge rows to failed, abort any still-open span so the
+// timeline does not keep a running bar for an attempt that will never
+// finish. Best-effort — a span cancel failure must not undo the status
+// flip that already made the row user-visible as failed.
+func (h *HousekeepingService) cancelOpenSpansForRecovered(
+	ctx context.Context, knowledgeIDs []string, reason string,
+) {
+	if h.spanRepo == nil || len(knowledgeIDs) == 0 {
+		return
+	}
+	for _, knowledgeID := range knowledgeIDs {
+		attempt, err := h.spanRepo.LatestAttempt(ctx, knowledgeID)
+		if err != nil || attempt <= 0 {
+			continue
+		}
+		n, cancelErr := h.spanRepo.CancelAllOpenSpans(
+			ctx, knowledgeID, attempt, werrors.ErrCodeTaskStuck, reason,
+		)
+		if cancelErr != nil {
+			logger.Warnf(ctx,
+				"[Housekeeping] cancel spans for %s failed: %v", knowledgeID, cancelErr)
+			continue
+		}
+		if n > 0 {
+			logger.Infof(ctx,
+				"[Housekeeping] cancelled %d open span(s) for knowledge %s attempt %d",
+				n, knowledgeID, attempt)
+		}
+	}
 }
 
 // parseHeartbeatTime accepts the timestamp formats Postgres and SQLite
