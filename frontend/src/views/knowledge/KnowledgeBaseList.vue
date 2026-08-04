@@ -354,7 +354,7 @@
           </template>
         </div>
 
-        <div v-if="spaceSelection === 'mine' && sortedMineKbs.length > 0" class="kb-card-wrap">
+        <div v-if="isMineOrAllOrgsScope && sortedMineKbs.length > 0" class="kb-card-wrap">
           <!-- 置顶分组标题 -->
           <div v-if="sortedMineKbs[0] && sortedMineKbs[0].is_pinned" class="kb-section-header kb-section-header-pinned"
             role="button" tabindex="0" @click="toggleKbSection('pinned')"
@@ -639,7 +639,7 @@
         </div>
 
         <!-- 我的知识库空状态 -->
-        <div v-if="spaceSelection === 'mine' && localOrgKbs.length === 0 && !loading" class="empty-state">
+        <div v-if="isMineOrAllOrgsScope && localOrgKbs.length === 0 && !loading" class="empty-state">
           <img class="empty-img" src="@/assets/img/upload.svg" alt="">
           <span class="empty-txt">{{ $t('knowledgeList.empty.title') }}</span>
           <span class="empty-desc">{{ $t('knowledgeList.empty.description') }}</span>
@@ -788,8 +788,11 @@ import {
   useWorkspaceScopeLabel,
 } from '@/composables/useWorkspaceScopeLabel'
 import {
+  clearExplicitAllOrgsScope,
+  ensureStoredOrgUnitFromMembership,
   getStoredOrgUnitId,
   listOrgUnits,
+  setStoredOrgUnitId,
   type OrgUnit,
 } from '@/api/org-unit'
 
@@ -895,16 +898,21 @@ const allKnowledgeBases = computed(() => kbs.value.length + sharedKbs.value.leng
 // non-org buckets — otherwise a new pseudo-scope (e.g. "favorites")
 // falls through here and triggers the per-space code paths, which
 // renders an extra "no shared KB" empty state on top of the real view.
-const RESERVED_SCOPES = new Set(['all', 'mine', 'favorites', 'recents'])
+const RESERVED_SCOPES = new Set(['all', 'mine', 'all-orgs', 'favorites', 'recents'])
 const spaceSelectionOrgId = computed(() => {
   const s = spaceSelection.value
   return !!s && !RESERVED_SCOPES.has(s)
 })
 
+/** 本组织 / 超管「所有」共用同一套卡片布局。 */
+const isMineOrAllOrgsScope = computed(
+  () => spaceSelection.value === 'mine' || spaceSelection.value === 'all-orgs',
+)
+
 // 当前空间下共享给我的知识库（旧：仅他人共享；保留用于兼容）
 const sharedKbsByOrg = computed(() => {
   const orgId = spaceSelection.value
-  if (orgId === 'all' || orgId === 'mine') return []
+  if (orgId === 'all' || orgId === 'mine' || orgId === 'all-orgs') return []
   return sharedKbs.value.filter(s => s.organization_id === orgId)
 })
 
@@ -1306,7 +1314,7 @@ const filteredKnowledgeBases = computed(() => {
   if (spaceSelection.value === 'recents') {
     return recentsList.value
   }
-  if (spaceSelection.value === 'mine') {
+  if (spaceSelection.value === 'mine' || spaceSelection.value === 'all-orgs') {
     return localOrgKbs.value.map(kb => ({ ...kb, isMine: true as const }))
   }
   if (spaceSelection.value !== 'all') {
@@ -1330,7 +1338,7 @@ const showKbListEmpty = computed(() => {
   if (loading.value) return false
   if (!authStore.hasRole('contributor')) return false
   if (spaceSelection.value === 'all' && filteredKnowledgeBases.value.length === 0) return true
-  if (spaceSelection.value === 'mine' && localOrgKbs.value.length === 0) return true
+  if (isMineOrAllOrgsScope.value && localOrgKbs.value.length === 0) return true
   return false
 })
 
@@ -1385,7 +1393,7 @@ const fetchList = (force = false) => {
 }
 
 // 选中空间时请求该空间内全部知识库（含我共享的）
-watch(spaceSelection, (val) => {
+watch(spaceSelection, async (val, prev) => {
   // Stale URL guard: an older "协作" view used scope=shared; that view
   // was removed, so normalize back to "all" instead of letting the
   // value fall through to the per-space fetch branch (which would 404
@@ -1394,7 +1402,34 @@ watch(spaceSelection, (val) => {
     spaceSelection.value = 'all'
     return
   }
-  if (val === 'all' || val === 'mine' || val === 'favorites' || val === 'recents' || !val) {
+  // Super-admin「所有」: clear OrgUnit so list APIs return every unit.
+  // Non-admins must not keep this scope even via a crafted URL.
+  if (val === 'all-orgs') {
+    if (!authStore.isSystemAdmin) {
+      spaceSelection.value = defaultScope
+      return
+    }
+    if (getStoredOrgUnitId().trim()) {
+      setStoredOrgUnitId('')
+    }
+    spaceKbsList.value = []
+    return
+  }
+  if (
+    prev === 'all-orgs' &&
+    authStore.isSystemAdmin &&
+    !getStoredOrgUnitId().trim()
+  ) {
+    clearExplicitAllOrgsScope()
+    await ensureStoredOrgUnitFromMembership({ allowAllOrgsDefault: false })
+  }
+  if (
+    val === 'all' ||
+    val === 'mine' ||
+    val === 'favorites' ||
+    val === 'recents' ||
+    !val
+  ) {
     spaceKbsList.value = []
     return
   }

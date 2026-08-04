@@ -32,6 +32,15 @@
             <span class="icon-label">{{ workspaceLabel }}</span>
           </div>
         </t-tooltip>
+        <!-- Super-admin only: unscoped view across every OrgUnit. -->
+        <t-tooltip v-if="showAllOrgs" :content="$t('listSpaceSidebar.allOrgs')" placement="right"
+          :show-arrow="false">
+          <div class="icon-item-labeled" :class="{ active: selected === 'all-orgs' }"
+            @click="select('all-orgs')">
+            <t-icon name="root-list" size="16px" />
+            <span class="icon-label">{{ $t('listSpaceSidebar.allOrgs') }}</span>
+          </div>
+        </t-tooltip>
         <!-- Shared spaces group: per-org/space entries only. We dropped
              the aggregate "协作" / shared-with-me entry — its meaning
              oscillated between "everything shared to me" and "things I
@@ -108,6 +117,13 @@
           </div>
           <span v-if="countMine !== undefined" class="item-count">{{ countMine }}</span>
         </div>
+        <div v-if="showAllOrgs" class="sidebar-item" :class="{ active: selected === 'all-orgs' }"
+          @click="select('all-orgs')">
+          <div class="item-left">
+            <t-icon name="root-list" class="item-icon" />
+            <span class="item-label">{{ $t('listSpaceSidebar.allOrgs') }}</span>
+          </div>
+        </div>
         <!-- Shared spaces group — per-org entries only; the aggregate
              entry was removed (see collapsed strip for rationale). -->
         <template v-if="organizationsWithCount.length">
@@ -152,11 +168,17 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { Icon as TIcon } from 'tdesign-vue-next'
 import SpaceAvatar from './SpaceAvatar.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useOrganizationStore } from '@/stores/organization'
 import { useWorkspaceScopeLabel } from '@/composables/useWorkspaceScopeLabel'
+import {
+  clearExplicitAllOrgsScope,
+  ensureStoredOrgUnitFromMembership,
+  getStoredOrgUnitId,
+  setStoredOrgUnitId,
+} from '@/api/org-unit'
 
 const COLLAPSED_WIDTH = 56
 const EXPANDED_WIDTH = 208
@@ -252,14 +274,17 @@ const emit = defineEmits<{
 }>()
 
 const orgStore = useOrganizationStore()
-const { t } = useI18n()
+const authStore = useAuthStore()
 const selected = computed({
   get: () => props.modelValue,
   set: (v: string) => emit('update:modelValue', v)
 })
 
-// 「本空间」位展示所在组织名；超管固定为「所有」。
+// 「本空间」位展示所在组织名；「所有」为超管独立入口，不再占用本组织位文案。
 const { workspaceScopeLabel: workspaceLabel } = useWorkspaceScopeLabel()
+
+// UI gate only — list APIs still enforce isUnscopedOrgBrowser server-side.
+const showAllOrgs = computed(() => authStore.isSystemAdmin === true)
 
 const organizations = computed(() => orgStore.organizations || [])
 
@@ -268,7 +293,24 @@ const organizationsWithCount = computed(() => {
   return organizations.value.filter((org) => (props.countByOrg?.[org.id] ?? 0) > 0)
 })
 
-function select(value: string) {
+async function select(value: string) {
+  if (value === 'all-orgs') {
+    if (!showAllOrgs.value) return
+    // Empty X-Org-Unit-ID → backend returns every OrgUnit's resources.
+    setStoredOrgUnitId('')
+    selected.value = 'all-orgs'
+    return
+  }
+  // Leaving「所有」: drop explicit-all flag and restore home OrgUnit
+  // so 全部/本组织 stay scoped.
+  if (
+    showAllOrgs.value &&
+    !getStoredOrgUnitId().trim() &&
+    props.modelValue === 'all-orgs'
+  ) {
+    clearExplicitAllOrgsScope()
+    await ensureStoredOrgUnitFromMembership({ allowAllOrgsDefault: false })
+  }
   selected.value = value
 }
 

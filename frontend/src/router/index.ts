@@ -113,6 +113,13 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true, requiresAdmin: true }
         },
         {
+          path: "data-charts",
+          name: "dataCharts",
+          component: () => import("../views/data-charts/DataChartsPage.vue"),
+          // 与侧栏 menu.minRole 对齐：编辑/访客不可进数据图表页。
+          meta: { requiresInit: true, requiresAuth: true, requiresAdmin: true }
+        },
+        {
           path: "mcp",
           name: "mcpServices",
           component: () => import("../views/mcp/McpPage.vue"),

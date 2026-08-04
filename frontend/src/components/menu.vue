@@ -392,6 +392,7 @@ const TOP_MENU_PATHS = new Set([
     'agents',
     'members',
     'org-units',
+    'data-charts',
     'organizations',
 ]);
 
@@ -414,6 +415,8 @@ const isMenuItemActive = (itemPath: string): boolean => {
             return currentRoute === 'tenantMembers';
         case 'org-units':
             return currentRoute === 'orgUnits';
+        case 'data-charts':
+            return currentRoute === 'dataCharts';
         case 'creatChat':
             return currentRoute === 'kbCreatChat' || currentRoute === 'globalCreatChat';
         case 'settings':
@@ -1034,6 +1037,7 @@ let agentIcon = ref('agent.svg');
 let mcpIcon = ref('mcp.svg');
 let organizationIcon = ref('organization.svg');
 let membersIcon = ref('members.svg');
+let chartIcon = ref('chart.svg');
 let pathPrefix = ref(route.name)
 
 const resolveMenuIcon = (item: MenuItem): string => {
@@ -1048,6 +1052,8 @@ const resolveMenuIcon = (item: MenuItem): string => {
             return organizationIcon.value;
         case 'members':
             return membersIcon.value;
+        case 'chart':
+            return chartIcon.value;
         case 'logout':
             return logoutIcon.value;
         case 'setting':
@@ -1067,6 +1073,7 @@ const getIcon = (path: string) => {
     const organizationsActiveState =
         route.name === 'organizationList' || route.name === 'orgUnits';
     const membersActiveState = route.name === 'tenantMembers';
+    const chartsActiveState = route.name === 'dataCharts';
 
     // 知识库图标：只在知识库页面显示绿色
     knowledgeIcon.value = kbActiveState.isKbActive ? 'zhishiku-green.svg' : 'zhishiku.svg';
@@ -1082,6 +1089,9 @@ const getIcon = (path: string) => {
 
     // 成员管理图标
     membersIcon.value = membersActiveState ? 'members-green.svg' : 'members.svg';
+
+    // 数据图表图标
+    chartIcon.value = chartsActiveState ? 'chart-green.svg' : 'chart.svg';
 
     // 对话图标：只在对话创建页面显示绿色，其他情况显示默认
     prefixIcon.value = creatChatActiveState.isCreatChatActive ? 'prefixIcon-green.svg' : 'prefixIcon.svg';
@@ -1113,6 +1123,8 @@ const handleMenuClick = async (path: string) => {
         router.push('/platform/members')
     } else if (path === 'org-units') {
         router.push('/platform/org-units')
+    } else if (path === 'data-charts') {
+        router.push('/platform/data-charts')
     } else if (path === 'settings') {
         // 设置菜单项：打开设置弹窗并跳转路由
         uiStore.openSettings()

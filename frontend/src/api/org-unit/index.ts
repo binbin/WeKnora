@@ -34,14 +34,26 @@ export interface OrgUnitVisibility {
 
 const ORG_UNIT_STORAGE_KEY = 'weknora_org_unit_id'
 const ORG_UNIT_USER_STORAGE_KEY = 'weknora_org_unit_user_id'
+/** Super-admin clicked「所有」— keep empty scope; do not re-hydrate home. */
+const ORG_UNIT_EXPLICIT_ALL_KEY = 'weknora_org_unit_explicit_all'
 
 export function getStoredOrgUnitId(): string {
   return localStorage.getItem(ORG_UNIT_STORAGE_KEY) || ''
 }
 
+export function isExplicitAllOrgsScope(): boolean {
+  return localStorage.getItem(ORG_UNIT_EXPLICIT_ALL_KEY) === '1'
+}
+
+export function clearExplicitAllOrgsScope(): void {
+  localStorage.removeItem(ORG_UNIT_EXPLICIT_ALL_KEY)
+}
+
 export function clearStoredOrgUnitId(): void {
   localStorage.removeItem(ORG_UNIT_STORAGE_KEY)
   localStorage.removeItem(ORG_UNIT_USER_STORAGE_KEY)
+  // Account switch / logout: drop intentional「所有」so next login hydrates.
+  localStorage.removeItem(ORG_UNIT_EXPLICIT_ALL_KEY)
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('weknora-org-unit-changed'))
   }
@@ -50,6 +62,7 @@ export function clearStoredOrgUnitId(): void {
 export function setStoredOrgUnitId(orgUnitId: string): void {
   if (orgUnitId) {
     localStorage.setItem(ORG_UNIT_STORAGE_KEY, orgUnitId)
+    localStorage.removeItem(ORG_UNIT_EXPLICIT_ALL_KEY)
     try {
       const raw = localStorage.getItem('weknora_user')
       if (raw) {
@@ -64,6 +77,8 @@ export function setStoredOrgUnitId(orgUnitId: string): void {
   } else {
     localStorage.removeItem(ORG_UNIT_STORAGE_KEY)
     localStorage.removeItem(ORG_UNIT_USER_STORAGE_KEY)
+    // Empty string = intentional「所有」(sidebar / org settings clearable).
+    localStorage.setItem(ORG_UNIT_EXPLICIT_ALL_KEY, '1')
   }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('weknora-org-unit-changed'))
@@ -146,7 +161,8 @@ export async function ensureStoredOrgUnitFromMembership(options?: {
     }
     return existing
   }
-  if (allowAll) {
+  // can_access_all_tenants default, or super-admin explicit「所有」click.
+  if (allowAll || isExplicitAllOrgsScope()) {
     return ''
   }
   try {

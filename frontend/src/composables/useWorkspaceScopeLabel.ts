@@ -45,7 +45,8 @@ async function loadOrgUnitName(
 
     const storedId = getStoredOrgUnitId()
     if (!storedId) {
-      sharedOrgUnitName.value = ''
+      // Keep the last known org name so the「本组织」slot stays labeled
+      // while super-admin「所有」clears the stored scope.
       return
     }
 
@@ -123,12 +124,10 @@ export function useWorkspaceScopeLabel() {
 
   const workspaceScopeLabel = computed(() => {
     const storedId = getStoredOrgUnitId().trim()
-    if (canBrowseAllOrgs.value && !storedId) {
-      return t('listSpaceSidebar.allOrgs')
-    }
+    // 「所有」已是侧栏独立项（仅超管）；本组织位始终显示组织名。
     // 有活跃组织时只用组织名；名称尚未加载完时用「本组织」占位，
     // 不要用 currentTenantName（那是空间名，会把侧栏第四项显示成空间）。
-    if (storedId) {
+    if (storedId || sharedOrgUnitName.value) {
       return sharedOrgUnitName.value || t('listSpaceSidebar.currentOrg')
     }
     return (

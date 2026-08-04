@@ -12,7 +12,9 @@ import McpSettings from '@/views/settings/McpSettings.vue'
 .mcp-page {
   height: 100%;
   box-sizing: border-box;
-  overflow: auto;
-  padding: 24px 28px 32px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>

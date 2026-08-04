@@ -1,10 +1,32 @@
 <template>
-  <div class="mcp-settings">
+  <div class="mcp-list-container">
+    <ListSpaceSidebar
+      v-model="spaceSelection"
+      :count-all="services.length + sharedServices.length"
+      :count-mine="localOrgServices.length"
+      :count-by-org="sharedCountByOrg"
+      :show-favorites="false"
+      :show-recents="false"
+    />
+    <div class="mcp-list-content">
     <div class="section-header">
-      <h2>{{ $t('mcpSettings.title') }}</h2>
-      <p class="section-description">
-        {{ $t('mcpSettings.description') }}
-      </p>
+      <div class="section-header-row">
+        <div>
+          <h2>{{ $t('mcpSettings.title') }}</h2>
+          <p class="section-description">
+            {{ $t('mcpSettings.description') }}
+          </p>
+        </div>
+        <t-button
+          v-if="authStore.hasRole('admin') && !spaceSelectionOrgId"
+          theme="primary"
+          class="header-create-btn"
+          @click="handleAdd"
+        >
+          <template #icon><add-icon /></template>
+          {{ $t('mcpSettings.addService') }}
+        </t-button>
+      </div>
     </div>
 
     <div v-if="loading" class="loading-container">
@@ -17,8 +39,27 @@
         <p>{{ $t('mcpSettings.manageAndTest') }}</p>
       </div>
 
-      <div v-if="services.length === 0 && !authStore.hasRole('admin')" class="empty-state">
+      <div
+        v-if="displayServices.length === 0 && !authStore.hasRole('admin')"
+        class="empty-state"
+      >
         <t-empty :description="$t('mcpSettings.empty')" />
+      </div>
+
+      <div
+        v-else-if="displayServices.length === 0 && authStore.hasRole('admin')"
+        class="services-grid"
+      >
+        <button
+          type="button"
+          class="service-card service-card--add"
+          @click="handleAdd"
+        >
+          <span class="service-card--add__icon" aria-hidden="true">
+            <add-icon />
+          </span>
+          <span class="service-card--add__label">{{ $t('mcpSettings.addService') }}</span>
+        </button>
       </div>
 
       <div v-else class="services-grid">
@@ -26,7 +67,7 @@
              标题 / 副标题 / url 三段式。开关挂在标题行右侧，三点菜单 hover 才出现。
              SettingCard 当前没有其它消费者了，但保留组件供未来需要时复用。 -->
         <div
-          v-for="service in services"
+          v-for="service in displayServices"
           :key="service.id"
           class="service-card"
           :class="[
@@ -93,7 +134,7 @@
           </div>
         </div>
         <button
-          v-if="authStore.hasRole('admin')"
+          v-if="authStore.hasRole('admin') && !spaceSelectionOrgId"
           type="button"
           class="service-card service-card--add"
           @click="handleAdd"
@@ -114,11 +155,12 @@
       @success="handleDialogSuccess"
       @created="handleDialogCreated"
     />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { AddIcon } from 'tdesign-icons-vue-next'
 import { useI18n } from 'vue-i18n'
@@ -128,31 +170,150 @@ import {
   deleteMCPService,
   type MCPService
 } from '@/api/mcp-service'
+import {
+  listSharedMCPServices,
+} from '@/api/organization'
+import {
+  clearExplicitAllOrgsScope,
+  ensureStoredOrgUnitFromMembership,
+  getStoredOrgUnitId,
+  setStoredOrgUnitId,
+} from '@/api/org-unit'
 import McpServiceDialog from './components/McpServiceDialog.vue'
+import ListSpaceSidebar from '@/components/ListSpaceSidebar.vue'
 import { useConfirmDelete } from '@/components/settings/useConfirmDelete'
 import { useAuthStore } from '@/stores/auth'
+import { useListUrlState } from '@/composables/useListUrlState'
+import {
+  ORG_UNIT_CHANGED_EVENT,
+} from '@/composables/useWorkspaceScopeLabel'
+
+interface SharedMCPServiceItem {
+  mcp_service?: MCPService
+  organization_id?: string
+  org_name?: string
+  permission?: string
+  share_id?: string
+  source_tenant_id?: number
+}
 
 const { t } = useI18n()
 const authStore = useAuthStore()
 const confirmDelete = useConfirmDelete()
 
+const defaultScope: 'all' | 'mine' =
+  authStore.hasRole('admin') || authStore.isSystemAdmin ? 'mine' : 'all'
+const { scope: spaceSelection } = useListUrlState({
+  defaultScope,
+  defaultCreator: 'all',
+})
+
+const RESERVED_SCOPES = new Set(['all', 'mine', 'all-orgs'])
+const spaceSelectionOrgId = computed(() => {
+  const scope = spaceSelection.value
+  return !!scope && !RESERVED_SCOPES.has(scope)
+})
+
 const services = ref<MCPService[]>([])
+const sharedServices = ref<SharedMCPServiceItem[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const currentService = ref<MCPService | null>(null)
 
+function isLocalOrgUnitService(service: MCPService): boolean {
+  if (service.is_builtin) return true
+  const activeUnit = getStoredOrgUnitId().trim()
+  // 未选组织（超管「所有」）时不过滤，保持整树可见。
+  if (!activeUnit) return true
+  return (service.org_unit_id?.trim() || '') === activeUnit
+}
+
+const localOrgServices = computed(() =>
+  services.value.filter(isLocalOrgUnitService),
+)
+
+const sharedCountByOrg = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
+  sharedServices.value.forEach((item) => {
+    const orgId = item.organization_id
+    if (!orgId) return
+    counts[orgId] = (counts[orgId] || 0) + 1
+  })
+  return counts
+})
+
+const displayServices = computed<MCPService[]>(() => {
+  if (spaceSelection.value === 'mine' || spaceSelection.value === 'all-orgs') {
+    return localOrgServices.value
+  }
+  if (spaceSelectionOrgId.value) {
+    return sharedServices.value
+      .filter((item) => item.organization_id === spaceSelection.value)
+      .map((item) => item.mcp_service)
+      .filter((svc): svc is MCPService => !!svc)
+  }
+  // 「全部」：本空间服务 + 共享给我的（按 id 去重，本空间优先）
+  const seen = new Set<string>()
+  const merged: MCPService[] = []
+  services.value.forEach((svc) => {
+    seen.add(svc.id)
+    merged.push(svc)
+  })
+  sharedServices.value.forEach((item) => {
+    const svc = item.mcp_service
+    if (!svc || seen.has(svc.id)) return
+    seen.add(svc.id)
+    merged.push({ ...svc, can_write: false })
+  })
+  return merged
+})
+
 // Load MCP services
 const loadServices = async () => {
   loading.value = true
   try {
-    services.value = await listMCPServices()
+    const [owned, sharedRes] = await Promise.all([
+      listMCPServices(),
+      listSharedMCPServices(),
+    ])
+    services.value = Array.isArray(owned) ? owned : []
+    if (sharedRes.success && Array.isArray(sharedRes.data)) {
+      sharedServices.value = sharedRes.data as SharedMCPServiceItem[]
+    } else {
+      sharedServices.value = []
+    }
   } catch (error) {
     MessagePlugin.error(t('mcpSettings.toasts.loadFailed'))
     console.error('Failed to load MCP services:', error)
   } finally {
     loading.value = false
   }
+}
+
+watch(spaceSelection, async (val, prev) => {
+  if (val === 'all-orgs') {
+    if (!authStore.isSystemAdmin) {
+      spaceSelection.value = defaultScope
+      return
+    }
+    if (getStoredOrgUnitId().trim()) {
+      setStoredOrgUnitId('')
+    }
+    return
+  }
+  if (
+    prev === 'all-orgs' &&
+    authStore.isSystemAdmin &&
+    !getStoredOrgUnitId().trim()
+  ) {
+    clearExplicitAllOrgsScope()
+    await ensureStoredOrgUnitFromMembership({ allowAllOrgsDefault: false })
+  }
+})
+
+const handleOrgUnitChanged = () => {
+  void loadServices()
 }
 
 // Handle add button click
@@ -318,17 +479,44 @@ const getTransportTypeLabel = (transportType: string) => {
 }
 
 onMounted(() => {
-  loadServices()
+  void loadServices()
+  window.addEventListener(ORG_UNIT_CHANGED_EVENT, handleOrgUnitChanged)
+})
+
+onUnmounted(() => {
+  window.removeEventListener(ORG_UNIT_CHANGED_EVENT, handleOrgUnitChanged)
 })
 </script>
 
 <style scoped lang="less">
-.mcp-settings {
-  width: 100%;
+.mcp-list-container {
+  margin: 0;
+  height: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  position: relative;
+  min-height: 0;
+}
+
+.mcp-list-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 28px 32px;
+  overflow: auto;
 }
 
 .section-header {
   margin-bottom: 28px;
+
+  .section-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
 
   h2 {
     font-size: 20px;
@@ -342,6 +530,10 @@ onMounted(() => {
     color: var(--td-text-color-secondary);
     margin: 0;
     line-height: 1.6;
+  }
+
+  .header-create-btn {
+    flex-shrink: 0;
   }
 }
 

@@ -295,7 +295,7 @@
         </div>
 
         <!-- 我的智能体 -->
-        <div v-if="spaceSelection === 'mine' && sortedMineAgents.length > 0" class="agent-card-wrap">
+        <div v-if="isMineOrAllOrgsScope && sortedMineAgents.length > 0" class="agent-card-wrap">
           <template v-for="(agent, index) in sortedMineAgents" :key="agent.id">
             <!-- 内置：始终置顶。sortedMineAgents 已按 内置→我→同事 排序。 -->
             <div v-if="showShareGroupHeaders
@@ -665,7 +665,7 @@
           <span class="empty-desc">{{ $t('agent.empty.recentsDescription') }}</span>
         </div>
         <!-- 空状态：我的 -->
-        <div v-if="spaceSelection === 'mine' && agents.length === 0 && !loading" class="empty-state">
+        <div v-if="isMineOrAllOrgsScope && agents.length === 0 && !loading" class="empty-state">
           <img class="empty-img" src="@/assets/img/upload.svg" alt="">
           <span class="empty-txt">{{ $t('agent.empty.title') }}</span>
           <span class="empty-desc">{{ $t('agent.empty.description') }}</span>
@@ -819,7 +819,16 @@ import { shouldShowResourceOriginBadge } from '@/utils/card-list-badge'
 import { useAuthStore } from '@/stores/auth'
 import { useListUrlState } from '@/composables/useListUrlState'
 import { useResourcePins } from '@/composables/useResourcePins'
-import { useWorkspaceScopeLabel } from '@/composables/useWorkspaceScopeLabel'
+import {
+  ORG_UNIT_CHANGED_EVENT,
+  useWorkspaceScopeLabel,
+} from '@/composables/useWorkspaceScopeLabel'
+import {
+  clearExplicitAllOrgsScope,
+  ensureStoredOrgUnitFromMembership,
+  getStoredOrgUnitId,
+  setStoredOrgUnitId,
+} from '@/api/org-unit'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -869,15 +878,27 @@ const allAgentsCount = computed(() => agents.value.length + sharedAgents.value.l
 // with ListSpaceSidebar's pseudo-scopes (favorites / recents / shared /
 // mine / all). Anything not in here is treated as an org/space id, which
 // is what triggers the per-space fetch + "no shared agents" empty state.
-const RESERVED_SCOPES = new Set(['all', 'mine', 'shared', 'favorites', 'recents'])
+const RESERVED_SCOPES = new Set([
+  'all',
+  'mine',
+  'all-orgs',
+  'shared',
+  'favorites',
+  'recents',
+])
 const spaceSelectionOrgId = computed(() => {
   const s = spaceSelection.value
   return !!s && !RESERVED_SCOPES.has(s)
 })
 
+/** 本组织 / 超管「所有」共用同一套卡片布局。 */
+const isMineOrAllOrgsScope = computed(
+  () => spaceSelection.value === 'mine' || spaceSelection.value === 'all-orgs',
+)
+
 const sharedAgentsByOrg = computed(() => {
   const orgId = spaceSelection.value
-  if (orgId === 'all' || orgId === 'mine') return []
+  if (orgId === 'all' || orgId === 'mine' || orgId === 'all-orgs') return []
   return sharedAgents.value.filter(s => s.organization_id === orgId)
 })
 
@@ -963,7 +984,7 @@ const recentsAgentList = computed<DisplayAgent[]>(() => {
 const filteredAgents = computed<DisplayAgent[]>(() => {
   if (spaceSelection.value === 'favorites') return favoritesAgentList.value
   if (spaceSelection.value === 'recents') return recentsAgentList.value
-  if (spaceSelection.value === 'mine') {
+  if (spaceSelection.value === 'mine' || spaceSelection.value === 'all-orgs') {
     return agents.value.map(a => ({ ...a, isMine: true as const }))
   }
   if (spaceSelection.value !== 'all') return []
@@ -1066,7 +1087,7 @@ const showAgentListEmpty = computed(() => {
   if (loading.value) return false
   if (!canCreateOrCopyAgent.value) return false
   if (spaceSelection.value === 'all' && filteredAgents.value.length === 0) return true
-  if (spaceSelection.value === 'mine' && agents.value.length === 0) return true
+  if (isMineOrAllOrgsScope.value && agents.value.length === 0) return true
   return false
 })
 
@@ -1137,8 +1158,34 @@ const handleOpenAgentEditor = (event: CustomEvent) => {
 }
 
 // 选中空间时请求该空间内全部智能体（含我共享的）
-watch(spaceSelection, (val) => {
-  if (val === 'all' || val === 'mine' || !val) {
+watch(spaceSelection, async (val, prev) => {
+  if (val === 'all-orgs') {
+    if (!authStore.isSystemAdmin) {
+      spaceSelection.value = defaultScope
+      return
+    }
+    if (getStoredOrgUnitId().trim()) {
+      setStoredOrgUnitId('')
+    }
+    spaceAgentsList.value = []
+    return
+  }
+  if (
+    prev === 'all-orgs' &&
+    authStore.isSystemAdmin &&
+    !getStoredOrgUnitId().trim()
+  ) {
+    clearExplicitAllOrgsScope()
+    await ensureStoredOrgUnitFromMembership({ allowAllOrgsDefault: false })
+  }
+  if (
+    val === 'all' ||
+    val === 'mine' ||
+    val === 'favorites' ||
+    val === 'recents' ||
+    val === 'shared' ||
+    !val
+  ) {
     spaceAgentsList.value = []
     return
   }
@@ -1162,13 +1209,19 @@ watch(creatorFilter, () => {
   fetchList(true)
 })
 
+const handleOrgUnitChanged = () => {
+  fetchList(true)
+}
+
 onMounted(() => {
   fetchList()
   window.addEventListener('openAgentEditor', handleOpenAgentEditor as EventListener)
+  window.addEventListener(ORG_UNIT_CHANGED_EVENT, handleOrgUnitChanged)
 })
 
 onUnmounted(() => {
   window.removeEventListener('openAgentEditor', handleOpenAgentEditor as EventListener)
+  window.removeEventListener(ORG_UNIT_CHANGED_EVENT, handleOrgUnitChanged)
 })
 
 const onVisibleChange = (visible: boolean) => {

@@ -55,6 +55,14 @@ export const useMenuStore = defineStore('menuStore', () => {
       // 组织层级：仅管理员/所有者可见；编辑/访客不露入口。
       minRole: 'admin',
     },
+    {
+      title: '',
+      titleKey: 'menu.dataCharts',
+      icon: 'chart',
+      path: 'data-charts',
+      // 数据图表：仅管理员/所有者可见。
+      minRole: 'admin',
+    },
     { title: '', titleKey: 'menu.settings', icon: 'setting', path: 'settings' },
     { title: '', titleKey: 'menu.logout', icon: 'logout', path: 'logout' }
   ])
