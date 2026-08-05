@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 )
 
 // DefaultManager implements the Manager interface
@@ -51,9 +52,12 @@ func (m *DefaultManager) initializeSandbox(ctx context.Context) error {
 		dockerSandbox := NewDockerSandbox(m.config)
 		if dockerSandbox.IsAvailable(ctx) {
 			m.sandbox = dockerSandbox
-			// Pre-pull the sandbox image asynchronously so it's ready before first use
+			// Pre-pull the sandbox image asynchronously so it's ready before first use.
+			// Use a 10-minute timeout to prevent the goroutine from hanging indefinitely.
 			go func() {
-				if err := dockerSandbox.EnsureImage(context.Background()); err != nil {
+				pullCtx, pullCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				defer pullCancel()
+				if err := dockerSandbox.EnsureImage(pullCtx); err != nil {
 					log.Printf("[sandbox] failed to pre-pull image %s: %v", m.config.DockerImage, err)
 				} else {
 					log.Printf("[sandbox] image %s is ready", m.config.DockerImage)

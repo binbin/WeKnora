@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -1912,7 +1912,7 @@ func (s *knowledgeService) buildFAQTagResolver(
 
 // hashQuestion 计算问题内容的哈希值，用于生成稳定的 sourceID。
 func hashQuestion(question string) string {
-	h := md5.Sum([]byte(question))
+	h := sha256.Sum256([]byte(question))
 	return hex.EncodeToString(h[:4])
 }
 

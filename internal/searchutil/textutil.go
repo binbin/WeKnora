@@ -1,7 +1,7 @@
 package searchutil
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"strings"
 	"unicode"
@@ -18,8 +18,8 @@ func BuildContentSignature(content string) string {
 	}
 	// Normalize whitespace
 	c = strings.Join(strings.Fields(c), " ")
-	// Use MD5 hash of full content
-	hash := md5.Sum([]byte(c))
+	// Use SHA-256 hash of full content
+	hash := sha256.Sum256([]byte(c))
 	return hex.EncodeToString(hash[:])
 }
 

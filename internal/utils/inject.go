@@ -211,6 +211,58 @@ func ParseSQL(sql string) *SQLParseResult {
 	return result
 }
 
+// IsReadOnlySQL uses pg_query to structurally determine whether a SQL statement
+// is read-only (SELECT, SHOW, DESCRIBE, EXPLAIN, or PRAGMA). Unlike simple
+// string-prefix matching, this cannot be bypassed with SQL comments or whitespace.
+// If parsing fails (e.g. for DuckDB-specific SHOW/PRAGMA syntax that the
+// PostgreSQL parser does not understand), it falls back to a trimmed-lowercase
+// prefix check for those specific keywords only.
+func IsReadOnlySQL(sql string) bool {
+	trimmedSQL := strings.TrimSpace(sql)
+	if trimmedSQL == "" {
+		return false
+	}
+
+	parseResult, err := pg_query.Parse(trimmedSQL)
+	if err != nil {
+		// Parser fallback: DuckDB-specific statements (SHOW, DESCRIBE, EXPLAIN, PRAGMA)
+		// may not parse in the PostgreSQL parser. Allow these via prefix check.
+		lowerSQL := strings.ToLower(trimmedSQL)
+		return strings.HasPrefix(lowerSQL, "show") ||
+			strings.HasPrefix(lowerSQL, "describe") ||
+			strings.HasPrefix(lowerSQL, "explain") ||
+			strings.HasPrefix(lowerSQL, "pragma")
+	}
+
+	if len(parseResult.Stmts) == 0 {
+		return false
+	}
+
+	node := parseResult.Stmts[0].Stmt
+	if node == nil {
+		return false
+	}
+
+	// SELECT (including CTEs, UNION, etc.)
+	if node.GetSelectStmt() != nil {
+		return true
+	}
+	// EXPLAIN wraps another statement and is inherently read-only
+	if node.GetExplainStmt() != nil {
+		return true
+	}
+	// VariableShowStmt covers SHOW statements in PostgreSQL
+	if node.GetVariableShowStmt() != nil {
+		return true
+	}
+	// VacuumStmt can be SHOW-like in some parser variants
+	if node.GetVariableSetStmt() != nil {
+		return false
+	}
+
+	return false
+}
+
 // extractSelectFieldsFromPgQuery extracts field names from SELECT clause using pg_query parse tree
 func extractSelectFieldsFromPgQuery(selectStmt *pg_query.SelectStmt) []string {
 	fields := make([]string, 0)

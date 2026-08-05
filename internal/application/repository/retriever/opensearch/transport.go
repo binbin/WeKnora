@@ -1,14 +1,18 @@
 package opensearch
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/opensearch-project/opensearch-go/v4"
 	osapi "github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 
+	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
@@ -34,6 +38,9 @@ import (
 func NewOpenSearchClient(cfg *types.ConnectionConfig) (*osapi.Client, error) {
 	if cfg == nil || cfg.Addr == "" {
 		return nil, fmt.Errorf("opensearch: ConnectionConfig.Addr required: %w", ErrConfigInvalid)
+	}
+	if cfg.InsecureSkipVerify && strings.EqualFold(strings.TrimSpace(os.Getenv("GIN_MODE")), "release") {
+		logger.Warnf(context.Background(), "[OpenSearch] WARNING: InsecureSkipVerify=true in production mode (GIN_MODE=release) — TLS certificate verification is DISABLED. This is a security risk.")
 	}
 	transport := buildHTTPTransport(cfg.InsecureSkipVerify)
 	return osapi.NewClient(osapi.Config{

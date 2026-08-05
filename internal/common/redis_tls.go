@@ -2,6 +2,7 @@ package common
 
 import (
 	"crypto/tls"
+	"log"
 	"os"
 	"strings"
 )
@@ -35,6 +36,11 @@ func RedisTLSConfig() *tls.Config {
 	}
 	if envTrue("REDIS_TLS_INSECURE_SKIP_VERIFY") {
 		cfg.InsecureSkipVerify = true
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("GIN_MODE")), "release") {
+			log.Println("[SECURITY] WARNING: REDIS_TLS_INSECURE_SKIP_VERIFY=true in production mode (GIN_MODE=release) — Redis TLS certificate verification is DISABLED. This is a security risk; set REDIS_TLS_INSECURE_SKIP_VERIFY=false for production.")
+		} else {
+			log.Println("[SECURITY] WARNING: REDIS_TLS_INSECURE_SKIP_VERIFY=true — Redis TLS certificate verification is DISABLED. Do not use in production.")
+		}
 	}
 
 	return cfg

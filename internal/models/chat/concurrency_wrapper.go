@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/models/limiter"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -60,8 +61,20 @@ func (w *concurrencyChat) ChatStream(ctx context.Context, messages []Message, op
 			select {
 			case out <- resp:
 			case <-ctx.Done():
+				// Drain the channel with a timeout so the goroutine does not
+				// leak if the upstream producer never finishes sending.
 				go func() {
-					for range ch {
+					drainCtx, drainCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+					defer drainCancel()
+					for {
+						select {
+						case _, ok := <-ch:
+							if !ok {
+								return
+							}
+						case <-drainCtx.Done():
+							return
+						}
 					}
 				}()
 				return

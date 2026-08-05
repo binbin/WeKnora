@@ -300,11 +300,14 @@ func (e *EvaluationService) Evaluation(ctx context.Context,
 	logger.Info(ctx, "Registering evaluation task")
 	e.evaluationMemoryStorage.register(detail)
 
-	// Start evaluation in background goroutine
+	// Start evaluation in background goroutine with a 30-minute timeout
+	// to prevent goroutine leak if the context from the HTTP request is cancelled.
 	logger.Info(ctx, "Starting evaluation in background")
 	go func() {
+		evalCtx, evalCancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer evalCancel()
 		// Create new context with logger for background task
-		newCtx := logger.CloneContext(ctx)
+		newCtx := logger.CloneContext(evalCtx)
 		logger.Infof(newCtx, "Background evaluation started for task ID: %s", taskID)
 
 		// Update task status to running

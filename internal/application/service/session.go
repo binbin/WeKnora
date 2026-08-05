@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/config"
 	apperrors "github.com/Tencent/WeKnora/internal/errors"
@@ -439,9 +440,11 @@ func (s *sessionService) DeleteSession(ctx context.Context, id string) error {
 	}
 
 	// Cleanup chat history knowledge entries for this session (async, best-effort).
-	// Use WithoutCancel so the goroutine survives after the HTTP request context is done.
-	bgCtx := context.WithoutCancel(ctx)
+	// Use a fresh background context with timeout so the goroutine survives after
+	// the HTTP request context is done but does not run indefinitely.
+	bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	go func() {
+		defer bgCancel()
 		knowledgeIDs, err := s.messageRepo.GetKnowledgeIDsBySessionID(bgCtx, id)
 		if err != nil {
 			logger.Warnf(bgCtx, "Failed to get knowledge IDs for session %s: %v", id, err)
@@ -504,7 +507,10 @@ func (s *sessionService) BatchDeleteSessions(ctx context.Context, ids []string) 
 	}
 
 	// Cleanup associated resources for each session
-	bgCtx := context.WithoutCancel(ctx)
+	// Use a fresh background context with timeout so cleanup goroutines
+	// survive after the HTTP request context is done but do not run indefinitely.
+	bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer bgCancel()
 	for _, id := range visibleIDs {
 		// Cleanup chat history knowledge entries (async, best-effort)
 		go func(sessionID string) {
@@ -554,7 +560,8 @@ func (s *sessionService) DeleteAllSessions(ctx context.Context) error {
 	if err != nil {
 		logger.Warnf(ctx, "Failed to list sessions for cleanup: %v", err)
 	} else {
-		bgCtx := context.WithoutCancel(ctx)
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer bgCancel()
 		for _, session := range sessions {
 			// Cleanup chat history knowledge entries (async, best-effort)
 			go func(sessionID string) {

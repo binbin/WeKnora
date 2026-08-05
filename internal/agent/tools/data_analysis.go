@@ -218,13 +218,9 @@ func (t *DataAnalysisTool) Execute(ctx context.Context, args json.RawMessage) (*
 		input.Sql = rewrittenSQL
 	}
 
-	// Check if this is a read-only query
-	normalizedSQL := strings.TrimSpace(strings.ToLower(input.Sql))
-	isReadOnly := strings.HasPrefix(normalizedSQL, "select") ||
-		strings.HasPrefix(normalizedSQL, "show") ||
-		strings.HasPrefix(normalizedSQL, "describe") ||
-		strings.HasPrefix(normalizedSQL, "explain") ||
-		strings.HasPrefix(normalizedSQL, "pragma")
+	// Check if this is a read-only query using structural parse-tree analysis
+	// instead of string-prefix matching (which can be bypassed with SQL comments).
+	isReadOnly := utils.IsReadOnlySQL(input.Sql)
 
 	if !isReadOnly {
 		// Reject modification queries

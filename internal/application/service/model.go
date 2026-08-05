@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	apperrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -131,10 +132,13 @@ func (s *modelService) CreateModel(ctx context.Context, model *types.Model) erro
 		return err
 	}
 
-	// Start asynchronous model download
+	// Start asynchronous model download with a 30-minute timeout
+	// to prevent goroutine leak if the HTTP request context is cancelled.
 	logger.Infof(ctx, "Starting background download for model: %s", model.Name)
-	newCtx := logger.CloneContext(ctx)
 	go func() {
+		dlCtx, dlCancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer dlCancel()
+		newCtx := logger.CloneContext(dlCtx)
 		logger.Info(newCtx, "Background download started")
 		err := s.ollamaService.PullModel(newCtx, model.Name)
 		if err != nil {

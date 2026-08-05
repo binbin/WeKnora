@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -48,7 +48,7 @@ func isValidURL(url string) bool {
 	return false
 }
 
-// calculateFileHash calculates MD5 hash of a file
+// calculateFileHash calculates SHA-256 hash of a file
 func calculateFileHash(file *multipart.FileHeader) (string, error) {
 	f, err := file.Open()
 	if err != nil {
@@ -56,7 +56,7 @@ func calculateFileHash(file *multipart.FileHeader) (string, error) {
 	}
 	defer f.Close()
 
-	h := md5.New()
+	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
 	}
@@ -70,7 +70,7 @@ func calculateFileHash(file *multipart.FileHeader) (string, error) {
 }
 
 func calculateStr(strList ...string) string {
-	h := md5.New()
+	h := sha256.New()
 	input := strings.Join(strList, "")
 	h.Write([]byte(input))
 	return hex.EncodeToString(h.Sum(nil))
