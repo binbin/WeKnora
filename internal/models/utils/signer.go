@@ -3,8 +3,9 @@ package utils
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"sort"
 	"strconv"
 	"strings"
@@ -70,8 +71,16 @@ func md5Hex(s string) string {
 
 func generateNonce(length int) string {
 	b := make([]byte, length)
+	n := big.NewInt(int64(len(nonceChars)))
 	for i := range b {
-		b[i] = nonceChars[rand.Intn(len(nonceChars))]
+		idx, err := rand.Int(rand.Reader, n)
+		if err != nil {
+			// This should never happen with crypto/rand.Reader,
+			// but fall back to a fixed index to avoid a panic.
+			b[i] = nonceChars[0]
+			continue
+		}
+		b[i] = nonceChars[idx.Int64()]
 	}
 	return string(b)
 }

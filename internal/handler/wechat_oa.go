@@ -183,7 +183,7 @@ type bindingCompleteRequest struct {
 // BindingComplete POST /api/v1/im/wechat_oa/binding/complete (Cloud HMAC)
 func (handler *WeChatOAHandler) BindingComplete(c *gin.Context) {
 	ctx := c.Request.Context()
-	rawBody, err := io.ReadAll(c.Request.Body)
+	rawBody, err := io.ReadAll(io.LimitReader(c.Request.Body, 1*1024*1024))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "read body failed"})
 		return

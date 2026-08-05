@@ -21,14 +21,17 @@ func ErrorHandler() gin.HandlerFunc {
 
 			// 检查是否为应用错误
 			if appErr, ok := errors.IsAppError(err); ok {
-				// 返回应用错误
+				// 返回应用错误（生产环境隐藏内部错误详情）
+				errResp := gin.H{
+					"code":    appErr.Code,
+					"message": appErr.Message,
+				}
+				if gin.Mode() != gin.ReleaseMode {
+					errResp["details"] = appErr.Details
+				}
 				c.JSON(appErr.HTTPCode, gin.H{
 					"success": false,
-					"error": gin.H{
-						"code":    appErr.Code,
-						"message": appErr.Message,
-						"details": appErr.Details,
-					},
+					"error":   errResp,
 				})
 				return
 			}

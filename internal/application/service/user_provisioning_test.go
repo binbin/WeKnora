@@ -130,7 +130,7 @@ func TestUserServiceRegisterTenantlessSkipsTenantCreation(t *testing.T) {
 	user, err := svc.Register(context.Background(), &types.RegisterRequest{
 		Username:           "张三",
 		Email:              "alice@example.com",
-		Password:           "supersecret",
+		Password:           "supersecret123",
 		TenantProvisioning: types.TenantProvisioningTenantless,
 	})
 	if err != nil {
@@ -159,7 +159,7 @@ func TestUserServiceRegisterReusesSharedTenant(t *testing.T) {
 	user, err := svc.Register(context.Background(), &types.RegisterRequest{
 		Username:           "李四",
 		Email:              "bob@example.com",
-		Password:           "supersecret",
+		Password:           "supersecret123",
 		TenantProvisioning: types.TenantProvisioningCreatePersonal,
 	})
 	if err != nil {

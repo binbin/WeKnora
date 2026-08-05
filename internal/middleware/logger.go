@@ -94,8 +94,8 @@ func readRequestBody(c *gin.Context) string {
 		return "[非文本类型，已跳过]"
 	}
 
-	// 完整读取body内容（不限制大小），因为需要完整重置给后续handler使用
-	bodyBytes, err := io.ReadAll(c.Request.Body)
+	// 限制读取body内容最大1MB，防止内存耗尽攻击
+	bodyBytes, err := io.ReadAll(io.LimitReader(c.Request.Body, 1024*1024))
 	if err != nil {
 		return "[读取请求体失败]"
 	}

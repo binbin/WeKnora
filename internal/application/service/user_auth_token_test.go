@@ -117,9 +117,9 @@ func TestValidateTokenRejectsRefreshToken(t *testing.T) {
 		"type":    "refresh",
 		"exp":     time.Now().Add(time.Hour).Unix(),
 	})
-	tokenRepo.tokens[refreshJWT] = &types.AuthToken{
+	tokenRepo.tokens[hashToken(refreshJWT)] = &types.AuthToken{
 		UserID:    "user-1",
-		Token:     refreshJWT,
+		Token:     hashToken(refreshJWT),
 		TokenType: "refresh_token",
 	}
 
@@ -132,9 +132,9 @@ func TestValidateTokenRejectsRefreshToken(t *testing.T) {
 		"user_id": "user-1",
 		"exp":     time.Now().Add(time.Hour).Unix(),
 	})
-	tokenRepo.tokens[legacyRefresh] = &types.AuthToken{
+	tokenRepo.tokens[hashToken(legacyRefresh)] = &types.AuthToken{
 		UserID:    "user-1",
-		Token:     legacyRefresh,
+		Token:     hashToken(legacyRefresh),
 		TokenType: "refresh_token",
 	}
 
@@ -154,9 +154,9 @@ func TestRefreshTokenRejectsAccessTokenRecord(t *testing.T) {
 		"type":    "refresh",
 		"exp":     time.Now().Add(time.Hour).Unix(),
 	})
-	tokenRepo.tokens[refreshJWT] = &types.AuthToken{
+	tokenRepo.tokens[hashToken(refreshJWT)] = &types.AuthToken{
 		UserID:    "user-1",
-		Token:     refreshJWT,
+		Token:     hashToken(refreshJWT),
 		TokenType: "access_token",
 	}
 

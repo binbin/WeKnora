@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	secutils "github.com/Tencent/WeKnora/internal/utils"
 )
 
 // resolveImageURLForLLM converts stored image paths to a format that LLM APIs can consume.
@@ -75,7 +77,12 @@ func readLocalStorageBytes(storagePath string) []byte {
 		baseDir = "/data/files"
 	}
 	localPath := filepath.Join(baseDir, filepath.FromSlash(relPath))
-	data, err := os.ReadFile(localPath)
+	safePath, err := secutils.SafePathUnderBase(baseDir, localPath)
+	if err != nil {
+		log.Printf("[image-resolve] path traversal blocked for %s: %v", localPath, err)
+		return nil
+	}
+	data, err := os.ReadFile(safePath)
 	if err != nil {
 		log.Printf("[image-resolve] failed to read local file %s: %v", localPath, err)
 		return nil

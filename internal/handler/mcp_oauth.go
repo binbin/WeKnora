@@ -92,6 +92,11 @@ func (h *MCPOAuthHandler) AuthorizeURL(c *gin.Context) {
 	if req.FrontendRedirect == "" {
 		req.FrontendRedirect = "/"
 	}
+	// Validate frontend_redirect to prevent open redirects.
+	// Reject absolute URLs (e.g. "https://evil.com/path") and ensure it is a relative path.
+	if strings.Contains(req.FrontendRedirect, "://") || !strings.HasPrefix(req.FrontendRedirect, "/") {
+		req.FrontendRedirect = "/"
+	}
 
 	service, err := h.svc.GetMCPServiceByID(ctx, tenantID, serviceID)
 	if err != nil || service == nil {

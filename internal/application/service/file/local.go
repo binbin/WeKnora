@@ -84,7 +84,7 @@ func (s *localFileService) SaveFile(ctx context.Context,
 
 	// Create destination file for writing
 	logger.Info(ctx, "Creating destination file")
-	dst, err := os.Create(filePath)
+	dst, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		logger.Errorf(ctx, "Failed to create destination file: %v", err)
 		return "", fmt.Errorf("failed to create file: %w", err)

@@ -2280,8 +2280,8 @@ func (h *InitializationHandler) TestMultimodalFunction(c *gin.Context) {
 		separators = []string{"\n\n", "\n", "。", "！", "？", ";", "；"}
 	}
 
-	// 读取图片文件内容
-	imageContent, err := io.ReadAll(file)
+	// 读取图片文件内容（限制最大50MB，防止内存耗尽攻击）
+	imageContent, err := io.ReadAll(io.LimitReader(file, 50*1024*1024))
 	if err != nil {
 		logger.Error(ctx, "Failed to read image file", err)
 		c.Error(errors.NewBadRequestError("读取图片文件失败"))

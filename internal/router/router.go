@@ -31,6 +31,41 @@ import (
 	_ "github.com/Tencent/WeKnora/docs" // swagger docs
 )
 
+// corsConfig 构建 CORS 配置。
+// 优先读取 CORS_ALLOWED_ORIGINS 环境变量（逗号分隔的 origin 列表），
+// 未设置时回退到 APP_EXTERNAL_URL，都未设置则使用空列表（禁止跨域凭据请求）。
+func corsConfig() cors.Config {
+	origins := parseAllowedOrigins()
+	return cors.Config{
+		AllowOrigins:     origins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Org-Unit-ID", "X-Embed-Session", "X-External-User-ID", "X-External-User-Token"},
+		ExposeHeaders:    []string{"Content-Length", "Access-Control-Allow-Origin"},
+		AllowCredentials: len(origins) > 0, // 仅在有显式 origin 时允许凭据
+		MaxAge:           12 * time.Hour,
+	}
+}
+
+// parseAllowedOrigins 解析允许的 CORS origin 列表。
+// 优先级：CORS_ALLOWED_ORIGINS > APP_EXTERNAL_URL > 空列表。
+func parseAllowedOrigins() []string {
+	if v := os.Getenv("CORS_ALLOWED_ORIGINS"); v != "" {
+		parts := strings.Split(v, ",")
+		origins := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				origins = append(origins, p)
+			}
+		}
+		return origins
+	}
+	if v := os.Getenv("APP_EXTERNAL_URL"); v != "" {
+		return []string{v}
+	}
+	return []string{}
+}
+
 // RouterParams 路由参数
 type RouterParams struct {
 	dig.In
@@ -116,14 +151,12 @@ func NewRouter(params RouterParams) *gin.Engine {
 	}
 
 	// CORS 中间件应放在最前面
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Org-Unit-ID", "X-Embed-Session", "X-External-User-ID", "X-External-User-Token"},
-		ExposeHeaders:    []string{"Content-Length", "Access-Control-Allow-Origin"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	// CORS_ALLOWED_ORIGINS 环境变量指定允许的 origin 列表（逗号分隔）
+	// 未设置时使用 APP_EXTERNAL_URL，都未设置则禁止跨域凭据请求
+	r.Use(cors.New(corsConfig()))
+
+	// 安全响应头（在 CORS 之后、RequestID 之前）
+	r.Use(middleware.SecurityHeaders())
 
 	// 基础中间件（不需要认证）
 	r.Use(middleware.RequestID())
@@ -245,7 +278,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		// so that sub-groups inherit it.
 		v1.Use(rbacGuards.apiKeyAuthorizer.Middleware())
 
-		RegisterAuthRoutes(v1, params.AuthHandler, rbacGuards)
+		RegisterAuthRoutes(v1, params.AuthHandler, rbacGuards, params.RedisClient)
 		RegisterTenantRoutes(v1, params.TenantHandler, params.TenantMemberHandler, params.TenantInvitationHandler, params.AuditLogHandler, rbacGuards)
 		RegisterMyInvitationRoutes(v1, params.TenantInvitationHandler)
 		RegisterKnowledgeBaseRoutes(v1, params.KBHandler, rbacGuards)
@@ -850,8 +883,11 @@ func RegisterMyInvitationRoutes(r *gin.RouterGroup, invitationHandler *handler.T
 }
 
 // RegisterAuthRoutes registers authentication routes
-func RegisterAuthRoutes(r *gin.RouterGroup, handler *handler.AuthHandler, g *rbacGuards) {
-	r.POST("/auth/register", handler.Register)
+func RegisterAuthRoutes(r *gin.RouterGroup, handler *handler.AuthHandler, g *rbacGuards, redisClient *redis.Client) {
+	authRL := middleware.AuthRateLimit(redisClient)
+	loginRL := middleware.LoginRateLimit(redisClient)
+
+	r.POST("/auth/register", authRL, handler.Register)
 	// Share-link surfaces are unauthenticated and accept a plaintext
 	// token from the caller; rate-limit by IP to bound brute-force /
 	// enumeration / abuse traffic. Limiter is shared across both
@@ -860,14 +896,14 @@ func RegisterAuthRoutes(r *gin.RouterGroup, handler *handler.AuthHandler, g *rba
 	publicAuthRL := middleware.PublicAuthRateLimit()
 	r.POST("/auth/register-by-invite", publicAuthRL, handler.RegisterByInvite)
 	r.POST("/auth/invitations/lookup", publicAuthRL, handler.LookupInvitationByToken)
-	r.POST("/auth/login", handler.Login)
+	r.POST("/auth/login", loginRL, handler.Login)
 	r.POST("/auth/auto-setup", handler.AutoSetup)
 	r.GET("/auth/config", handler.GetAuthConfig)
 	r.POST("/auth/switch-tenant", handler.SwitchTenant)
 	r.GET("/auth/oidc/config", handler.GetOIDCConfig)
 	r.GET("/auth/oidc/url", handler.GetOIDCAuthorizationURL)
 	r.GET("/auth/oidc/callback", handler.OIDCRedirectCallback)
-	r.POST("/auth/refresh", handler.RefreshToken)
+	r.POST("/auth/refresh", authRL, handler.RefreshToken)
 	r.GET("/auth/validate", handler.ValidateToken)
 	r.POST("/auth/logout", handler.Logout)
 	// auth/me returns only the caller's own identity/profile, so it is safe

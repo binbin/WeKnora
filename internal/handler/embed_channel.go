@@ -695,7 +695,7 @@ var (
 
 // patchEmbedChatPayload merges embed-channel constraints into the client QA body.
 func patchEmbedChatPayload(body io.Reader, ch *types.EmbedChannel, agentMode bool) ([]byte, error) {
-	raw, err := io.ReadAll(body)
+	raw, err := io.ReadAll(io.LimitReader(body, 10*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", errInvalidEmbedChatBody, err)
 	}

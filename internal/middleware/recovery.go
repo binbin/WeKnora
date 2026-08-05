@@ -26,10 +26,14 @@ func Recovery() gin.HandlerFunc {
 					"stacktrace": string(stacktrace),
 				})
 
-				// 返回500错误
+				// 返回500错误（生产环境隐藏内部错误详情）
+				message := "An unexpected error occurred"
+				if gin.Mode() != gin.ReleaseMode {
+					message = fmt.Sprintf("%v", err)
+				}
 				c.AbortWithStatusJSON(500, gin.H{
 					"error":   "Internal Server Error",
-					"message": fmt.Sprintf("%v", err),
+					"message": message,
 				})
 			}
 		}()

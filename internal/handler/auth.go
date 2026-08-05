@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/handler/dto"
@@ -418,7 +419,7 @@ func (h *AuthHandler) OIDCRedirectCallback(c *gin.Context) {
 	resp, err := h.userService.LoginWithOIDC(ctx, code, strings.TrimSpace(decodedState.RedirectURI), h.resolveDefaultTenantMode(ctx))
 	if err != nil {
 		logger.Errorf(ctx, "Failed to complete OIDC login via redirect callback: %v", err)
-		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("login_failed")+"&oidc_error_description="+urlQueryEscape(err.Error()))
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("login_failed"))
 		return
 	}
 	if !resp.Success {
@@ -727,6 +728,14 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	// Validate new password against the password policy (M-09)
+	if err := service.ValidatePasswordPolicy(req.NewPassword); err != nil {
+		logger.Error(ctx, "New password does not meet password policy", err)
+		appErr := errors.NewValidationError("New password does not meet password policy").WithDetails(err.Error())
+		c.Error(appErr)
+		return
+	}
+
 	// Get current user
 	user, err := h.userService.GetCurrentUser(ctx)
 	if err != nil {
@@ -743,6 +752,18 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		appErr := errors.NewBadRequestError("Password change failed").WithDetails(err.Error())
 		c.Error(appErr)
 		return
+	}
+
+	// M-11: Revoke all existing tokens after password change so any
+	// previously issued sessions are immediately invalidated.
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		tokenParts := strings.SplitN(authHeader, " ", 2)
+		if len(tokenParts) == 2 && tokenParts[0] == "Bearer" {
+			if err := h.userService.Logout(ctx, tokenParts[1]); err != nil {
+				logger.Warnf(ctx, "Failed to revoke tokens after password change: %v", err)
+			}
+		}
 	}
 
 	logger.Infof(ctx, "Password changed successfully for user: %s", user.Email)

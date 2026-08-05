@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
 	apprepo "github.com/Tencent/WeKnora/internal/application/repository"
@@ -75,6 +78,13 @@ const (
 	chineseDisplayNameMaxRunes = 20
 )
 
+// Account lockout configuration
+const (
+	loginFailThreshold = 10               // Max failed attempts before lockout
+	loginLockDuration  = 15 * time.Minute // Lockout duration
+	loginFailWindow    = 30 * time.Minute // Failure count window
+)
+
 // ValidateChineseDisplayName enforces the registration name policy:
 // only Han characters, length 2–20 (rune count).
 func ValidateChineseDisplayName(name string) error {
@@ -90,6 +100,57 @@ func ValidateChineseDisplayName(name string) error {
 		}
 	}
 	return nil
+}
+
+// isAccountLocked checks if the account is locked due to too many failed login attempts
+func (s *userService) isAccountLocked(ctx context.Context, email string) (bool, error) {
+	if s.redisClient == nil {
+		return false, nil
+	}
+	key := "login:lockout:" + email
+	exists, err := s.redisClient.Exists(ctx, key).Result()
+	if err != nil {
+		logger.Errorf(ctx, "Failed to check account lockout: %v", err)
+		return false, nil // Fail open - don't lock on Redis errors
+	}
+	return exists > 0, nil
+}
+
+// recordLoginFailure increments the failed login attempt counter
+func (s *userService) recordLoginFailure(ctx context.Context, email string) {
+	if s.redisClient == nil {
+		return
+	}
+	key := "login:failures:" + email
+	count, err := s.redisClient.Incr(ctx, key).Result()
+	if err != nil {
+		logger.Errorf(ctx, "Failed to record login failure: %v", err)
+		return
+	}
+	// Set expiry on first failure
+	if count == 1 {
+		s.redisClient.Expire(ctx, key, loginFailWindow)
+	}
+	// Lock account if threshold exceeded
+	if count >= int64(loginFailThreshold) {
+		lockKey := "login:lockout:" + email
+		if err := s.redisClient.Set(ctx, lockKey, "1", loginLockDuration).Err(); err != nil {
+			logger.Errorf(ctx, "Failed to lock account: %v", err)
+		} else {
+			logger.Warnf(ctx, "Account locked due to %d failed attempts: %s", count, email)
+		}
+	}
+}
+
+// clearLoginFailures removes the failed login attempt counter on successful login
+func (s *userService) clearLoginFailures(ctx context.Context, email string) {
+	if s.redisClient == nil {
+		return
+	}
+	key := "login:failures:" + email
+	if err := s.redisClient.Del(ctx, key).Err(); err != nil {
+		logger.Errorf(ctx, "Failed to clear login failures: %v", err)
+	}
 }
 
 // getJwtSecret retrieves the JWT secret from the environment, falling back to a securely generated random secret.
@@ -110,6 +171,14 @@ func getJwtSecret() string {
 	return jwtSecret
 }
 
+// hashToken returns the hex-encoded SHA-256 digest of the raw token string.
+// Used to store a non-reversible reference in the database instead of the
+// plaintext JWT.
+func hashToken(raw string) string {
+	h := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(h[:])
+}
+
 // userService implements the UserService interface
 type userService struct {
 	userRepo           interfaces.UserRepository
@@ -118,6 +187,7 @@ type userService struct {
 	memberService      interfaces.TenantMemberService
 	orgWorkspaceService interfaces.OrgWorkspaceService
 	config             *config.Config
+	redisClient        *redis.Client
 }
 
 // NewUserService creates a new user service instance
@@ -128,6 +198,7 @@ func NewUserService(
 	tenantService interfaces.TenantService,
 	memberService interfaces.TenantMemberService,
 	orgWorkspaceService interfaces.OrgWorkspaceService,
+	redisClient *redis.Client,
 ) interfaces.UserService {
 	return &userService{
 		userRepo:            userRepo,
@@ -136,6 +207,7 @@ func NewUserService(
 		memberService:       memberService,
 		orgWorkspaceService: orgWorkspaceService,
 		config:              configInfo,
+		redisClient:         redisClient,
 	}
 }
 
@@ -148,6 +220,9 @@ func (s *userService) Register(ctx context.Context, req *types.RegisterRequest) 
 		return nil, errors.New("username, email and password are required")
 	}
 	if err := ValidateChineseDisplayName(req.Username); err != nil {
+		return nil, err
+	}
+	if err := ValidatePasswordPolicy(req.Password); err != nil {
 		return nil, err
 	}
 
@@ -255,10 +330,22 @@ func (s *userService) Register(ctx context.Context, req *types.RegisterRequest) 
 // Login authenticates a user and returns tokens
 func (s *userService) Login(ctx context.Context, req *types.LoginRequest) (*types.LoginResponse, error) {
 	logger.Info(ctx, "Start user login")
+
+	// Check if account is locked due to too many failed attempts
+	locked, _ := s.isAccountLocked(ctx, req.Email)
+	if locked {
+		logger.Warn(ctx, "Account is locked due to too many failed login attempts")
+		return &types.LoginResponse{
+			Success: false,
+			Message: "Account is temporarily locked due to too many failed login attempts. Please try again later.",
+		}, nil
+	}
+
 	// Get user by email
 	user, err := s.userRepo.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		logger.Errorf(ctx, "Failed to get user by email: %v", err)
+		s.recordLoginFailure(ctx, req.Email)
 		return &types.LoginResponse{
 			Success: false,
 			Message: "Invalid email or password",
@@ -266,6 +353,7 @@ func (s *userService) Login(ctx context.Context, req *types.LoginRequest) (*type
 	}
 	if user == nil {
 		logger.Warn(ctx, "User not found for email")
+		s.recordLoginFailure(ctx, req.Email)
 		return &types.LoginResponse{
 			Success: false,
 			Message: "Invalid email or password",
@@ -285,12 +373,16 @@ func (s *userService) Login(ctx context.Context, req *types.LoginRequest) (*type
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
 	if err != nil {
 		logger.Warn(ctx, "Password verification failed")
+		s.recordLoginFailure(ctx, req.Email)
 		return &types.LoginResponse{
 			Success: false,
 			Message: "Invalid email or password",
 		}, nil
 	}
 	logger.Info(ctx, "Password verification successful")
+
+	// Clear login failures on successful authentication
+	s.clearLoginFailures(ctx, req.Email)
 
 	// Generate tokens. Resolve the target tenant once so the JWT claim
 	// and the tenant we return below agree — otherwise an honoured
@@ -1012,12 +1104,12 @@ func (s *userService) generateTokensForTenant(
 	user *types.User,
 	activeTenantID uint64,
 ) (accessToken, refreshToken string, err error) {
-	// Generate access token (expires in 24 hours)
+	// Generate access token (expires in 15 minutes)
 	accessClaims := jwt.MapClaims{
 		"user_id":   user.ID,
 		"email":     user.Email,
 		"tenant_id": activeTenantID,
-		"exp":       time.Now().Add(24 * time.Hour).Unix(),
+		"exp":       time.Now().Add(15 * time.Minute).Unix(),
 		"iat":       time.Now().Unix(),
 		"type":      "access",
 	}
@@ -1042,13 +1134,13 @@ func (s *userService) generateTokensForTenant(
 		return "", "", err
 	}
 
-	// Store tokens in database
+	// Store hashed tokens in database (never persist raw JWTs)
 	accessTokenRecord := &types.AuthToken{
 		ID:        uuid.New().String(),
 		UserID:    user.ID,
-		Token:     accessToken,
+		Token:     hashToken(accessToken),
 		TokenType: "access_token",
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		ExpiresAt: time.Now().Add(15 * time.Minute),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -1056,7 +1148,7 @@ func (s *userService) generateTokensForTenant(
 	refreshTokenRecord := &types.AuthToken{
 		ID:        uuid.New().String(),
 		UserID:    user.ID,
-		Token:     refreshToken,
+		Token:     hashToken(refreshToken),
 		TokenType: "refresh_token",
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
@@ -1144,10 +1236,8 @@ func (s *userService) SwitchTenant(
 // call. Tokens minted before tenant-level RBAC don't carry the claim;
 // in that case we fall back to user.TenantID for backward compatibility.
 func (s *userService) ValidateToken(ctx context.Context, tokenString string) (*types.User, uint64, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
+	parser := jwt.NewParser(jwt.WithExpirationRequired(), jwt.WithValidMethods([]string{"HS256"}))
+	token, err := parser.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(getJwtSecret()), nil
 	})
 
@@ -1169,8 +1259,8 @@ func (s *userService) ValidateToken(ctx context.Context, tokenString string) (*t
 		return nil, 0, errors.New("refresh token cannot be used as access token")
 	}
 
-	// Check if token is revoked
-	tokenRecord, err := s.tokenRepo.GetTokenByValue(ctx, tokenString)
+	// Check if token is revoked (lookup by hash since we only store digests)
+	tokenRecord, err := s.tokenRepo.GetTokenByValue(ctx, hashToken(tokenString))
 	if err != nil || tokenRecord == nil || tokenRecord.IsRevoked {
 		return nil, 0, errors.New("token is revoked")
 	}
@@ -1254,10 +1344,8 @@ func (s *userService) RefreshToken(
 	ctx context.Context,
 	refreshTokenString string,
 ) (accessToken, newRefreshToken string, err error) {
-	token, err := jwt.Parse(refreshTokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
+	parser := jwt.NewParser(jwt.WithExpirationRequired(), jwt.WithValidMethods([]string{"HS256"}))
+	token, err := parser.Parse(refreshTokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(getJwtSecret()), nil
 	})
 
@@ -1280,8 +1368,8 @@ func (s *userService) RefreshToken(
 		return "", "", errors.New("invalid user ID in token")
 	}
 
-	// Check if token is revoked
-	tokenRecord, err := s.tokenRepo.GetTokenByValue(ctx, refreshTokenString)
+	// Check if token is revoked (lookup by hash since we only store digests)
+	tokenRecord, err := s.tokenRepo.GetTokenByValue(ctx, hashToken(refreshTokenString))
 	if err != nil || tokenRecord == nil || tokenRecord.IsRevoked {
 		return "", "", errors.New("refresh token is revoked")
 	}
@@ -1317,7 +1405,7 @@ func (s *userService) Logout(ctx context.Context, tokenString string) error {
 
 // RevokeToken revokes a token
 func (s *userService) RevokeToken(ctx context.Context, tokenString string) error {
-	tokenRecord, err := s.tokenRepo.GetTokenByValue(ctx, tokenString)
+	tokenRecord, err := s.tokenRepo.GetTokenByValue(ctx, hashToken(tokenString))
 	if err != nil {
 		return err
 	}
