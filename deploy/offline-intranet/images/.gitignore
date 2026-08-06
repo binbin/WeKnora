@@ -1,0 +1,4 @@
+# 大体积离线产物（本地生成，不进 Git）
+*.tar
+*.tar.gz
+!README.md

@@ -1,0 +1,43 @@
+# 内蒙古人社 AI 网关 — 内置模型（启动时 UPSERT 到 models 表）
+# 凭据与地址通过环境变量注入，见同目录上级 .env
+
+builtin_models:
+  - id: builtin-nmg-rs-chat
+    type: KnowledgeQA
+    source: remote
+    is_default: true
+    status: active
+    name: ${LLM_MODEL_NAME}
+    description: 内蒙古人社AI网关 · 对话模型
+    parameters:
+      base_url: ${LLM_BASE_URL}
+      api_key: ${LLM_API_KEY}
+      provider: ${LLM_PROVIDER}
+
+  - id: builtin-nmg-rs-embedding
+    type: Embedding
+    source: remote
+    is_default: true
+    status: active
+    name: ${EMBEDDING_MODEL_NAME}
+    description: 内蒙古人社AI网关 · 向量模型
+    parameters:
+      base_url: ${EMBEDDING_BASE_URL}
+      api_key: ${EMBEDDING_API_KEY}
+      provider: ${EMBEDDING_PROVIDER}
+      embedding_parameters:
+        # 若入库报维度不匹配，用网关实际维度改 .env 中说明并同步改此处后重启
+        dimension: 1024
+        truncate_prompt_tokens: 0
+
+  - id: builtin-nmg-rs-rerank
+    type: Rerank
+    source: remote
+    is_default: true
+    status: active
+    name: ${RERANK_MODEL_NAME}
+    description: 内蒙古人社AI网关 · 重排序模型
+    parameters:
+      base_url: ${RERANK_BASE_URL}
+      api_key: ${RERANK_API_KEY}
+      provider: ${RERANK_PROVIDER}

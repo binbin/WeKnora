@@ -1,0 +1,169 @@
+# TreeRAG / WeKnora 纯内网离线部署（镜像导入，不走 registry pull）
+# 版本：见 .env 中 WEKNORA_VERSION
+#
+# 使用：
+#   ./scripts/load-images.sh
+#   ./scripts/deploy.sh
+#
+# 宿主机 Nginx 反代到 127.0.0.1:${FRONTEND_PORT}（默认 18080）
+
+services:
+  frontend:
+    image: registry.cn-beijing.aliyuncs.com/gov-claw/tree-rag-ui:${WEKNORA_VERSION:-v0.8.18}
+    container_name: TreeRAG-frontend
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-18080}:80"
+    environment:
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      - APP_HOST=${APP_HOST:-app}
+      - APP_PORT=${APP_BACKEND_PORT:-8080}
+      - APP_SCHEME=${APP_SCHEME:-http}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - TreeRAG-network
+    restart: unless-stopped
+
+  app:
+    image: registry.cn-beijing.aliyuncs.com/gov-claw/tree-rag-app:${WEKNORA_VERSION:-v0.8.18}
+    container_name: TreeRAG-app
+    # 仅本机调试用；对外一律走宿主机 Nginx → frontend
+    ports:
+      - "127.0.0.1:${APP_PORT:-18081}:8080"
+    volumes:
+      - data-files:/data/files
+      - docreader-tmp:/tmp/docreader:ro
+      - ./config/config.yaml:/app/config/config.yaml:ro
+      - ./config/builtin_models.yaml:/app/config/builtin_models.yaml:ro
+      - ./skills/preloaded:/app/skills/preloaded:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    env_file:
+      - .env
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - GIN_MODE=${GIN_MODE:-release}
+      - TZ=${TZ:-Asia/Shanghai}
+      - WEKNORA_LANGUAGE=${WEKNORA_LANGUAGE:-zh-CN}
+      - AUTO_MIGRATE=${AUTO_MIGRATE:-true}
+      - APP_EXTERNAL_URL=${APP_EXTERNAL_URL:-}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-}
+      - DISABLE_REGISTRATION=${DISABLE_REGISTRATION:-true}
+      - DB_DRIVER=${DB_DRIVER:-postgres}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - RETRIEVE_DRIVER=${RETRIEVE_DRIVER:-postgres}
+      - DOCREADER_ADDR=${DOCREADER_ADDR:-docreader:50051}
+      - DOCREADER_TRANSPORT=${DOCREADER_TRANSPORT:-grpc}
+      - STREAM_MANAGER_TYPE=${STREAM_MANAGER_TYPE:-redis}
+      - REDIS_ADDR=${REDIS_ADDR:-redis:6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_PREFIX=${REDIS_PREFIX:-stream:}
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - LOCAL_STORAGE_BASE_DIR=${LOCAL_STORAGE_BASE_DIR:-/data/files}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      - OLLAMA_OPTIONAL=${OLLAMA_OPTIONAL:-true}
+      - JWT_SECRET=${JWT_SECRET}
+      - SYSTEM_AES_KEY=${SYSTEM_AES_KEY}
+      - SSRF_WHITELIST=${SSRF_WHITELIST:-}
+      - SSRF_WHITELIST_EXTRA=${SSRF_WHITELIST_EXTRA:-}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME}
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
+      - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - RERANK_MODEL_NAME=${RERANK_MODEL_NAME}
+      - RERANK_BASE_URL=${RERANK_BASE_URL}
+      - RERANK_API_KEY=${RERANK_API_KEY}
+      - RERANK_PROVIDER=${RERANK_PROVIDER:-generic}
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      docreader:
+        condition: service_healthy
+    networks:
+      - TreeRAG-network
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  docreader:
+    image: registry.cn-beijing.aliyuncs.com/gov-claw/tree-rag-docreader:${WEKNORA_VERSION:-v0.8.18}
+    container_name: TreeRAG-docreader
+    expose:
+      - "50051"
+    volumes:
+      - docreader-tmp:/tmp/docreader
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DOCREADER_IMAGE_OUTPUT_DIR=/tmp/docreader
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      - SSRF_WHITELIST=${SSRF_WHITELIST:-}
+      - SSRF_WHITELIST_EXTRA=${SSRF_WHITELIST_EXTRA:-}
+      - DOCREADER_GRPC_PORT=50051
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - TreeRAG-network
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  postgres:
+    image: paradedb/paradedb:v0.22.2-pg17
+    container_name: TreeRAG-postgres
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - TreeRAG-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    stop_grace_period: 1m
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: TreeRAG-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks:
+      - TreeRAG-network
+    restart: unless-stopped
+
+networks:
+  TreeRAG-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  data-files:
+  docreader-tmp:
+  redis-data:
