@@ -450,6 +450,11 @@ start_app() {
     fi
     export DOCREADER_TRANSPORT="${DOCREADER_TRANSPORT:-grpc}"
 
+    # 本地前端 Vite 默认 origin；生产/显式配置优先，不覆盖已有值
+    if [ -z "${CORS_ALLOWED_ORIGINS:-}" ] && [ -z "${APP_EXTERNAL_URL:-}" ]; then
+        export CORS_ALLOWED_ORIGINS="http://localhost:5173"
+    fi
+
     if ! check_remote_dev_connectivity; then
         return 1
     fi

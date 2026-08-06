@@ -33,17 +33,30 @@ import (
 
 // corsConfig 构建 CORS 配置。
 // 优先读取 CORS_ALLOWED_ORIGINS 环境变量（逗号分隔的 origin 列表），
-// 未设置时回退到 APP_EXTERNAL_URL，都未设置则使用空列表（禁止跨域凭据请求）。
+// 未设置时回退到 APP_EXTERNAL_URL，都未设置则拒绝跨域（禁止凭据）。
+// gin-contrib/cors 在 AllowOrigins 为空且未设 AllowOriginFunc 时会 panic，
+// 因此空列表改用 AllowOriginFunc 显式拒绝。
 func corsConfig() cors.Config {
 	origins := parseAllowedOrigins()
-	return cors.Config{
-		AllowOrigins:     origins,
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Org-Unit-ID", "X-Embed-Session", "X-External-User-ID", "X-External-User-Token"},
+	cfg := cors.Config{
+		AllowMethods: []string{
+			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
+		},
+		AllowHeaders: []string{
+			"Origin", "Content-Type", "Accept", "Authorization",
+			"X-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Org-Unit-ID",
+			"X-Embed-Session", "X-External-User-ID", "X-External-User-Token",
+		},
 		ExposeHeaders:    []string{"Content-Length", "Access-Control-Allow-Origin"},
-		AllowCredentials: len(origins) > 0, // 仅在有显式 origin 时允许凭据
+		AllowCredentials: len(origins) > 0,
 		MaxAge:           12 * time.Hour,
 	}
+	if len(origins) > 0 {
+		cfg.AllowOrigins = origins
+	} else {
+		cfg.AllowOriginFunc = func(string) bool { return false }
+	}
+	return cfg
 }
 
 // parseAllowedOrigins 解析允许的 CORS origin 列表。
