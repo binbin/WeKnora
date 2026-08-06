@@ -6,6 +6,9 @@
 当前预置版本：`v0.8.18`  
 预置模型网关：**内蒙古人社AI网关**（`http://10.55.45.50:38080/v1`）
 
+> **本目录已内置 `images/` 离线镜像**（linux/amd64，约 9.6GB）。  
+> 内网机可直接：`./scripts/load-images.sh && ./scripts/deploy.sh`
+
 ---
 
 ## 目录结构
@@ -25,6 +28,7 @@ offline-intranet/
 ├── images/                   # 离线镜像 tar / 汇总包（由 pack 脚本生成）
 └── scripts/
     ├── pack-images.sh        # 【有网机】拉镜像并导出
+    ├── download-from-ci.sh   # 从 Actions 制品拉取镜像
     ├── load-images.sh        # 【内网机】docker load
     ├── deploy.sh             # 【内网机】compose up + 可选装 Nginx
     ├── install-nginx.sh      # 安装 Nginx 站点
@@ -57,35 +61,34 @@ offline-intranet/
 
 ---
 
-## 一、有网机器：制作离线包
+## 一、拷贝到内网机
 
-要求：能访问 `registry.cn-beijing.aliyuncs.com`（ACR），Docker 支持 `linux/amd64`。
+本包已含镜像时，直接整目录拷贝即可：
+
+```bash
+# 在制作机（本仓库）
+rsync -avP deploy/offline-intranet/ user@intranet:/opt/treerag/
+# 或打成一个总包
+tar -C deploy -cvf treerag-offline-intranet-v0.8.18.tar offline-intranet
+```
+
+> 合计约 **10GB+**，请预留磁盘与传输时间。`.env` 含密钥，仅限内网介质传递。
+
+### 需要重新打镜像包时（可选）
+
+有网且可登录 ACR：
 
 ```bash
 cd deploy/offline-intranet
-
-# ACR 登录（与 CI 推送同一仓库）
-export ACR_USERNAME='<你的 ACR 用户名>'
-export ACR_PASSWORD='<你的 ACR 密码>'
-
-# 默认打 linux/amd64（适配常见 Ubuntu x86_64 服务器）
+export ACR_USERNAME='...' ACR_PASSWORD='...'
 ./scripts/pack-images.sh
 ```
 
-成功后 `images/` 下会有：
-
-- 各镜像独立 `*.tar`
-- `manifest-v0.8.18.txt`
-- 汇总包 `treerag-images-v0.8.18-linux-amd64.tar.gz`（便于一次拷贝）
-
-将**整个** `offline-intranet` 目录（含 `images/`）拷到内网机，例如：
+或触发 GitHub Actions：`Pack Offline Images`，再：
 
 ```bash
-rsync -avP ./offline-intranet/ user@intranet:/opt/treerag/
-# 或 scp / U 盘拷贝
+./scripts/download-from-ci.sh
 ```
-
-> 镜像体积较大（通常十余 GB），请预留磁盘与传输时间。
 
 ---
 

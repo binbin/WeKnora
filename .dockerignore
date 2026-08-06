@@ -43,6 +43,7 @@ TreeRAG-lite
 /dist/
 /build/
 cmd/desktop/build/bin/
+/deploy/
 
 # 本地数据 / 模型文件
 /models/
