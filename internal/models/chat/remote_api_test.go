@@ -205,6 +205,14 @@ func TestBuildChatCompletionRequest_GPT5MaxCompletionTokens(t *testing.T) {
 		assert.Equal(t, 0, req.MaxTokens)
 		assert.Equal(t, 2048, req.MaxCompletionTokens)
 	})
+
+	t.Run("MaxCompletionTokens alone maps to MaxTokens for compatible APIs", func(t *testing.T) {
+		c := build(t, "openai", "gpt-4o")
+		opts := &ChatOptions{MaxCompletionTokens: 4096}
+		req := c.shapedRequest(messages, opts, false)
+		assert.Equal(t, 4096, req.MaxTokens, "agent max_completion_tokens must become max_tokens")
+		assert.Equal(t, 0, req.MaxCompletionTokens)
+	})
 }
 
 func TestBuildChatCompletionRequest_ToolChoice(t *testing.T) {

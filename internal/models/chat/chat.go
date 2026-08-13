@@ -40,6 +40,22 @@ type ChatOptions struct {
 	Format              json.RawMessage `json:"format,omitempty"`              // 响应格式定义
 }
 
+// EffectiveCompletionTokenLimit returns the generation token budget.
+// Agent UI / config persist max_completion_tokens; many providers only honor
+// max_tokens. Prefer MaxCompletionTokens when set.
+func EffectiveCompletionTokenLimit(opts *ChatOptions) int {
+	if opts == nil {
+		return 0
+	}
+	if opts.MaxCompletionTokens > 0 {
+		return opts.MaxCompletionTokens
+	}
+	if opts.MaxTokens > 0 {
+		return opts.MaxTokens
+	}
+	return 0
+}
+
 // MessageContentPart represents a part of multi-content message
 type MessageContentPart struct {
 	Type     string    `json:"type"`                // "text" or "image_url"

@@ -609,8 +609,8 @@
                       </div>
                     </div>
 
-                    <!-- 最大生成Token数（仅普通模式） -->
-                    <div v-if="!isAgentMode" class="setting-row">
+                    <!-- 最大生成Token数 -->
+                    <div class="setting-row">
                       <div class="setting-info">
                         <label>{{ $t('agent.editor.maxCompletionTokens') }}</label>
                         <p class="desc">{{ $t('agentEditor.desc.maxTokens') }}</p>

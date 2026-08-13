@@ -126,11 +126,12 @@ func (c *RemoteAPIChat) BuildChatCompletionRequest(
 		req.PresencePenalty = float32(opts.PresencePenalty)
 	}
 
-	if opts.MaxTokens > 0 {
-		req.MaxTokens = opts.MaxTokens
-	}
-	if opts.MaxCompletionTokens > 0 {
-		req.MaxCompletionTokens = opts.MaxCompletionTokens
+	// Agent / summary config stores the limit as MaxCompletionTokens. Most
+	// OpenAI-compatible providers (and the go-openai default field) only honor
+	// max_tokens, so map the effective limit there. Reasoning / GPT-5 adapters
+	// migrate max_tokens → max_completion_tokens in ShapeRequest.
+	if limit := EffectiveCompletionTokenLimit(opts); limit > 0 {
+		req.MaxTokens = limit
 	}
 
 	// 处理 Tools

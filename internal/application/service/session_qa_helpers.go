@@ -210,6 +210,9 @@ func (s *sessionService) applyAgentOverridesToChatManage(
 	}
 	if customAgent.Config.MaxCompletionTokens > 0 {
 		cm.SummaryConfig.MaxCompletionTokens = customAgent.Config.MaxCompletionTokens
+		// Keep MaxTokens in sync so providers that only read max_tokens
+		// (before request shaping) still see the agent-configured limit.
+		cm.SummaryConfig.MaxTokens = customAgent.Config.MaxCompletionTokens
 		logger.Infof(ctx, "Using custom agent's max_completion_tokens: %d", customAgent.Config.MaxCompletionTokens)
 	}
 	// Agent-level thinking setting takes full control (no global fallback).
