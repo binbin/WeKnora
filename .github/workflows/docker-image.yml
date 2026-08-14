@@ -67,6 +67,8 @@ jobs:
           context: ./frontend
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=build-ui
           cache-to: type=gha,scope=build-ui,mode=max
 
@@ -117,6 +119,8 @@ jobs:
           context: .
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=build-docreader
           cache-to: type=gha,scope=build-docreader,mode=max
 
@@ -152,6 +156,8 @@ jobs:
           context: .
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=build-sandbox
           cache-to: type=gha,scope=build-sandbox,mode=max
 
@@ -177,6 +183,8 @@ jobs:
           context: .
           labels: ${{ steps.meta-cube.outputs.labels }}
           tags: ${{ steps.meta-cube.outputs.tags }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=build-sandbox-cube
           cache-to: type=gha,scope=build-sandbox-cube,mode=max
 
@@ -242,6 +250,8 @@ jobs:
             ${{ format('GO_VERSION_ARG={0}', steps.version.outputs.go_version) }}
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/tree-rag-app
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=build-app-${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,scope=build-app-${{ env.PLATFORM_PAIR }},mode=max
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true

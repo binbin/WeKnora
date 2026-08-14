@@ -10,12 +10,12 @@ import (
 	"testing"
 )
 
-func newWeKnoraCloudEmbedderTestServer(t *testing.T, response string) *WeKnoraCloudEmbedder {
+func newWeKnoraCloudEmbedderTestServer(t *testing.T, response string) *TreeRAGCloudEmbedder {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != weKnoraCloudEmbedPath {
-			http.Error(w, fmt.Sprintf("request path = %q, want %q", r.URL.Path, weKnoraCloudEmbedPath), http.StatusNotFound)
+		if r.URL.Path != treeRAGCloudEmbedPath {
+			http.Error(w, fmt.Sprintf("request path = %q, want %q", r.URL.Path, treeRAGCloudEmbedPath), http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -23,7 +23,7 @@ func newWeKnoraCloudEmbedderTestServer(t *testing.T, response string) *WeKnoraCl
 	}))
 	t.Cleanup(server.Close)
 
-	return &WeKnoraCloudEmbedder{
+	return &TreeRAGCloudEmbedder{
 		modelName: "test-embedding",
 		modelID:   "test-model-id",
 		appID:     "test-app-id",

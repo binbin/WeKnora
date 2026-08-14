@@ -81,7 +81,9 @@ func (s *resolveOwnAgentStub) CreateAgent(context.Context, *types.CustomAgent) (
 func (s *resolveOwnAgentStub) GetAgentByIDAndTenant(context.Context, string, uint64) (*types.CustomAgent, error) {
 	panic("not implemented")
 }
-func (s *resolveOwnAgentStub) ListAgents(context.Context) ([]*types.CustomAgent, error) {
+func (s *resolveOwnAgentStub) ListAgents(
+	context.Context, string,
+) ([]*types.CustomAgent, error) {
 	panic("not implemented")
 }
 func (s *resolveOwnAgentStub) UpdateAgent(context.Context, *types.CustomAgent) (*types.CustomAgent, error) {
@@ -100,6 +102,8 @@ func (s *resolveOwnAgentStub) GetKnowledgeSuggestedQuestions(context.Context, st
 	panic("not implemented")
 }
 
+const resolveAgentTestOrgUnitID = "ou-test"
+
 func newResolveAgentTestContext(tenantID uint64) (*gin.Context, context.Context) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -108,6 +112,7 @@ func newResolveAgentTestContext(tenantID uint64) (*gin.Context, context.Context)
 	c.Set(types.UserIDContextKey.String(), "user-1")
 	c.Set(types.TenantIDContextKey.String(), tenantID)
 	ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, tenantID)
+	ctx = types.WithOrgUnitID(ctx, resolveAgentTestOrgUnitID)
 	c.Request = c.Request.WithContext(ctx)
 	return c, ctx
 }
@@ -144,7 +149,12 @@ func TestResolveAgent_UsesSharedAgentWhenSourceSelectorMatches(t *testing.T) {
 
 func TestResolveAgent_FallsBackToLocalAgentWithoutSourceSelector(t *testing.T) {
 	c, ctx := newResolveAgentTestContext(7)
-	localAgent := &types.CustomAgent{ID: "builtin-smart-reasoning", TenantID: 7, Name: "Local"}
+	localAgent := &types.CustomAgent{
+		ID:        "builtin-smart-reasoning",
+		TenantID:  7,
+		Name:      "Local",
+		OrgUnitID: resolveAgentTestOrgUnitID,
+	}
 	h := &Handler{
 		agentShareService:  &resolveAgentShareStub{},
 		customAgentService: &resolveOwnAgentStub{agent: localAgent},
