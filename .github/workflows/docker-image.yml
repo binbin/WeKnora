@@ -167,7 +167,7 @@ jobs:
         id: meta-cube
         uses: docker/metadata-action@v6
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/weknora-sandbox
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/tree-rag-sandbox
           flavor: |
             suffix=-cube,onlatest=true
 

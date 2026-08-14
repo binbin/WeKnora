@@ -89,7 +89,7 @@
                   v-if="canManage"
                   trigger="click"
                   :options="embedMenuOptions"
-                  @click="(value) => onEmbedMenu(value, row.raw)"
+                  @click="onEmbedMenuFor(row.raw)"
                 >
                   <t-button size="small" variant="outline" shape="square">
                     <template #icon><t-icon name="ellipsis" /></template>
@@ -623,6 +623,12 @@ function openApiDoc(): void {
 
 function startEmbed(channel: EmbedChannel): void {
   embedPanelRef.value?.openDrawer(channel)
+}
+
+function onEmbedMenuFor(channel: EmbedChannel) {
+  return (value: string | number | Record<string, unknown>) => {
+    onEmbedMenu(value, channel)
+  }
 }
 
 function onEmbedMenu(value: string | number | Record<string, unknown>, channel: EmbedChannel): void {

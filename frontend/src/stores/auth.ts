@@ -65,6 +65,9 @@ export const useAuthStore = defineStore('auth', () => {
     return !!token.value && !!user.value
   })
 
+  // Lite client was removed; keep a stable false so leftover UI gates compile.
+  const isLiteMode = computed(() => false)
+
   const hasValidTenant = computed(() => {
     return !!tenant.value && !!tenant.value.id
   })
@@ -575,6 +578,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 计算属性
     isLoggedIn,
+    isLiteMode,
     hasValidTenant,
     currentTenantId,
     currentTenantName,

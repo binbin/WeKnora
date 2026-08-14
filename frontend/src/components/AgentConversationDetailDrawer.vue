@@ -162,7 +162,7 @@ import {
   collectAllSessionMessages,
   type SessionExportMessage,
 } from '@/utils/sessionMarkdown'
-import { copyTextToClipboard } from '@/utils/chatMessageShared'
+import { copyToClipboard as copyTextToClipboard } from '@/utils/clipboard'
 import {
   createChatMarkdownRenderer,
   renderChatMarkdown,

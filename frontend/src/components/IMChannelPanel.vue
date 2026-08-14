@@ -54,7 +54,7 @@
           </button>
 
           <button v-if="authStore.hasRole('admin')" type="button" class="channel-card channel-card--add"
-            @click="openCreate">
+            @click="() => openCreate()">
             <span class="channel-card__badge" aria-hidden="true">
               <t-icon name="add" />
             </span>

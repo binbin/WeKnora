@@ -896,7 +896,6 @@ const closeDrawer = () => {
 const parseOrigins = () => parseAllowedOrigins(originsText.value)
 
 const originsValidationMessage = (error: AllowedOriginsValidationError) => {
-  if (error.code === 'required') return t('embedPublish.originsRequired')
   if (error.code === 'wildcard_prod') return t('embedPublish.originsWildcardProd')
   return t('embedPublish.originsInvalid', { origin: error.origin })
 }
