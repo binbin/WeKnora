@@ -365,4 +365,4 @@ func TestBuildLoginMembershipsSynthsWhenMemberServiceMissing(t *testing.T) {
 	if len(got) != 1 || got[0].TenantID != 7 || got[0].TenantName != "Home" {
 		t.Fatalf("fallback memberships = %#v", got)
 	}
-})
+}

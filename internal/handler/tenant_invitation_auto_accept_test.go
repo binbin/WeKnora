@@ -81,7 +81,15 @@ type autoAcceptInvitationSvc struct {
 	reconcilePending bool
 }
 
-func (s *autoAcceptInvitationSvc) Create(_ context.Context, tenantID uint64, userID string, role types.TenantRole, _ *string, _ string) (*types.TenantInvitation, error) {
+func (s *autoAcceptInvitationSvc) Create(
+	_ context.Context,
+	tenantID uint64,
+	userID string,
+	role types.TenantRole,
+	_ *string,
+	_ string,
+	_ string,
+) (*types.TenantInvitation, error) {
 	s.created = true
 	return &types.TenantInvitation{
 		ID:            1,
@@ -293,3 +301,50 @@ func TestCreateInvitation_AutoAccept_AdoptsTenantlessInviteeHomeTenant(t *testin
 			users.updateCalled, users.updatedTenant)
 	}
 }
+
+type autoAcceptOrgUnitSvc struct {
+	interfaces.OrgUnitService
+	transferredUser string
+	transferredUnit string
+	transferCalled  bool
+}
+
+func (s *autoAcceptOrgUnitSvc) TransferMember(
+	_ context.Context,
+	_ uint64,
+	userID string,
+	toOrgUnitID string,
+) (*types.OrgUnitMember, error) {
+	s.transferCalled = true
+	s.transferredUser = userID
+	s.transferredUnit = toOrgUnitID
+	return &types.OrgUnitMember{UserID: userID, OrgUnitID: toOrgUnitID}, nil
+}
+
+func TestCreateInvitation_AutoAccept_BindsOrgUnit(t *testing.T) {
+	users := &autoAcceptUserSvc{user: &types.User{ID: "u-bob", Email: "bob@x.com", Username: "bob"}}
+	members := &autoAcceptMemberSvc{}
+	orgUnits := &autoAcceptOrgUnitSvc{}
+	h := &TenantInvitationHandler{
+		invitationService: &autoAcceptInvitationSvc{},
+		userService:       users,
+		memberService:     members,
+		orgUnitService:    orgUnits,
+		systemSettingSvc:  &autoAcceptSettingSvc{enabled: true},
+	}
+	r := newAutoAcceptTestRouter(h)
+
+	body := `{"email":"bob@x.com","role":"contributor","org_unit_id":"unit-east"}`
+	w := postAutoAcceptInvitation(t, r, body)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !orgUnits.transferCalled {
+		t.Fatal("auto-accept should bind the invitee to the requested org unit")
+	}
+	if orgUnits.transferredUser != "u-bob" || orgUnits.transferredUnit != "unit-east" {
+		t.Fatalf("bound %s -> %s, want u-bob -> unit-east",
+			orgUnits.transferredUser, orgUnits.transferredUnit)
+	}
+}
+

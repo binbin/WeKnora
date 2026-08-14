@@ -41,6 +41,14 @@ func (s *listAgentsRepoStub) DeleteAgent(context.Context, string, uint64) error 
 func (s *listAgentsRepoStub) CountByModelID(context.Context, uint64, string) (int64, error) {
 	return 0, nil
 }
+func (s *listAgentsRepoStub) CountBySandboxConfigID(context.Context, uint64, string) (int64, error) {
+	return 0, nil
+}
+func (s *listAgentsRepoStub) ListNamesBySandboxConfigID(
+	context.Context, uint64, string,
+) ([]string, error) {
+	return nil, nil
+}
 
 func TestListAgentsPurposeChatAndManage(t *testing.T) {
 	repo := &listAgentsRepoStub{

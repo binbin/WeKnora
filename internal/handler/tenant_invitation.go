@@ -349,7 +349,9 @@ func (h *TenantInvitationHandler) CreateInvitation(c *gin.Context) {
 			c.Error(apperrors.NewInternalServerError("failed to add member"))
 			return
 		}
-		h.autoAcceptInvitationAndRespond(c, ctx, user, tenantID, req.Role, invitedBy)
+		h.autoAcceptInvitationAndRespond(
+			c, ctx, user, tenantID, req.Role, invitedBy, req.OrgUnitID,
+		)
 		return
 	}
 
@@ -409,12 +411,14 @@ func (h *TenantInvitationHandler) autoAcceptInvitationAndRespond(
 	tenantID uint64,
 	role types.TenantRole,
 	invitedBy *string,
+	orgUnitID string,
 ) {
 	member, err := h.memberService.AddMember(ctx, user.ID, tenantID, role, invitedBy)
 	if err != nil {
 		writeAddMemberError(c, ctx, user, tenantID, err)
 		return
 	}
+	h.bindAutoAcceptOrgUnit(ctx, tenantID, user.ID, orgUnitID)
 	if h.invitationService != nil {
 		if markErr := h.invitationService.MarkPendingAcceptedIfExists(ctx, tenantID, user.ID); markErr != nil {
 			logger.Warnf(ctx,
@@ -434,6 +438,23 @@ func (h *TenantInvitationHandler) autoAcceptInvitationAndRespond(
 		}
 	}
 	writeAddMemberSuccess(c, user, member)
+}
+
+func (h *TenantInvitationHandler) bindAutoAcceptOrgUnit(
+	ctx context.Context,
+	tenantID uint64,
+	userID string,
+	orgUnitID string,
+) {
+	orgUnitID = strings.TrimSpace(orgUnitID)
+	if h.orgUnitService == nil || orgUnitID == "" || userID == "" {
+		return
+	}
+	if _, err := h.orgUnitService.TransferMember(ctx, tenantID, userID, orgUnitID); err != nil {
+		logger.Errorf(ctx,
+			"auto_accept: member added but org_unit membership failed: tenant=%d user=%s unit=%s err=%v",
+			tenantID, userID, orgUnitID, err)
+	}
 }
 
 // RevokeInvitation godoc

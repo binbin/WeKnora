@@ -651,7 +651,7 @@ func TestInvitationService_MarkPendingAcceptedIfExists_NoPending(t *testing.T) {
 func TestInvitationService_MarkPendingAcceptedIfExists_FlipsPendingRow(t *testing.T) {
 	svc, invRepo, _ := newInvitationSvc()
 	ctx := context.Background()
-	inv, err := svc.Create(ctx, 1, "u-alice", types.TenantRoleViewer, nil, "")
+	inv, err := svc.Create(ctx, 1, "u-alice", types.TenantRoleViewer, nil, "", "")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
