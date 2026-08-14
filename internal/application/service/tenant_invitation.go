@@ -252,6 +252,9 @@ func (s *tenantInvitationService) Create(
 	if !role.IsValid() {
 		return nil, ErrInvalidTenantRole
 	}
+	if err := rejectAPIKeyOwnerAssignment(ctx, role); err != nil {
+		return nil, err
+	}
 	if role == types.TenantRoleOwner && !types.IsSystemAdminActor(ctx) {
 		return nil, ErrOnlySystemAdminCanAssignOwner
 	}
@@ -656,6 +659,9 @@ func (s *tenantInvitationService) CreateShareLink(
 ) (*types.TenantInvitation, string, error) {
 	if !role.IsValid() {
 		return nil, "", ErrInvalidTenantRole
+	}
+	if err := rejectAPIKeyOwnerAssignment(ctx, role); err != nil {
+		return nil, "", err
 	}
 	if role == types.TenantRoleOwner && !types.IsSystemAdminActor(ctx) {
 		return nil, "", ErrOnlySystemAdminCanAssignOwner

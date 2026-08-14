@@ -30,7 +30,7 @@ func TestPrepareMessagesWithModelContextUsesChunkCentricContext(t *testing.T) {
 
 	messages, refs := prepareMessagesWithModelContext(context.Background(), manage)
 	require.Len(t, messages, 2)
-	require.Contains(t, messages[0].Content, "来源处理协议")
+	require.Contains(t, messages[0].Content, "Source handling protocol")
 	require.Contains(t, messages[1].Content, `<document id="d1" kb="b1" title="Doc">`)
 	require.Contains(t, messages[1].Content, `<chunk id="c1" index="1" view="full">`)
 	require.Contains(t, messages[1].Content, `<chunk id="c2" index="2" view="full">`)
@@ -110,7 +110,7 @@ func TestPrepareMessagesWithModelContextCompactsHistoryWithoutCurrentRetrieval(t
 
 	messages, refs := prepareMessagesWithModelContext(context.Background(), manage)
 	messages = refs.EncodeMessages(messages)
-	require.Contains(t, messages[0].Content, "来源处理协议")
+	require.Contains(t, messages[0].Content, "Source handling protocol")
 	require.Contains(t, messages[2].Content, `<ref id="w1"/>`)
 	require.NotContains(t, messages[2].Content, "https://example.com/old")
 }

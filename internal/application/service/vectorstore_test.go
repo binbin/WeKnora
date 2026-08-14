@@ -826,6 +826,8 @@ CREATE TABLE IF NOT EXISTS knowledge_bases (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     tenant_id INTEGER NOT NULL,
+    org_unit_id VARCHAR(64) NOT NULL DEFAULT '',
+    share_with_descendants BOOLEAN NOT NULL DEFAULT 0,
     creator_id VARCHAR(36),
     type VARCHAR(32) NOT NULL DEFAULT 'document',
     chunking_config TEXT NOT NULL DEFAULT '{}',
