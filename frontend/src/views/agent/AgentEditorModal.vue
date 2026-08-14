@@ -104,6 +104,27 @@
                       </div>
                     </div>
 
+                    <!-- 集成渠道状态（编辑模式，配置在发布渠道） -->
+                    <div v-if="editorMode === 'edit' && editorAgent?.id" class="setting-row">
+                      <div class="setting-info">
+                        <label>{{ $t('integrations.agentEditor.label') }}</label>
+                        <p class="desc">{{ isPostCreateSession ? $t('agent.editor.postCreateHint.integrationDesc') : $t('integrations.agentEditor.desc') }}</p>
+                      </div>
+                      <div class="setting-control">
+                        <div class="integration-inline">
+                          <button type="button" class="integration-inline__stat integration-inline__link" @click="gotoIntegrations('im')">
+                            <span>{{ $t('integrations.tabs.im') }} · {{ agentIMChannelCount }}</span>
+                            <t-icon name="chevron-right" size="14px" />
+                          </button>
+                          <span class="integration-inline__sep" aria-hidden="true">|</span>
+                          <button type="button" class="integration-inline__stat integration-inline__link" @click="gotoIntegrations('embed')">
+                            <span>{{ $t('integrations.tabs.embed') }} · {{ agentEmbedChannelCount }}</span>
+                            <t-icon name="chevron-right" size="14px" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                     <!-- 运行模式（首先选择） -->
                     <div class="setting-row">
                       <div class="setting-info">
@@ -177,6 +198,19 @@
                         <t-textarea v-model="formData.description"
                           :placeholder="$t('agent.editor.descriptionPlaceholder')"
                           :autosize="{ minRows: 2, maxRows: 4 }" :disabled="isBuiltinAgent" />
+                      </div>
+                    </div>
+
+                    <!-- 长期记忆。放在这里而不是「多轮对话」那一组，是因为那一组
+                         整个带了 !isAgentMode，而智能推理恰恰是最需要这个开关的模式。
+                         这个开关只能"关"：空间或个人设置关闭时，这里打开也不生效。 -->
+                    <div class="setting-row">
+                      <div class="setting-info">
+                        <label>{{ $t('agent.editor.memoryEnabled') }}</label>
+                        <p class="desc">{{ $t('agentEditor.desc.memoryEnabled') }}</p>
+                      </div>
+                      <div class="setting-control">
+                        <t-switch v-model="formData.config.memory_enabled" />
                       </div>
                     </div>
 
@@ -666,6 +700,7 @@
                       <div class="setting-control">
                         <ModelSelector model-type="Rerank" :selected-model-id="formData.config.rerank_model_id"
                           :all-models="allModels"
+                          :clearable="!needsRerankModel"
                           @update:selected-model-id="(val: string) => formData.config.rerank_model_id = val"
                           @add-model="handleAddModel('rerank')"
                           :placeholder="$t('agent.editor.rerankModelPlaceholder')" />
@@ -683,6 +718,7 @@
                       <div class="setting-control">
                         <ModelSelector model-type="KnowledgeQA"
                           :selected-model-id="formData.config.query_understand_model_id" :all-models="allModels"
+                          clearable
                           @update:selected-model-id="(val: string) => formData.config.query_understand_model_id = val"
                           @add-model="handleAddModel('llm')"
                           :placeholder="$t('agent.editor.queryUnderstandModelPlaceholder')" />
@@ -821,6 +857,7 @@
                       <div class="setting-control">
                         <ModelSelector model-type="ASR" :selected-model-id="formData.config.asr_model_id"
                           :all-models="allModels"
+                          clearable
                           @update:selected-model-id="(val: string) => formData.config.asr_model_id = val"
                           @add-model="handleAddModel('asr')"
                           :placeholder="$t('agentEditor.audioUpload.asrModelPlaceholder')" />
@@ -1023,6 +1060,7 @@
                           <ModelSelector model-type="KnowledgeQA"
                             :selected-model-id="formData.config.question_suggestions.follow_ups.model_id"
                             :all-models="allModels"
+                            clearable
                             @update:selected-model-id="(val: string) => formData.config.question_suggestions.follow_ups.model_id = val"
                             @add-model="handleAddModel('summary')" />
                         </div>
@@ -1295,6 +1333,46 @@
                       <div class="info-content">
                         <p><strong>{{ $t('agent.editor.skillsInfoTitle') }}</strong></p>
                         <p>{{ $t('agent.editor.skillsInfoContent') }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 沙箱后端配置（仅 Agent 模式）：技能脚本的运行环境 -->
+                <div v-show="currentSection === 'sandbox' && isAgentMode" class="section">
+                  <div class="section-header">
+                    <h2>{{ $t('agent.editor.sandboxConfig') }}</h2>
+                    <p class="section-description">{{ $t('agent.editor.sandboxConfigDesc') }}</p>
+                  </div>
+
+                  <div class="settings-group">
+                    <div class="setting-row">
+                      <div class="setting-info">
+                        <label>{{ $t('agent.editor.sandboxBackend') }}</label>
+                        <p class="desc">{{ $t('agent.editor.sandboxBackendHint') }}</p>
+                      </div>
+                      <div class="setting-control">
+                        <t-select v-model="formData.config.sandbox_config_id"
+                          :placeholder="$t('agent.editor.sandboxBackendDefault')" style="width: 280px">
+                          <t-option value="" :label="$t('agent.editor.sandboxBackendDefault')" />
+                          <t-option v-for="cfg in sandboxConfigOptions" :key="cfg.id" :value="cfg.id"
+                            :label="`${cfg.name} (${backendLabel(cfg.sandbox_type)})`" />
+                        </t-select>
+                      </div>
+                    </div>
+
+                    <!-- 未建具名配置时说明「默认」到底是什么，避免下拉只有一项时显得像坏了 -->
+                    <div v-if="sandboxConfigOptions.length === 0" class="setting-row">
+                      <div class="setting-info">
+                        <p class="desc empty-hint">{{ $t('agent.editor.sandboxNoConfigs') }}</p>
+                      </div>
+                    </div>
+
+                    <div class="skill-info-box">
+                      <t-icon name="cloud" class="info-icon" />
+                      <div class="info-content">
+                        <p><strong>{{ $t('agent.editor.sandboxInfoTitle') }}</strong></p>
+                        <p>{{ $t('agent.editor.sandboxInfoContent') }}</p>
                       </div>
                     </div>
                   </div>
@@ -1660,6 +1738,15 @@
                   @close="handleClose"
                 />
               </div>
+              <div v-if="isPostCreateSession" class="settings-footer">
+                <p class="settings-footer-note">
+                  <t-icon name="check-circle-filled" class="settings-footer-note__icon" />
+                  <span>
+                    <strong>{{ $t('agent.editor.postCreateHint.title') }}</strong>
+                    {{ $t('agent.editor.postCreateHint.footer') }}
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1680,10 +1767,13 @@ import {
   markContextualGuideDone,
 } from '@/config/contextualGuides';
 import { useI18n } from 'vue-i18n';
+import { selectInitialModelId } from '@/utils/modelDefaults';
+import { copyWithToast } from '@/utils/clipboard';
 import { MessagePlugin } from 'tdesign-vue-next';
 import {
   createAgent,
   updateAgent,
+  listIMChannels,
   type CustomAgent,
   type PlaceholderDefinition,
   type AgentTypePreset,
@@ -1695,7 +1785,13 @@ import { type ModelConfig } from '@/api/model';
 import { type AgentNotReadyReasonKey, agentRequiresRerankModel } from '@/utils/agent-readiness';
 import { type SkillInfo } from '@/api/skill';
 import { type WebSearchProviderEntity } from '@/api/web-search-provider';
-import { type StorageEngineStatusItem, type PromptTemplate, type PromptTemplatesConfig } from '@/api/system';
+import {
+  isNamedSandboxBackend,
+  type SandboxConfigRecord,
+  type StorageEngineStatusItem,
+  type PromptTemplate,
+  type PromptTemplatesConfig,
+} from '@/api/system';
 import { useUIStore } from '@/stores/ui';
 import { useAuthStore } from '@/stores/auth';
 import { useOrganizationStore } from '@/stores/organization';
@@ -1705,6 +1801,7 @@ import AgentAvatar from '@/components/AgentAvatar.vue';
 import PromptTemplateSelector from '@/components/PromptTemplateSelector.vue';
 import ModelSelector from '@/components/ModelSelector.vue';
 import KBParserSettings, { type ParserEngineRule } from '@/views/knowledge/settings/KBParserSettings.vue';
+import { listEmbedChannels } from '@/api/embed';
 import { getRootZoom, rectToCssPx } from '@/utils/zoom';
 import {
   evaluateToolRequirement,
@@ -1753,29 +1850,15 @@ const emit = defineEmits<{
 const savedAgent = ref<CustomAgent | null>(null);
 const editorMode = computed(() => (savedAgent.value ? 'edit' : props.mode));
 const editorAgent = computed(() => savedAgent.value ?? props.agent ?? null);
+const isPostCreateSession = computed(() => !!savedAgent.value);
+const saveButtonLabel = computed(() =>
+  editorMode.value === 'create'
+    ? t('agent.editor.buttons.create')
+    : t('agent.editor.buttons.saveAndClose')
+);
 
 const copyAgentId = async () => {
-  const id = editorAgent.value?.id;
-  if (!id) return;
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(id);
-    } else {
-      const textarea = document.createElement('textarea');
-      textarea.value = id;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-    MessagePlugin.success(t('common.copied'));
-  } catch {
-    MessagePlugin.error(t('common.copyFailed'));
-  }
+  await copyWithToast(editorAgent.value?.id, 'common.copied');
 };
 
 const currentSection = ref(props.initialSection || 'basic');
@@ -1926,7 +2009,7 @@ type McpSelectOption = { label: string; value: string; disabled?: boolean };
 
 const mcpOptions = computed<McpSelectOption[]>(() => {
   const services = editorResources.mcpServices || [];
-  const selectedIds = new Set(formData.value.config.mcp_services || []);
+  const selectedIds = new Set<string>(formData.value.config.mcp_services || []);
   const serviceById = new Map(services.map((mcp) => [mcp.id, mcp]));
   const options: McpSelectOption[] = [];
 
@@ -1963,6 +2046,19 @@ const webSearchProviderList = ref<WebSearchProviderEntity[]>([]);
 const skillOptions = ref<{ name: string; description: string }[]>([]);
 // 是否允许启用 Skills（取决于后端沙箱是否启用，disabled 时为 false；未请求前为 false 避免闪显）
 const skillsAvailable = ref(false);
+// 空间内的具名沙箱后端配置。始终包含当前已选中的那份，即使它已被删除——
+// 否则下拉会静默显示为“不启用沙箱”，看不出该智能体其实指着一份不存在的配置。
+const sandboxConfigOptions = computed(() => {
+  const configs = chatResources.sandboxConfigs.filter((cfg) => isNamedSandboxBackend(cfg.sandbox_type));
+  const selected = formData.value.config.sandbox_config_id;
+  if (!selected || configs.some((cfg) => cfg.id === selected)) return configs;
+  return [
+    ...configs,
+    { id: selected, name: t('agent.editor.sandboxBackendMissing'), sandbox_type: '' } as SandboxConfigRecord,
+  ];
+});
+const backendLabel = (type: string) =>
+  type ? t(`settings.sandbox.backends.${type}`) : t('common.error');
 // 存储引擎可用状态（用于图片存储 provider 选择）
 const storageEngineStatus = ref<StorageEngineStatusItem[]>([]);
 const imageStorageOptions = computed(() => {
@@ -2326,6 +2422,9 @@ const navItems = computed(() => {
   }
   if (isAgentMode.value && skillsAvailable.value) {
     items.push({ key: 'skills', icon: 'lightbulb', label: t('agent.editor.skillsConfig') });
+    // 沙箱是技能脚本的运行环境：先选跑哪些技能，再选跑在哪份后端上。
+    // 与 skills 同门控——部署级沙箱关闭时技能整体不可用，选后端也就无从谈起。
+    items.push({ key: 'sandbox', icon: 'cloud', label: t('agent.editor.sandboxConfig') });
   }
   return items;
 });
@@ -2389,7 +2488,7 @@ const navGroups = computed(() => {
     {
       key: 'capability',
       label: t('agentEditor.navGroups.capability'),
-      items: pickItems(['multimodal', 'tools', 'mcp', 'skills']),
+      items: pickItems(['multimodal', 'tools', 'mcp', 'skills', 'sandbox']),
     },
   ].filter((group) => group.items.length > 0);
 });
@@ -2424,6 +2523,8 @@ const defaultFormData = {
     // Skills 设置
     skills_selection_mode: 'none' as 'all' | 'selected' | 'none',
     selected_skills: [] as string[],
+    // 技能脚本运行在哪份空间沙箱配置上。留空表示禁用脚本执行。
+    sandbox_config_id: '' as string,
     // 知识库设置：新建智能体默认选择 "全部知识库"，
     // 让用户无需先去勾选 KB 即可上手；如有需要可改为 "selected" / "none"。
     kb_selection_mode: 'all' as 'all' | 'selected' | 'none',
@@ -2459,6 +2560,9 @@ const defaultFormData = {
     // 多轮对话设置
     multi_turn_enabled: false,
     history_turns: 5,
+    // 长期记忆：默认跟随空间设置。写 true 与不写等价，只有 false 才会
+    // 让这个智能体单独不读记忆。
+    memory_enabled: true,
     // 检索策略设置
     embedding_top_k: 10,
     keyword_threshold: 0.3,
@@ -2527,13 +2631,15 @@ const removeStarterSuggestion = (index: number) => {
   formData.value.config.question_suggestions.starters.items.splice(index, 1);
 };
 
-const applyDefaultChatModelIfEmpty = () => {
+const applyDefaultModelsIfEmpty = () => {
   if (props.mode !== 'create' || !formData.value) return
-  const chat =
-    allModels.value.find((m) => m.type === 'KnowledgeQA' && m.is_default)
-    || allModels.value.find((m) => m.type === 'KnowledgeQA')
-  if (!formData.value.config.model_id && chat?.id) {
-    formData.value.config.model_id = chat.id
+  const chatModelId = selectInitialModelId(allModels.value, 'KnowledgeQA')
+  const rerankModelId = selectInitialModelId(allModels.value, 'Rerank')
+  if (!formData.value.config.model_id && chatModelId) {
+    formData.value.config.model_id = chatModelId
+  }
+  if (!formData.value.config.rerank_model_id && rerankModelId) {
+    formData.value.config.rerank_model_id = rerankModelId
   }
 }
 
@@ -2631,6 +2737,27 @@ watch(currentSection, (section) => {
     syncActivePromptAnchor();
   }
 });
+
+const agentIMChannelCount = ref(0);
+const agentEmbedChannelCount = ref(0);
+
+async function loadAgentIntegrationCounts(agentId: string) {
+  try {
+    const [imResp, embedResp] = await Promise.all([
+      listIMChannels(agentId),
+      listEmbedChannels(agentId),
+    ]);
+    agentIMChannelCount.value = imResp?.data?.length ?? 0;
+    agentEmbedChannelCount.value = embedResp?.data?.length ?? 0;
+  } catch {
+    agentIMChannelCount.value = 0;
+    agentEmbedChannelCount.value = 0;
+  }
+}
+
+function gotoIntegrations(_tab: 'im' | 'embed') {
+  setWorkspaceTab('publish');
+}
 
 const filteredIntentPlaceholders = computed(() => {
   if (!intentPromptPopup.value.prefix) {
@@ -3047,6 +3174,9 @@ const initializeEditor = async () => {
       // 附件解析调优字段：旧数据缺省时置 0（表示使用全局默认）
       if (agentData.config.attachment_ocr_max_pages == null) agentData.config.attachment_ocr_max_pages = 0;
       if (agentData.config.attachment_parse_wait_timeout_sec == null) agentData.config.attachment_parse_wait_timeout_sec = 0;
+      // 长期记忆：后端用 omitempty，跟随空间设置的智能体不带这个字段。
+      // 不补成 true 的话开关会显示为"关"，用户随手一存就真的把记忆关了。
+      if (agentData.config.memory_enabled == null) agentData.config.memory_enabled = true;
 
       // 兼容旧数据：如果没有 agent_mode 字段，根据 allowed_tools 推断
       if (!agentData.config.agent_mode) {
@@ -3074,6 +3204,9 @@ const initializeEditor = async () => {
       // 内置智能体：如果提示词为空，填入系统默认值
       if (agentData.is_builtin) {
         fillBuiltinAgentDefaults();
+      }
+      if (agentData.id) {
+        void loadAgentIntegrationCounts(agentData.id);
       }
     } else {
       // 创建新智能体，使用系统默认值
@@ -3138,7 +3271,7 @@ const initializeEditor = async () => {
           formData.value.description = getPresetDefaultDescription(preset);
         }
       }
-      applyDefaultChatModelIfEmpty()
+      applyDefaultModelsIfEmpty()
     }
 
     if (props.initialHighlightField) {
@@ -3427,6 +3560,7 @@ const loadDependencies = async () => {
       chatResources.ensureModels(),
       chatResources.ensureKnowledgeBases(),
       chatResources.ensureWebSearchProviders(),
+      chatResources.ensureSandboxConfigs(),
       editorResources.prefetchAgentEditorDeps(),
     ]);
 
@@ -4377,6 +4511,8 @@ const handleSave = async () => {
       savedAgent.value = created;
       (formData.value as { id?: string }).id = created.id;
       markContextualGuideDone('agentCreate')
+      currentSection.value = 'basic';
+      void loadAgentIntegrationCounts(created.id);
       MessagePlugin.success(t('agent.messages.created'));
       emit('success', created);
     } else {
@@ -5133,10 +5269,77 @@ const handleSave = async () => {
   padding: 12px 40px;
   border-top: 1px solid var(--td-component-stroke);
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 16px;
   flex-shrink: 0;
   background-color: var(--td-bg-color-container);
+}
+
+.settings-footer-note {
+  margin: 0;
+  margin-right: auto;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--td-text-color-secondary);
+
+  strong {
+    margin-right: 4px;
+    color: var(--td-text-color-primary);
+    font-weight: 500;
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+    font-size: 14px;
+    color: var(--td-success-color);
+  }
+}
+
+.settings-footer-actions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.integration-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  &__stat {
+    font-size: 13px;
+    color: var(--td-text-color-secondary);
+
+    &.integration-inline__link {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      line-height: 1;
+      color: var(--td-brand-color);
+      cursor: pointer;
+
+      &:hover {
+        opacity: 0.85;
+      }
+    }
+  }
+
+  &__sep {
+    color: var(--td-component-stroke);
+    font-size: 12px;
+  }
 }
 
 /* 滚动条：与设置弹窗一致 */

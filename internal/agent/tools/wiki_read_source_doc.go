@@ -16,10 +16,16 @@ type wikiReadSourceDocTool struct {
 	BaseTool
 	knowledgeService interfaces.KnowledgeService
 	chunkService     interfaces.ChunkService
+	searchTargets    types.SearchTargets
+	scopeEnforced    bool
 }
 
-func NewWikiReadSourceDocTool(knowledgeService interfaces.KnowledgeService, chunkService interfaces.ChunkService) types.Tool {
-	return &wikiReadSourceDocTool{
+func NewWikiReadSourceDocTool(
+	knowledgeService interfaces.KnowledgeService,
+	chunkService interfaces.ChunkService,
+	searchTargets ...types.SearchTargets,
+) types.Tool {
+	tool := &wikiReadSourceDocTool{
 		BaseTool: NewBaseTool(
 			ToolWikiReadSourceDoc,
 			`读取或搜索特定源文档，以深入查找 wiki 中省略的细节。
@@ -52,6 +58,13 @@ func NewWikiReadSourceDocTool(knowledgeService interfaces.KnowledgeService, chun
 		knowledgeService: knowledgeService,
 		chunkService:     chunkService,
 	}
+	// Presence of the variadic argument — not its length — enables the Agent
+	// authorization boundary, so an empty scope fails closed.
+	if len(searchTargets) > 0 {
+		tool.searchTargets = searchTargets[0]
+		tool.scopeEnforced = true
+	}
+	return tool
 }
 
 // enrichChunkImageInfo populates chunk.ImageInfo for a batch of parent text
@@ -123,8 +136,17 @@ func (t *wikiReadSourceDocTool) Execute(ctx context.Context, args json.RawMessag
 		return &types.ToolResult{Success: false, Error: "knowledge_id is required"}, nil
 	}
 
-	knowledge, err := t.knowledgeService.GetKnowledgeByIDOnly(ctx, knowledgeID)
-	if err != nil {
+	var knowledge *types.Knowledge
+	var err error
+	if t.scopeEnforced {
+		knowledge, err = authorizeKnowledgeInSearchTargets(ctx, t.searchTargets, knowledgeID, t.knowledgeService)
+	} else {
+		knowledge, err = t.knowledgeService.GetKnowledgeByIDOnly(ctx, knowledgeID)
+	}
+	if err != nil || knowledge == nil {
+		if err == nil {
+			err = fmt.Errorf("knowledge service returned an empty result")
+		}
 		return &types.ToolResult{Success: false, Error: fmt.Sprintf("Document not found: %v", err)}, nil
 	}
 
@@ -184,6 +206,7 @@ func (t *wikiReadSourceDocTool) Execute(ctx context.Context, args json.RawMessag
 	}
 
 	for {
+		enabled := true
 		pagination := &types.Pagination{
 			Page:     page,
 			PageSize: pageSize,
@@ -195,7 +218,7 @@ func (t *wikiReadSourceDocTool) Execute(ctx context.Context, args json.RawMessag
 			knowledgeID,
 			pagination,
 			[]types.ChunkType{types.ChunkTypeText, types.ChunkTypeFAQ},
-			nil, "", "", "", "",
+			nil, "", "", "", "", &enabled,
 		)
 		if err != nil {
 			return &types.ToolResult{Success: false, Error: fmt.Sprintf("Failed to list chunks: %v", err)}, nil

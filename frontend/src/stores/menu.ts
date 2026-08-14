@@ -2,6 +2,8 @@ import { reactive, ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import i18n from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useDeploymentCapabilitiesStore } from '@/stores/deploymentCapabilities'
+import type { DeploymentCapabilityKey } from '@/config/deploymentCapabilities'
 
 type MenuChild = Record<string, any>
 type MenuMinRole = 'viewer' | 'contributor' | 'admin' | 'owner'
@@ -15,6 +17,7 @@ interface MenuItem {
   children?: MenuChild[]
   /** 侧栏可见的最低角色；未设置则始终可见（如新对话/知识库） */
   minRole?: MenuMinRole
+  requiredCapability?: DeploymentCapabilityKey
 }
 
 const createMenuChildren = () => reactive<MenuChild[]>([])
@@ -37,8 +40,15 @@ export const useMenuStore = defineStore('menuStore', () => {
       path: 'mcp',
       // MCP 管理：仅管理员/所有者可见；编辑(contributor)/访客(viewer)不露入口。
       minRole: 'admin',
+      requiredCapability: 'settings.mcp',
     },
-    { title: '', titleKey: 'menu.agents', icon: 'agent', path: 'agents' },
+    {
+      title: '',
+      titleKey: 'menu.agents',
+      icon: 'agent',
+      path: 'agents',
+      requiredCapability: 'agents',
+    },
     {
       title: '',
       titleKey: 'menu.members',
@@ -62,6 +72,13 @@ export const useMenuStore = defineStore('menuStore', () => {
       path: 'data-charts',
       // 数据图表：仅管理员/所有者可见。
       minRole: 'admin',
+    },
+    {
+      title: '',
+      titleKey: 'menu.organizations',
+      icon: 'organization',
+      path: 'organizations',
+      requiredCapability: 'organizations',
     },
     { title: '', titleKey: 'menu.settings', icon: 'setting', path: 'settings' },
     { title: '', titleKey: 'menu.logout', icon: 'logout', path: 'logout' }
@@ -95,10 +112,22 @@ export const useMenuStore = defineStore('menuStore', () => {
     }
   )
 
+  const liteHiddenPaths = new Set(['logout', 'organizations'])
+
   const canSeeMenuItem = (item: MenuItem): boolean => {
     if (item.path === 'creatChat' && !SHOW_SIDEBAR_NEW_CHAT) return false
-    if (!item.minRole) return true
     const authStore = useAuthStore()
+    const deploymentCapabilities = useDeploymentCapabilitiesStore()
+    if (authStore.isLiteMode && liteHiddenPaths.has(item.path)) {
+      return false
+    }
+    if (item.path === 'organizations' && !authStore.hasRole('admin')) {
+      return false
+    }
+    if (!deploymentCapabilities.isSupported(item.requiredCapability)) {
+      return false
+    }
+    if (!item.minRole) return true
     // 与 Settings.vue SECTION_MIN_ROLE 一致：超管 bypass；角色未加载时不露入口，避免闪烁。
     if (authStore.canAccessAllTenants) return true
     if (!authStore.currentTenantRole) return false

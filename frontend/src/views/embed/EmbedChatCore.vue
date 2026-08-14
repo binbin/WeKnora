@@ -322,7 +322,7 @@ const fetchSuggestedQuestions = async () => {
   }
   suggestedLoading.value = true
   try {
-    const res = await getEmbedSuggestedQuestions(props.channelId, props.token, 6)
+    const res = await getEmbedSuggestedQuestions(props.channelId, props.token)
     suggestedQuestions.value = res?.data?.questions || []
   } catch {
     suggestedQuestions.value = []

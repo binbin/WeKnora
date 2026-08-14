@@ -675,8 +675,11 @@ import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MessagePlugin } from 'tdesign-vue-next'
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next'
+import { copyWithToast } from '@/utils/clipboard'
 import { useAuthStore } from '@/stores/auth'
 import { resetUserPassword } from '@/api/system'
+import { AUDIT_ACTION_I18N_ROOTS } from '@/i18n/auditActionRegistry'
+import { auditActionLabel } from '@/i18n/auditActionLabel'
 import {
   listMembers,
   updateMemberRole,
@@ -1522,11 +1525,7 @@ function auditOutcomeTheme(o: AuditOutcome): 'success' | 'danger' | 'default' {
 // i18n 键名含点号（rbac.member_added）。用 t(path) 会按路径拆开解析，
 // 无法命中 tenantMember.audit.action['rbac.*'] — 必须用 tm + 字面量键。
 function formatAuditAction(action: AuditAction): string {
-  const bag = tm('tenantMember.audit.action') as unknown
-  if (bag !== null && typeof bag === 'object' && typeof (bag as Record<string, string>)[action] === 'string') {
-    return (bag as Record<string, string>)[action]
-  }
-  return action
+  return auditActionLabel({ tm }, AUDIT_ACTION_I18N_ROOTS.tenantMember, action)
 }
 
 // Resolve a user id to a display label: prefer current页的 members，
@@ -1759,13 +1758,7 @@ function absoluteInviteURL(raw: string): string {
 }
 
 async function copyText(text: string) {
-  if (!text) return
-  try {
-    await navigator.clipboard.writeText(text)
-    MessagePlugin.success(t('tenantInvitation.copied'))
-  } catch {
-    MessagePlugin.error(t('tenantInvitation.copyFailed'))
-  }
+  await copyWithToast(text, 'tenantInvitation.copied', 'tenantInvitation.copyFailed')
 }
 
 async function submitShareLink() {
@@ -1805,12 +1798,18 @@ const addConfirmOrgUnitLabel = computed(() => {
 
 // submitAdd is wired to the popup footer primary CTA. On step='form' it
 // validates and swaps to summary; on step='confirm' it fires the API.
+// With auto-accept the action is a direct add, so we skip the invitation
+// confirm step entirely and fire the API right after validation.
 async function submitAdd() {
   if (addDialogStep.value === 'form') {
     const valid = await addFormRef.value?.validate?.()
     if (valid !== true) return
     if (hasOrgHierarchy.value && !addForm.org_unit_id) {
       MessagePlugin.warning(t('tenantInvitation.errors.orgUnitRequired'))
+      return
+    }
+    if (authStore.autoAcceptInvitation) {
+      await sendInvitation(addForm.email.trim(), addForm.role, addForm.org_unit_id)
       return
     }
     addDialogStep.value = 'confirm'
@@ -1824,11 +1823,12 @@ function goBackToForm() {
   addDialogStep.value = 'form'
 }
 
-// dialogConfirmLabel drives the primary action label across the two steps.
+// dialogConfirmLabel: "Send" on the confirm step, or when auto-accept makes
+// the form step a direct add; otherwise "Send invitation".
 const dialogConfirmLabel = computed(() =>
-  addDialogStep.value === 'form'
-    ? t('tenantInvitation.inviteSubmit')
-    : t('tenantInvitation.confirmSend'),
+  addDialogStep.value === 'confirm' || authStore.autoAcceptInvitation
+    ? t('tenantInvitation.confirmSend')
+    : t('tenantInvitation.inviteSubmit'),
 )
 
 // sendInvitation actually fires the create-invitation API call.
@@ -1841,10 +1841,18 @@ async function sendInvitation(email: string, role: TenantRole, orgUnitId: string
       org_unit_id: orgUnitId || undefined,
     })
     if (resp.success) {
-      invitationsPage.value = 1
-      await loadInvitations()
+      // auto-accept returns a member (user_id) instead of an invitation (id)
+      const autoJoined = !!resp.data && 'user_id' in resp.data
       invitePopupVisible.value = false
-      MessagePlugin.success(t('tenantInvitation.inviteSuccess'))
+      if (autoJoined) {
+        // The invitee is already a member — refresh the roster so they
+        // appear immediately. No toast: the new row is the feedback.
+        await loadMembers()
+      } else {
+        invitationsPage.value = 1
+        await loadInvitations()
+        MessagePlugin.success(t('tenantInvitation.inviteSuccess'))
+      }
     } else {
       MessagePlugin.error(resp.message || t('tenantInvitation.errors.generic'))
     }

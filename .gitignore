@@ -59,3 +59,6 @@ fix-docker.sh
 # WeChat Mini Program local/private configuration
 miniprogram/project.private.config.json
 .worktrees/
+
+# Staging dir for the Docker sandbox self-check probe (removed after each run)
+.weknora-sandbox-check-*

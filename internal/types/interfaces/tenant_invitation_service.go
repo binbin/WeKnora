@@ -91,4 +91,9 @@ type TenantInvitationService interface {
 	// the share-link's tenant + role, then consumes the link (status
 	// → accepted). A second registration with the same token fails.
 	AcceptByToken(ctx context.Context, plainToken string, newUserID string) (*types.TenantMember, error)
+
+	// MarkPendingAcceptedIfExists transitions a per-user pending invitation
+	// into accepted when auto-accept joins the invitee without inbox
+	// confirmation. No-op when no pending row exists.
+	MarkPendingAcceptedIfExists(ctx context.Context, tenantID uint64, inviteeUserID string) error
 }

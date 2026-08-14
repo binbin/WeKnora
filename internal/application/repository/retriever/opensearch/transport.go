@@ -14,6 +14,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
+	secutils "github.com/Tencent/WeKnora/internal/utils"
 )
 
 // NewOpenSearchClient builds a TLS-hardened, pool-tuned *osapi.Client for
@@ -42,13 +43,16 @@ func NewOpenSearchClient(cfg *types.ConnectionConfig) (*osapi.Client, error) {
 	if cfg.InsecureSkipVerify && strings.EqualFold(strings.TrimSpace(os.Getenv("GIN_MODE")), "release") {
 		logger.Warnf(context.Background(), "[OpenSearch] WARNING: InsecureSkipVerify=true in production mode (GIN_MODE=release) — TLS certificate verification is DISABLED. This is a security risk.")
 	}
+	if err := secutils.ValidateURLForSSRF(cfg.Addr); err != nil {
+		return nil, fmt.Errorf("opensearch: address failed SSRF validation: %w", err)
+	}
 	transport := buildHTTPTransport(cfg.InsecureSkipVerify)
 	return osapi.NewClient(osapi.Config{
 		Client: opensearch.Config{
 			Addresses: []string{cfg.Addr},
 			Username:  cfg.Username,
 			Password:  cfg.Password,
-			Transport: transport,
+			Transport: &secutils.SSRFValidatingRoundTripper{Base: transport},
 		},
 	})
 }
@@ -61,6 +65,8 @@ func NewOpenSearchClient(cfg *types.ConnectionConfig) (*osapi.Client, error) {
 // final client fragile across SDK versions).
 func buildHTTPTransport(insecureSkipVerify bool) *http.Transport {
 	return &http.Transport{
+		Proxy:       http.ProxyFromEnvironment,
+		DialContext: secutils.SSRFSafeDialContext,
 		TLSClientConfig: &tls.Config{
 			MinVersion:         tls.VersionTLS12,
 			InsecureSkipVerify: insecureSkipVerify, //nolint:gosec — operator opt-in flag

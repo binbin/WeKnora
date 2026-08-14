@@ -321,7 +321,7 @@ const WikiChunkCitationPrompt = `你是一个精确的引用系统。你的任�
 const WikiPageModifySystemPrompt = `You are a wiki editor tasked with updating an existing wiki page. You must process NEW information to add and/or deleted documents whose exclusive contributions must be removed.
 
 ### SOURCE GROUNDING & MERGE RULES (CRITICAL):
-1. **No Inline Chunk IDs:** Chunk aliases such as [c003] are internal processing metadata. NEVER output them in the page body or summary, and remove any legacy inline chunk aliases from existing content while editing. Source associations are stored separately by the system.
+1. **No Inline Chunk IDs:** Chunk handles such as [c003] are internal processing metadata. NEVER output them in the page body or summary, and remove any legacy inline chunk handles from existing content while editing. Source associations are stored separately by the system.
 2. **Mandatory Grounding:** Every newly added factual claim, entity, or numerical value MUST be directly supported by the provided new source chunks, but the final prose must remain clean Markdown without inline chunk IDs.
 3. **No Hallucination:** Do not invent, synthesize, or infer any information that is not explicitly present in the provided source chunks. If the new chunks clearly and directly supersede or contradict existing content, update the main text to reflect the newer supported information AND add a brief "Contradictions / Updates" section summarizing the change. If the conflict is ambiguous, unresolved, or not directly supported by the provided chunks, do not overwrite the existing content; instead, add only a "Contradictions / Updates" section describing the conflict.
 4. The shared source-context block describes what each source document is about and what kind of document it is. Use it only to calibrate scope, attribution, and tone. Never copy source-context wording into the page as factual evidence.
@@ -456,21 +456,23 @@ const WikiLogEntryTemplate = `## [{{.Date}}] {{.Operation}} | {{.Title}}
 
 // WikiDeduplicationPrompt asks the LLM to identify duplicate entities/concepts
 // between newly extracted items and existing wiki pages.
-const WikiDeduplicationPrompt = `你是一个严格的去重系统。给定一份新抽取条目的列表和一份现有 wiki 页面的列表，判断哪些新条目与某个现有页面指向**完全相同**的现实世界实体或概念。
+const WikiDeduplicationPrompt = `你是一个严格的去重系统。给定一份新抽取条目的列表。每个条目携带**自己的**一小份表面相似的现有 wiki 页面列表（即其 <candidates>）。对每个条目，判断它是否与其自身候选中的**某一个**页面指向**完全相同**的现实世界实体或概念。
 
-<new_items>
-{{.NewItems}}
-</new_items>
-
-<existing_pages>
-{{.ExistingPages}}
-</existing_pages>
+<items>
+{{.Candidates}}
+</items>
 
 <instructions>
+### 如何阅读输入
+每个 <item> 是一个新抽取的实体/概念。嵌套在其中的 <candidates> 是你可以将该条目合并进去的**唯一**现有页面——它们是预先筛选出的与该条目相似的页面。某个条目下列出的页面对其他条目**没有任何**参考意义。
+
+### 硬性约束——合并必须同时满足：
+- 目标 slug 必须是**该条目内部**列出的候选 <page> slug 之一。永远不要合并到其他条目下列出的页面，也永远不要编造 slug。
+- 类型必须兼容：entity 只能与 entity 合并，concept 只能与 concept 合并。**永远不要将一个 entity 合并进 concept，反之亦然。**
+
 ### 合并判定标准——必须同时满足：
-1. 新条目与现有页面指向的是**同一个现实世界事物**（同一个人、同一个组织、同一个具体概念）。
+1. 新条目与候选页面指向的是**同一个现实世界事物**（同一个人、同一个组织、同一个具体概念）。
 2. 二者的匹配属于**名称变体**：缩写 ↔ 全称、译名，或轻微的拼写差异。
-3. 类型必须兼容：entity 只能与 entity 合并，concept 只能与 concept 合并。**永远不要将一个 entity 合并进 concept，反之亦然。**
 
 ### 正确合并的示例：
 - "Acme Corp" → "Acme Corporation"（同一家公司，缩写关系）

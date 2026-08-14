@@ -57,13 +57,15 @@ var webSearchTool = BaseTool{
 }
 ` + "`" + `
 
-## 提示
+## 证据与回退
 
 - 结果会通过 RAG 自动压缩以提取相关内容
 - 搜索结果会存入会话临时知识库
 - 仅在知识库没有所需信息时使用本工具
-- 结果包含短 ID wN、标题、摘要与内容片段（可能被截断）
-- **关键**：若内容被截断或需要完整细节，将该 wN 传给 **web_fetch** 拉取完整页面
+- 标题、URL、摘要与内容片段均可作为搜索摘要证据（内容可能被截断）
+- **关键**：仅当摘要不足或需要完整页面核实时，将该 wN 传给 **web_fetch**
+- 若 web_fetch 失败，保留搜索证据，说明页面内容未经核实，并对动态事实降低置信度
+- 不要仅因为页面无法抓取就重复等价搜索
 - 每次搜索最多返回 %d 条结果`,
 	schema: utils.GenerateSchema[WebSearchInput](),
 }
@@ -250,12 +252,14 @@ func (t *WebSearchTool) Execute(ctx context.Context, args json.RawMessage) (*typ
 		output += "\n"
 
 		resultData := map[string]interface{}{
-			"result_index": i + 1,
-			"title":        result.Title,
-			"url":          result.URL,
-			"snippet":      result.Snippet,
-			"content":      result.Content,
-			"source":       result.Source,
+			"result_index":  i + 1,
+			"title":         result.Title,
+			"url":           result.URL,
+			"snippet":       result.Snippet,
+			"content":       result.Content,
+			"source":        result.Source,
+			"evidence_type": "search_summary",
+			"page_verified": false,
 		}
 		if result.PublishedAt != nil {
 			resultData["published_at"] = result.PublishedAt.Format(time.RFC3339)
@@ -266,9 +270,9 @@ func (t *WebSearchTool) Execute(ctx context.Context, args json.RawMessage) (*typ
 	// Add guidance for next steps
 	output += "\n=== Next Steps ===\n"
 	if len(webResults) > 0 {
-		output += "- ⚠️ Content may be truncated (showing first 500 chars). Use web_fetch to get full page content.\n"
-		output += "- Extract URLs from results above and use web_fetch with appropriate prompts to get detailed information.\n"
-		output += "- Synthesize information from multiple sources for comprehensive answers.\n"
+		output += "- Titles, URLs, snippets, and content snippets are usable search-summary evidence.\n"
+		output += "- If the evidence is sufficient, answer now. Use web_fetch only for claims that need full-page verification.\n"
+		output += "- If fetching fails, retain these results, disclose that page content was not verified, and avoid presenting dynamic facts as certain.\n"
 	} else {
 		output += "- No web search results found. Consider:\n"
 		output += "  - Try different search queries or keywords\n"

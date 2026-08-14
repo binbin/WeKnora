@@ -248,13 +248,18 @@ func (t *DatabaseQueryTool) Execute(ctx context.Context, args json.RawMessage) (
 
 // validateAndSecureSQL validates the SQL query and injects tenant_id conditions
 func (t *DatabaseQueryTool) validateAndSecureSQL(sqlQuery string, tenantID uint64) (string, error) {
+	searchScopes := searchScopesFromTargets(t.searchTargets)
+	if len(searchScopes) == 0 {
+		return "", fmt.Errorf("no effective Agent knowledge scope is available")
+	}
 	securedSQL, validationResult, err := utils.ValidateAndSecureSQL(
 		sqlQuery,
 		utils.WithSecurityDefaults(tenantID),
 		utils.WithSoftDeleteFilter("knowledge_bases", "knowledges", "chunks"),
 		utils.WithHiddenKBFilter(),
+		utils.WithChunkEnabledFilter(),
 		utils.WithInjectionRiskCheck(),
-		utils.WithSearchScopes(searchScopesFromTargets(t.searchTargets)),
+		utils.WithSearchScopes(searchScopes),
 	)
 	if err != nil {
 		return "", err
@@ -277,10 +282,14 @@ func searchScopesFromTargets(searchTargets types.SearchTargets) []utils.SearchSc
 		if target == nil || target.KnowledgeBaseID == "" {
 			continue
 		}
+		knowledgeIDs, tagIDs := searchTargetScope(target)
+		if !searchTargetIsWholeKB(target) && len(knowledgeIDs) == 0 && len(tagIDs) == 0 {
+			continue
+		}
 		scopes = append(scopes, utils.SearchScope{
 			KnowledgeBaseID: target.KnowledgeBaseID,
-			KnowledgeIDs:    append([]string(nil), target.KnowledgeIDs...),
-			TagIDs:          append([]string(nil), target.TagIDs...),
+			KnowledgeIDs:    knowledgeIDs,
+			TagIDs:          tagIDs,
 		})
 	}
 	return scopes
