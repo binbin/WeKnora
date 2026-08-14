@@ -1315,6 +1315,8 @@ export default {
       mineruHtmlLabel: 'MinerU-HTML (HTML парсинг)',
       paddleocrVlEndpointPlaceholder: 'напр. http://your-paddleocr-vl:8080',
       paddleocrVlEndpointHint: 'Адрес полного сервиса PaddleOCR-VL (pipeline); суффикс /layout-parsing не требуется',
+      paddleocrVlApiKeyPlaceholder: 'API-ключ самостоятельно развёрнутого сервиса (необязательно)',
+      paddleocrVlApiKeyHint: 'Если сервис требует авторизацию, ключ отправляется как Authorization: Bearer <key>. Для официального PaddleX оставьте пустым.',
       paddleocrVlCloudTokenPlaceholder: 'Токен PaddleOCR-VL AI Studio'
     },
     storageBackend: {

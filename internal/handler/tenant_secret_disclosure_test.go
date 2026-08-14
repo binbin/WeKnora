@@ -130,7 +130,9 @@ func TestGetTenantKVAdminReturnsRedactedSecrets(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
 	assert.Equal(t, types.RedactedSecretPlaceholder, payload.Data.MinerUAPIKey)
+	assert.Equal(t, types.RedactedSecretPlaceholder, payload.Data.PaddleOCRVLAPIKey)
 	assert.NotContains(t, rec.Body.String(), "parser-secret-123")
+	assert.NotContains(t, rec.Body.String(), "paddle-local-secret")
 }
 
 func secretTenantFixture() *types.Tenant {
@@ -141,7 +143,8 @@ func secretTenantFixture() *types.Tenant {
 			APIKey: "legacy-search-secret-999",
 		},
 		ParserEngineConfig: &types.ParserEngineConfig{
-			MinerUAPIKey: "parser-secret-123",
+			MinerUAPIKey:      "parser-secret-123",
+			PaddleOCRVLAPIKey: "paddle-local-secret",
 		},
 		StorageEngineConfig: &types.StorageEngineConfig{
 			MinIO: &types.MinIOEngineConfig{

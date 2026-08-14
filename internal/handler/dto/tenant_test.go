@@ -44,6 +44,7 @@ func TestTenantResponse_AdminGetsRedactedIntegrationConfigs(t *testing.T) {
 	assert.Empty(t, resp.WebSearchConfig.APIKey)
 	require.NotNil(t, resp.ParserEngineConfig)
 	assert.Equal(t, types.RedactedSecretPlaceholder, resp.ParserEngineConfig.MinerUAPIKey)
+	assert.Equal(t, types.RedactedSecretPlaceholder, resp.ParserEngineConfig.PaddleOCRVLAPIKey)
 	require.NotNil(t, resp.StorageEngineConfig.MinIO)
 	assert.Equal(t, types.RedactedSecretPlaceholder, resp.StorageEngineConfig.MinIO.SecretAccessKey)
 }
@@ -73,6 +74,7 @@ func sampleSecretTenant() *types.Tenant {
 		},
 		ParserEngineConfig: &types.ParserEngineConfig{
 			MinerUAPIKey:          "parser-secret-123",
+			PaddleOCRVLAPIKey:     "paddle-local-secret-789",
 			PaddleOCRVLCloudToken: "paddle-secret-456",
 		},
 		StorageEngineConfig: &types.StorageEngineConfig{

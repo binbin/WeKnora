@@ -1279,6 +1279,8 @@ export default {
       vlmServerUrlHint: "当 Backend 选择 vlm-http-client 或 hybrid-http-client 时需要填写",
       paddleocrVlEndpointPlaceholder: "如 http://your-paddleocr-vl:8080",
       paddleocrVlEndpointHint: "填写 PaddleOCR-VL 完整服务（pipeline）地址，无需 /layout-parsing 后缀",
+      paddleocrVlApiKeyPlaceholder: "自建站点 API Key（可选）",
+      paddleocrVlApiKeyHint: "若服务开启鉴权，将以 Authorization: Bearer <key> 发送；官方 PaddleX 默认无需填写",
       paddleocrVlCloudTokenPlaceholder: "PaddleOCR-VL 飞桨星河社区 Token",
     },
     storageBackend: {
