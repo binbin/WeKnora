@@ -43,17 +43,20 @@ func TestMergeWebSearchConfigForUpdate_PreservesRedactedSecrets(t *testing.T) {
 func TestMergeParserEngineConfigForUpdate_PreservesRedactedSecrets(t *testing.T) {
 	existing := &ParserEngineConfig{
 		MinerUAPIKey:          "mineru-secret",
+		PaddleOCRVLAPIKey:     "paddle-local-secret",
 		PaddleOCRVLCloudToken: "paddle-secret",
 		MinerUEndpoint:        "http://mineru",
 	}
 	incoming := &ParserEngineConfig{
 		MinerUAPIKey:          RedactedSecretPlaceholder,
+		PaddleOCRVLAPIKey:     RedactedSecretPlaceholder,
 		PaddleOCRVLCloudToken: RedactedSecretPlaceholder,
 		MinerUEndpoint:        "http://mineru-new",
 	}
 	merged := MergeParserEngineConfigForUpdate(incoming, existing)
 	require.NotNil(t, merged)
 	assert.Equal(t, "mineru-secret", merged.MinerUAPIKey)
+	assert.Equal(t, "paddle-local-secret", merged.PaddleOCRVLAPIKey)
 	assert.Equal(t, "paddle-secret", merged.PaddleOCRVLCloudToken)
 	assert.Equal(t, "http://mineru-new", merged.MinerUEndpoint)
 }
@@ -96,6 +99,17 @@ func TestMergeStorageEngineConfigForUpdate_PreservesRedactedSecrets(t *testing.T
 	assert.Equal(t, "access-id", merged.MinIO.AccessKeyID)
 	assert.Equal(t, "secret-key", merged.MinIO.SecretAccessKey)
 	assert.Equal(t, "bucket-new", merged.MinIO.BucketName)
+}
+
+func TestParserEngineConfigForResponse_MasksPaddleOCRVLAPIKey(t *testing.T) {
+	cfg := &ParserEngineConfig{
+		PaddleOCRVLAPIKey:     "paddle-local-secret",
+		PaddleOCRVLCloudToken: "paddle-cloud-secret",
+	}
+	resp := ParserEngineConfigForResponse(cfg, true)
+	require.NotNil(t, resp)
+	assert.Equal(t, RedactedSecretPlaceholder, resp.PaddleOCRVLAPIKey)
+	assert.Equal(t, RedactedSecretPlaceholder, resp.PaddleOCRVLCloudToken)
 }
 
 func TestParserEngineConfigForResponse_NilSafe(t *testing.T) {

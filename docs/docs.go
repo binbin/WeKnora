@@ -17887,6 +17887,14 @@ const docTemplate = `{
                     "description": "PaddleOCR-VL self-hosted pipeline service (full /layout-parsing API).",
                     "type": "string"
                 },
+                "paddleocr_vl_api_key": {
+                    "description": "Optional Bearer token for gated self-hosted PaddleOCR-VL deployments.",
+                    "type": "string"
+                },
+                "paddleocr_vl_model": {
+                    "description": "e.g. PaddleOCR-VL",
+                    "type": "string"
+                },
                 "paddleocr_vl_use_chart_recognition": {
                     "type": "boolean"
                 },

@@ -1408,6 +1408,8 @@ export default {
       vlmServerUrlHint: 'Required when Backend is vlm-http-client or hybrid-http-client',
       paddleocrVlEndpointPlaceholder: 'e.g. http://your-paddleocr-vl:8080',
       paddleocrVlEndpointHint: 'Base URL of the full PaddleOCR-VL pipeline service; no /layout-parsing suffix needed',
+      paddleocrVlApiKeyPlaceholder: 'Self-hosted API Key (optional)',
+      paddleocrVlApiKeyHint: 'If the service requires auth, sent as Authorization: Bearer <key>. Official PaddleX serving does not need this.',
       paddleocrVlCloudTokenPlaceholder: 'PaddleOCR-VL AI Studio Token',
     },
     storageBackend: {
