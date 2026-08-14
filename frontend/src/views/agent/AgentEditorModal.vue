@@ -4534,6 +4534,7 @@ const handleSave = async () => {
       savedAgent.value = updated;
       MessagePlugin.success(t('agent.messages.updated'));
       emit('success', updated);
+      handleClose();
     }
   } catch (e: any) {
     MessagePlugin.error(e?.message || t('agent.messages.saveFailed'));

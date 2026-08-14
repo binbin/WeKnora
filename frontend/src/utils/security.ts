@@ -10,7 +10,6 @@ import {
   markdownDomPurifyConfig,
   markdownDomPurifySecurityHooks,
 } from './markdownDomPurify.ts';
-import { getRequestOrgUnitId } from '@/api/org-unit'
 import {
   buildProtectedFileRequest,
   isProtectedFileProxyPath,
@@ -509,10 +508,6 @@ export async function hydrateProtectedFileImages(
     if (!request) {
       img.dataset.authHydrated = '0';
       return;
-    }
-    const selectedOrgUnitId = getRequestOrgUnitId();
-    if (selectedOrgUnitId) {
-      request.headers['X-Org-Unit-ID'] = selectedOrgUnitId;
     }
     const { url: requestURL, headers } = request;
 

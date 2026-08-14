@@ -98,3 +98,31 @@ test('all file proxies are recognized as protected proxy paths', () => {
   assert.equal(isProtectedFileProxyPath('/api/v1/embed/ch-1/files'), true)
   assert.equal(isProtectedFileProxyPath('/api/v1/embed/ch-1/config'), false)
 })
+
+test('tenant file requests attach the selected org unit header', () => {
+  const memory = new Map<string, string>()
+  const previous = globalThis.localStorage
+  globalThis.localStorage = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      memory.set(key, String(value))
+    },
+    removeItem: (key: string) => {
+      memory.delete(key)
+    },
+    clear: () => {
+      memory.clear()
+    },
+    key: () => null,
+    get length() {
+      return memory.size
+    },
+  } as Storage
+  try {
+    memory.set('weknora_org_unit_id', 'ou-1')
+    const request = buildProtectedFileRequest(RESOURCE, { mode: 'tenant' })
+    assert.equal(request?.headers['X-Org-Unit-ID'], 'ou-1')
+  } finally {
+    globalThis.localStorage = previous
+  }
+})

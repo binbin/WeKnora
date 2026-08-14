@@ -247,12 +247,16 @@ func withCitationsEnabled(enabled bool) testEngineOption {
 func TestBuildSystemPromptUsesInternalCitationSetting(t *testing.T) {
 	model := &mockChat{}
 	enabledEngine := newTestEngine(t, model)
-	require.Contains(t, enabledEngine.buildSystemPrompt(context.Background()), "本回答已启用来源引用")
+	require.Contains(
+		t,
+		enabledEngine.buildSystemPrompt(context.Background()),
+		"Source citations are enabled for this answer",
+	)
 
 	disabledEngine := newTestEngine(t, model, withCitationsEnabled(false))
 	prompt := disabledEngine.buildSystemPrompt(context.Background())
-	require.Contains(t, prompt, "本回答已禁用来源引用")
-	require.NotContains(t, prompt, "本回答已启用来源引用")
+	require.Contains(t, prompt, "Source citations are disabled for this answer")
+	require.NotContains(t, prompt, "Source citations are enabled for this answer")
 }
 
 func newTestEngine(t *testing.T, chatModel chat.Chat, opts ...testEngineOption) *AgentEngine {

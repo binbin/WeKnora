@@ -106,6 +106,8 @@ export function isProtectedFileProxyPath(pathname: string): boolean {
   );
 }
 
+const ORG_UNIT_STORAGE_KEY = 'weknora_org_unit_id';
+
 function tenantRequestHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   try {
@@ -123,6 +125,13 @@ function tenantRequestHeaders(): Record<string, string> {
       // active tenant into weknora_tenant, leaving authenticated file
       // fetches landing on the home tenant.
       headers['X-Tenant-ID'] = selectedTenantId;
+    }
+
+    // Must match api/org-unit ORG_UNIT_STORAGE_KEY. File hydration uses
+    // fetch(), not axios, so it cannot reuse the request interceptor.
+    const selectedOrgUnitId = (localStorage.getItem(ORG_UNIT_STORAGE_KEY) || '').trim();
+    if (selectedOrgUnitId) {
+      headers['X-Org-Unit-ID'] = selectedOrgUnitId;
     }
   } catch {
     // ignore localStorage read errors

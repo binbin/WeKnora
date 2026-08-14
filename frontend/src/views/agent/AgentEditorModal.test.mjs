@@ -5,10 +5,14 @@ import test from 'node:test'
 const source = readFileSync(new URL('./AgentEditorModal.vue', import.meta.url), 'utf8')
 
 test('editing an agent closes the editor after a successful save', () => {
-  assert.match(
-    source,
-    /await updateAgent\(formData\.value\.id, formData\.value\);\s*MessagePlugin\.success\(t\('agent\.messages\.updated'\)\);\s*emit\('success'\);\s*handleClose\(\);/
-  )
+  const editBranch = source.match(
+    /if \(editorMode\.value === 'create'\) \{[\s\S]*?\} else \{([\s\S]*?)handleClose\(\);\r?\n    \}/
+  )?.[1]
+
+  assert.ok(editBranch, 'expected to find the edit/save branch')
+  assert.match(editBranch, /await updateAgent\(agentId, formData\.value\)/)
+  assert.match(editBranch, /MessagePlugin\.success\(t\('agent\.messages\.updated'\)\)/)
+  assert.match(editBranch, /emit\('success', updated\)/)
 })
 
 test('the first successful create stays open for integration setup', () => {
