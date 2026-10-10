@@ -4805,6 +4805,7 @@ export default {
     noModel: '暂无可用模型',
     stopGeneration: '停止生成',
     send: '发送',
+    aiGeneratedDisclaimer: '内容由AI生成，请仔细甄别',
     steerCurrent: '补充当前任务',
     steerAfter: '完成后发送',
     steerAccepted: '本轮补充',

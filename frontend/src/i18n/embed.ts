@@ -537,6 +537,7 @@ const messages = {
       "placeholder": "直接向模型提问",
       "stopGeneration": "停止生成",
       "send": "发送",
+      "aiGeneratedDisclaimer": "内容由AI生成，请仔细甄别",
       "webSearch": {
         "label": "网络搜索",
         "toggleOn": "开启网络搜索",
@@ -1119,6 +1120,7 @@ const messages = {
       "placeholder": "モデルに直接質問",
       "stopGeneration": "生成を停止",
       "send": "送信",
+      "aiGeneratedDisclaimer": "内容はAIによって生成されています。ご自身でご判断ください",
       "webSearch": {
         "label": "Web検索",
         "toggleOn": "Web検索を有効化",
@@ -1705,6 +1707,7 @@ const messages = {
       "placeholder": "Ask questions directly to the model",
       "stopGeneration": "Stop Generation",
       "send": "Send",
+      "aiGeneratedDisclaimer": "Content is AI-generated. Please verify carefully.",
       "webSearch": {
         "label": "Web search",
         "toggleOn": "Enable web search",
@@ -1853,6 +1856,7 @@ const koEmbedPublish = {
     placeholder: '모델에 직접 질문하세요',
     stopGeneration: '생성 중지',
     send: '보내기',
+    aiGeneratedDisclaimer: '내용은 AI가 생성한 것입니다. 신중히 확인해 주세요',
     webSearch: {
       label: '웹 검색',
       toggleOn: '웹 검색 켜기',
@@ -1992,6 +1996,8 @@ const ruEmbedPublish = {
     placeholder: 'Задайте вопрос модели',
     stopGeneration: 'Остановить генерацию',
     send: 'Отправить',
+    aiGeneratedDisclaimer:
+      'Контент создан ИИ. Проверяйте информацию внимательно.',
     webSearch: {
       label: 'Веб-поиск',
       toggleOn: 'Включить веб-поиск',

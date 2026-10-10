@@ -2574,6 +2574,8 @@ export default {
     noModel: '利用可能なモデルがありません',
     stopGeneration: '生成を停止',
     send: '送信',
+    aiGeneratedDisclaimer:
+      '内容はAIによって生成されています。ご自身でご判断ください',
     steerCurrent: '現在のタスクに追加',
     steerAfter: '完了後に送信',
     steerAccepted: 'このタスクへの追加',

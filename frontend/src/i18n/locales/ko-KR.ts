@@ -4633,6 +4633,7 @@ export default {
     noModel: '사용 가능한 모델 없음',
     stopGeneration: '생성 중지',
     send: '전송',
+    aiGeneratedDisclaimer: '내용은 AI가 생성한 것입니다. 신중히 확인해 주세요',
     steerCurrent: '현재 작업에 추가',
     steerAfter: '완료 후 보내기',
     steerAccepted: '현재 작업에 추가됨',

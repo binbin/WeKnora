@@ -2599,6 +2599,7 @@ export default {
     noModel: 'No available models',
     stopGeneration: 'Stop Generation',
     send: 'Send',
+    aiGeneratedDisclaimer: 'Content is AI-generated. Please verify carefully.',
     steerCurrent: 'Supplement current task',
     steerAfter: 'Send after completion',
     steerAccepted: 'Added during this task',

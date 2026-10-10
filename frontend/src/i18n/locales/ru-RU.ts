@@ -4633,6 +4633,8 @@ export default {
     noModel: 'Нет доступных моделей',
     stopGeneration: 'Остановить генерацию',
     send: 'Отправить',
+    aiGeneratedDisclaimer:
+      'Контент создан ИИ. Проверяйте информацию внимательно.',
     steerCurrent: 'Дополнить текущую задачу',
     steerAfter: 'Отправить после завершения',
     steerAccepted: 'Дополнение к текущей задаче',

@@ -108,6 +108,7 @@
         @send-msg="onSendMsg"
         @stop-generation="handleStopGeneration"
       />
+      <p class="embed-chat__ai-disclaimer">{{ t('input.aiGeneratedDisclaimer') }}</p>
     </div>
     <ChatReferencesDrawer embedded-mode />
   </div>
@@ -562,6 +563,14 @@ watch(
   flex-shrink: 0;
   padding: 8px 16px 16px;
   box-sizing: border-box;
+}
+
+.embed-chat__ai-disclaimer {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--td-text-color-placeholder, #999);
 }
 
 .msg-skeleton-list {
