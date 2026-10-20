@@ -21,6 +21,8 @@ node_modules/
 /dist/
 /build/
 *.log
+*.exe
+*.exe~
 
 # 临时文件
 tmp/
