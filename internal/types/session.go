@@ -214,14 +214,17 @@ func SanitizeClientSessionDescription(incoming, existing string) string {
 // agent stored in sessions.agent_config JSON (web / embed UI memory).
 // When AgentID is set, Admin+ ListSessions clears per-user scope so agent
 // conversation logs can show the whole tenant.
+// HasMessages, when true, excludes sessions that never received a message
+// (common for guest-link / embed page opens that create a shell session).
 type SessionListQuery struct {
-	TenantID uint64
-	UserID   string
-	Keyword  string
-	Source   string
-	AgentID  string
-	Page     int
-	PageSize int
+	TenantID    uint64
+	UserID      string
+	Keyword     string
+	Source      string
+	AgentID     string
+	HasMessages bool
+	Page        int
+	PageSize    int
 }
 
 // SessionListItem is a session row enriched with its IM origin (when any).

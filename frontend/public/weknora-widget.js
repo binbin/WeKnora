@@ -38,6 +38,127 @@
   var instance = null;
   var listeners = {};
 
+  function ieDocumentMode() {
+    if (typeof document !== 'undefined' && typeof document.documentMode === 'number') {
+      return document.documentMode;
+    }
+    var ua = (global.navigator && global.navigator.userAgent) || '';
+    var match = /MSIE (\d+)/.exec(ua);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
+  function isLegacyIEHost() {
+    // IE7 and below cannot host the widget; IE8+ loads iframe → legacy shell.
+    var mode = ieDocumentMode();
+    if (mode > 0) return mode < 8;
+    var ua = (global.navigator && global.navigator.userAgent) || '';
+    return /MSIE [1-7]\./.test(ua);
+  }
+
+  // Minimal Promise for IE9 token refresh (static-token mode never needs it).
+  function ensurePromise() {
+    if (typeof global.Promise === 'function') return;
+    function P(executor) {
+      var self = this;
+      self._state = 0;
+      self._value = undefined;
+      self._handlers = [];
+      function resolve(value) { settle(1, value); }
+      function reject(reason) { settle(2, reason); }
+      function settle(state, value) {
+        if (self._state) return;
+        self._state = state;
+        self._value = value;
+        var i;
+        for (i = 0; i < self._handlers.length; i += 1) {
+          self._handlers[i]();
+        }
+      }
+      this.then = function (onFulfilled, onRejected) {
+        return new P(function (res, rej) {
+          function handle() {
+            try {
+              if (self._state === 1) {
+                res(typeof onFulfilled === 'function' ? onFulfilled(self._value) : self._value);
+              } else if (self._state === 2) {
+                if (typeof onRejected === 'function') res(onRejected(self._value));
+                else rej(self._value);
+              } else {
+                self._handlers.push(handle);
+              }
+            } catch (err) {
+              rej(err);
+            }
+          }
+          if (self._state) {
+            setTimeout(handle, 0);
+          } else {
+            self._handlers.push(handle);
+          }
+        });
+      };
+      this.catch = function (onRejected) { return this.then(null, onRejected); };
+      try { executor(resolve, reject); } catch (err) { reject(err); }
+    }
+    P.resolve = function (value) {
+      return new P(function (resolve) { resolve(value); });
+    };
+    global.Promise = P;
+  }
+
+  function xhrGetJSON(url) {
+    ensurePromise();
+    return new global.Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error('token endpoint HTTP ' + xhr.status));
+          return;
+        }
+        try {
+          resolve(JSON.parse(xhr.responseText || '{}'));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      xhr.send(null);
+    });
+  }
+
+  function resolveOrigin(url, baseHref) {
+    try {
+      if (typeof URL === 'function') {
+        return new URL(url, baseHref).origin;
+      }
+    } catch (ignore) { /* fall through */ }
+    var anchor = document.createElement('a');
+    anchor.href = url;
+    // IE9 may need a base assignment for relative URLs.
+    if (!anchor.host && baseHref) {
+      var base = document.createElement('a');
+      base.href = baseHref;
+      anchor.href = base.href.replace(/[^/]*$/, '') + url.replace(/^\//, '');
+    }
+    var protocol = anchor.protocol;
+    var host = anchor.host;
+    if (!protocol || !host) return '';
+    return protocol + '//' + host;
+  }
+
+  function findWidgetScript() {
+    if (document.currentScript) return document.currentScript;
+    var scripts = document.getElementsByTagName('script');
+    var i;
+    for (i = scripts.length - 1; i >= 0; i -= 1) {
+      var src = scripts[i].src || '';
+      if (src.indexOf('weknora-widget.js') >= 0) return scripts[i];
+    }
+    return null;
+  }
+
   function normalizePosition(pos) {
     if (!pos || POSITIONS.indexOf(pos) < 0) return DEFAULT_POSITION;
     return pos;
@@ -62,6 +183,11 @@
   }
 
   function createWidget(opts) {
+    if (isLegacyIEHost()) {
+      console.warn('[TreeRAG] IE7 and below are not supported; use IE8+ or a modern browser');
+      return null;
+    }
+    ensurePromise();
     var channelId = opts.channel || opts.channelId;
     // Insecure mode: a long-lived publish token is embedded in the page.
     var staticToken = opts.token;
@@ -95,18 +221,10 @@
     // Returns a Promise resolving to a usable token. In static mode this is the
     // embedded publish token. In secure mode it fetches from tokenEndpoint.
     function loadToken(force) {
-      if (staticToken) return Promise.resolve(staticToken);
-      if (currentToken && !force) return Promise.resolve(currentToken);
+      if (staticToken) return global.Promise.resolve(staticToken);
+      if (currentToken && !force) return global.Promise.resolve(currentToken);
       if (tokenInFlight) return tokenInFlight;
-      tokenInFlight = fetch(tokenEndpoint, {
-        method: 'GET',
-        credentials: 'include',
-        headers: { Accept: 'application/json' },
-      })
-        .then(function (res) {
-          if (!res.ok) throw new Error('token endpoint HTTP ' + res.status);
-          return res.json();
-        })
+      tokenInFlight = xhrGetJSON(tokenEndpoint)
         .then(function (data) {
           var d = data || {};
           var inner = d.data || d;
@@ -130,25 +248,25 @@
     var title = opts.title || DEFAULT_TITLE;
     var baseUrl = (opts.baseUrl || opts.base || '').replace(/\/$/, '');
     if (!baseUrl) {
-      var script = document.currentScript;
+      var script = findWidgetScript();
       if (script && script.src) {
         baseUrl = script.src.replace(/\/weknora-widget\.js.*$/, '');
+      } else if (global.location) {
+        baseUrl = global.location.protocol + '//' + global.location.host;
       } else {
-        baseUrl = global.location ? global.location.origin : '';
+        baseUrl = '';
       }
     }
 
     var panelWidth = Number(opts.width) > 0 ? Number(opts.width) : DEFAULT_WIDTH;
     var panelHeight = Number(opts.height) > 0 ? Number(opts.height) : DEFAULT_HEIGHT;
     var embedUrl = baseUrl + '/embed/' + encodeURIComponent(channelId);
-    var embedOrigin = baseUrl;
-    try {
-      // Derive the exact origin (scheme + host + port) rather than trusting the
-      // raw baseUrl string, so postMessage origin checks are precise.
-      embedOrigin = new URL(embedUrl, global.location ? global.location.href : undefined).origin;
-    } catch (e) {
-      embedOrigin = baseUrl;
-    }
+    // Derive the exact origin (scheme + host + port) rather than trusting the
+    // raw baseUrl string, so postMessage origin checks are precise.
+    var embedOrigin = resolveOrigin(
+      embedUrl,
+      global.location ? global.location.href : undefined
+    ) || baseUrl;
     var destroyed = false;
     var panelOpen = false;
     var iframeReady = false;
@@ -197,7 +315,12 @@
     iframe.setAttribute('allow', 'clipboard-write');
     var hostOrigin = '';
     try {
-      hostOrigin = global.location ? global.location.origin : '';
+      if (global.location) {
+        hostOrigin = global.location.origin ||
+          (global.location.protocol + '//' + global.location.host);
+      } else {
+        hostOrigin = '';
+      }
     } catch (e) { hostOrigin = ''; }
     var crossOriginEmbed = hostOrigin && embedOrigin && hostOrigin !== embedOrigin;
     var sandboxAttr = String(opts.sandbox || opts.sandboxMode || '').trim();
@@ -383,6 +506,10 @@
 
   var api = {
     init: function (opts) {
+      if (isLegacyIEHost()) {
+        console.warn('[TreeRAG] IE7 and below are not supported');
+        return null;
+      }
       if (instance) instance.destroy();
       instance = createWidget(opts || {});
       return instance;
@@ -411,7 +538,7 @@
 
   global.TreeRAG = api;
 
-  var legacyScript = document.currentScript;
+  var legacyScript = findWidgetScript();
   if (legacyScript) {
     var legacyChannel = legacyScript.getAttribute('data-channel');
     var legacyToken = legacyScript.getAttribute('data-token');

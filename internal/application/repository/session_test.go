@@ -381,3 +381,39 @@ func TestSessionRepositoryQueryPagedAgentIDMatchesWebJSONAndIM(t *testing.T) {
 	require.EqualValues(t, 1, webTotal)
 	require.Equal(t, []string{matchedWeb.ID}, listItemIDsForTest(webOnly))
 }
+
+// Guest-link / embed page opens create empty shell sessions. Conversation
+// logs pass HasMessages so those shells stay out of the listing and totals.
+type testSessionMessage struct {
+	ID        string `gorm:"primaryKey"`
+	SessionID string
+	DeletedAt gorm.DeletedAt
+}
+
+func (testSessionMessage) TableName() string { return "messages" }
+
+func TestSessionRepositoryQueryPagedHasMessagesExcludesEmptyShells(t *testing.T) {
+	repo, db := newSessionRepositoryForTest(t)
+	require.NoError(t, db.AutoMigrate(&testIMChannelSession{}, &testSessionMessage{}))
+	ctx := context.Background()
+
+	withMsg := createSessionForTest(t, db, 1, "alice")
+	emptyShell := createSessionForTest(t, db, 1, "alice")
+	require.NoError(t, db.Create(&testSessionMessage{
+		ID: "msg-1", SessionID: withMsg.ID,
+	}).Error)
+
+	allItems, allTotal, err := repo.QueryPaged(ctx, &types.SessionListQuery{
+		TenantID: 1, UserID: "alice", Page: 1, PageSize: 50,
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 2, allTotal)
+	require.ElementsMatch(t, []string{withMsg.ID, emptyShell.ID}, listItemIDsForTest(allItems))
+
+	filledItems, filledTotal, err := repo.QueryPaged(ctx, &types.SessionListQuery{
+		TenantID: 1, UserID: "alice", HasMessages: true, Page: 1, PageSize: 50,
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, filledTotal)
+	require.Equal(t, []string{withMsg.ID}, listItemIDsForTest(filledItems))
+}

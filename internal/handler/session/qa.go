@@ -85,12 +85,20 @@ type qaRequestContext struct {
 	// the previous turn exits). Events still land in StreamManager so the
 	// client can attach via continue-stream; nothing is written to gin.
 	skipSSE bool
+	// bufferEmbedJSON asks executeQA to wait for the async turn and return a
+	// single JSON body (IE9 legacy embed backup when SSE XHR is unstable).
+	// Implies skipSSE for the gin writer path.
+	bufferEmbedJSON bool
 	// steerCarryOver is appended to this run's steer sub-list before the run
 	// is published as live, so leftover inject / after messages from the
 	// previous run are visible to this engine from round 1 and to any client
 	// that reloads the queue.
 	steerCarryOver []interfaces.StreamEvent
 }
+
+// GinKeyEmbedBufferedJSON marks an embed agent-chat request that wants a
+// single application/json response instead of text/event-stream.
+const GinKeyEmbedBufferedJSON = "embed_buffered_json"
 
 // buildQARequest converts the qaRequestContext into a types.QARequest for service invocation.
 // steerSink rides along when the caller set one, so agent runs drain mid-run
@@ -423,6 +431,12 @@ func (h *Handler) parseQARequest(c *gin.Context, logPrefix string) (*qaRequestCo
 		reqAgentEnabled:       request.AgentEnabled,
 		reqAgentID:            request.AgentID,
 		resourceRewriter:      resourceRewriter,
+	}
+	if flag, exists := c.Get(GinKeyEmbedBufferedJSON); exists {
+		if enabled, ok := flag.(bool); ok && enabled {
+			reqCtx.skipSSE = true
+			reqCtx.bufferEmbedJSON = true
+		}
 	}
 
 	return reqCtx, &request, nil
@@ -1106,7 +1120,9 @@ func (h *Handler) executeQA(reqCtx *qaRequestContext, mode qaMode, generateTitle
 
 	if mode == qaModeAgent {
 		if err := h.rejectIfOtherAgentRunLive(ctx, reqCtx); err != nil {
-			if reqCtx.c != nil && !reqCtx.skipSSE {
+			if reqCtx.bufferEmbedJSON && reqCtx.c != nil {
+				writeEmbedBufferedJSONError(reqCtx.c, err)
+			} else if reqCtx.c != nil && !reqCtx.skipSSE {
 				_ = reqCtx.c.Error(err)
 			} else {
 				logger.ErrorWithFields(ctx, err, map[string]interface{}{"session_id": sessionID})
@@ -1138,7 +1154,9 @@ func (h *Handler) executeQA(reqCtx *qaRequestContext, mode qaMode, generateTitle
 	// Create user message. Include pre-uploaded document metadata so history
 	// reload shows the attachments even though their content is selected later.
 	if err := h.persistTurnMessages(ctx, reqCtx); err != nil {
-		if reqCtx.c != nil && !reqCtx.skipSSE {
+		if reqCtx.bufferEmbedJSON && reqCtx.c != nil {
+			writeEmbedBufferedJSONError(reqCtx.c, errors.NewInternalServerError(err.Error()))
+		} else if reqCtx.c != nil && !reqCtx.skipSSE {
 			_ = reqCtx.c.Error(errors.NewInternalServerError(err.Error()))
 		} else {
 			logger.ErrorWithFields(ctx, err, map[string]interface{}{"session_id": sessionID})
@@ -1171,7 +1189,13 @@ func (h *Handler) executeQA(reqCtx *qaRequestContext, mode qaMode, generateTitle
 			streamCtx.cancel()
 		}
 		h.rollbackTurnMessages(ctx, reqCtx, createdUser, createdAssistant)
-		if reqCtx.c != nil && !reqCtx.skipSSE {
+		if reqCtx.bufferEmbedJSON && reqCtx.c != nil {
+			if stderrors.Is(streamCtx.liveRunErr, stream.ErrLiveRunExists) {
+				writeEmbedBufferedJSONError(reqCtx.c, errors.NewConflictError("another turn is already running in this session"))
+			} else {
+				writeEmbedBufferedJSONError(reqCtx.c, errors.NewServiceUnavailableError("Failed to publish running turn"))
+			}
+		} else if reqCtx.c != nil && !reqCtx.skipSSE {
 			if stderrors.Is(streamCtx.liveRunErr, stream.ErrLiveRunExists) {
 				_ = reqCtx.c.Error(errors.NewConflictError("another turn is already running in this session"))
 			} else {
@@ -1341,6 +1365,9 @@ func (h *Handler) executeQA(reqCtx *qaRequestContext, mode qaMode, generateTitle
 
 	if reqCtx.skipSSE {
 		<-asyncDone
+		if reqCtx.bufferEmbedJSON && reqCtx.c != nil {
+			h.writeEmbedBufferedJSON(ctx, reqCtx, streamCtx)
+		}
 		return
 	}
 
@@ -1348,6 +1375,48 @@ func (h *Handler) executeQA(reqCtx *qaRequestContext, mode qaMode, generateTitle
 	shouldWaitForTitle := generateTitle && reqCtx.session.Title == ""
 	h.handleAgentEventsForSSE(ctx, reqCtx.c, sessionID, reqCtx.assistantMessage.ID,
 		reqCtx.requestID, streamCtx.eventBus, shouldWaitForTitle, reqCtx.resourceRewriter)
+}
+
+func writeEmbedBufferedJSONError(c *gin.Context, err error) {
+	if c == nil || err == nil {
+		return
+	}
+	status := http.StatusInternalServerError
+	msg := err.Error()
+	var appErr *errors.AppError
+	if stderrors.As(err, &appErr) && appErr != nil {
+		if appErr.HTTPCode > 0 {
+			status = appErr.HTTPCode
+		}
+		msg = appErr.Message
+	}
+	c.JSON(status, gin.H{"success": false, "error": msg})
+}
+
+func (h *Handler) writeEmbedBufferedJSON(
+	ctx context.Context,
+	reqCtx *qaRequestContext,
+	streamCtx *sseStreamContext,
+) {
+	answer := ""
+	messageID := ""
+	if streamCtx != nil && streamCtx.assistantMessage != nil {
+		answer = streamCtx.assistantMessage.Content
+		messageID = streamCtx.assistantMessage.ID
+	}
+	if h.messageService != nil && reqCtx != nil && messageID != "" {
+		if msg, err := h.messageService.GetMessage(ctx, reqCtx.sessionID, messageID); err == nil && msg != nil {
+			answer = msg.Content
+		}
+	}
+	reqCtx.c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"answer":     answer,
+			"session_id": reqCtx.sessionID,
+			"message_id": messageID,
+		},
+	})
 }
 
 // runVLMAnalysisIfNeeded runs VLM image analysis within the async goroutine,

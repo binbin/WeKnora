@@ -11,6 +11,7 @@ export async function getSessionsList(
   page_size: number,
   source?: string,
   agentId?: string,
+  options?: { hasMessages?: boolean },
 ) {
   const params = new URLSearchParams({
     page: String(page),
@@ -21,6 +22,9 @@ export async function getSessionsList(
   }
   if (agentId) {
     params.set("agent_id", agentId);
+  }
+  if (options?.hasMessages) {
+    params.set("has_messages", "true");
   }
   return get(`/api/v1/sessions?${params.toString()}`);
 }

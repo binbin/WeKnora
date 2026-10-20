@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI 助手</title>
+  <link rel="stylesheet" href="/legacy-embed/style.css" />
+</head>
+<body>
+  <div id="app" class="embed-page">
+    <div id="error" class="embed-error" style="display:none;"></div>
+    <div id="loading" class="embed-loading">加载中...</div>
+    <div id="shell" class="embed-shell" style="display:none;">
+      <div id="sidebar-mask" class="embed-sidebar-mask" style="display:none;"></div>
+      <aside id="sidebar" class="embed-session-sidebar" style="display:none;">
+        <div class="embed-session-sidebar__head">
+          <h2 class="embed-session-sidebar__title">对话列表</h2>
+          <button type="button" id="btn-new" class="embed-session-sidebar__new" disabled>新建对话</button>
+        </div>
+        <div id="session-list" class="embed-session-sidebar__list" role="list"></div>
+      </aside>
+      <div class="embed-main">
+        <header class="embed-header">
+          <button type="button" id="btn-menu" class="embed-header__menu" style="display:none;" title="对话列表">☰</button>
+          <span id="header-badge" class="embed-header__badge">AI</span>
+          <div class="embed-header__text">
+            <h1 id="header-title" class="embed-header__title">AI 助手</h1>
+            <p id="header-sub" class="embed-header__subtitle" style="display:none;"></p>
+          </div>
+          <button type="button" id="btn-header-new" class="embed-header__action" style="display:none;" title="新建对话" disabled>+</button>
+        </header>
+        <div class="embed-chat">
+          <div id="scroll" class="embed-chat__scroll">
+            <div id="messages" class="embed-chat__messages"></div>
+          </div>
+          <div id="mcp-hint" class="embed-mcp-hint" style="display:none;">
+            当前对话需要完成授权或工具确认，请使用 Chrome / Edge 等现代浏览器打开。
+          </div>
+          <div class="embed-chat__input">
+            <div id="input-box" class="embed-input-box">
+              <textarea id="input" class="embed-input-box__textarea" rows="2" placeholder="有问题，尽管问"></textarea>
+              <div class="embed-input-box__bar">
+                <div class="embed-input-box__actions">
+                  <button type="button" id="btn-stop" class="embed-stop-btn" style="display:none;" title="停止生成">
+                    <span class="embed-stop-btn__icon"></span>
+                  </button>
+                  <button type="button" id="btn-send" class="embed-send-btn" title="发送" disabled>
+                    <img src="/legacy-embed/send.svg" width="16" height="16" alt="" />
+                    <span class="embed-send-btn__text">发送</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="embed-chat__ai-disclaimer">内容由AI生成，请仔细甄别</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/config.js"></script>
+  <!--[if lt IE 9]>
+  <script src="/legacy-embed/json2.min.js"></script>
+  <![endif]-->
+  <script src="/legacy-embed/json2.js"></script>
+  <script src="/legacy-embed/jquery-1.12.4.min.js"></script>
+  <script src="/legacy-embed/api.js"></script>
+  <script src="/legacy-embed/markdown.js"></script>
+  <script src="/legacy-embed/app.js"></script>
+</body>
+</html>

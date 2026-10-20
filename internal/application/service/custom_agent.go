@@ -22,9 +22,13 @@ var (
 	ErrCannotModifyBuiltin   = errors.New("cannot modify built-in agent basic info")
 	ErrCannotDeleteBuiltin   = errors.New("cannot delete built-in agent")
 	ErrAgentNameRequired     = errors.New("agent name is required")
-	ErrBuiltinModelRequired  = errors.New("a built-in KnowledgeQA model is required")
-	ErrBuiltinAgentDisabled  = errors.New("built-in agents are disabled")
-	ErrAgentNotVisibleInChat = errors.New("agent is not available in this department")
+	// ErrKnowledgeQAModelRequired is returned when create/update/copy lacks a
+	// usable KnowledgeQA (chat) model. Kept as ErrBuiltinModelRequired alias
+	// below for handler compatibility with older call sites.
+	ErrKnowledgeQAModelRequired = errors.New("a KnowledgeQA model is required")
+	ErrBuiltinModelRequired     = ErrKnowledgeQAModelRequired
+	ErrBuiltinAgentDisabled     = errors.New("built-in agents are disabled")
+	ErrAgentNotVisibleInChat    = errors.New("agent is not available in this department")
 )
 
 const (
@@ -78,7 +82,7 @@ func (s *customAgentService) CreateAgent(ctx context.Context, agent *types.Custo
 	if strings.TrimSpace(agent.Name) == "" {
 		return nil, ErrAgentNameRequired
 	}
-	if err := s.validateBuiltinKnowledgeQAModel(ctx, agent.Config.ModelID); err != nil {
+	if err := s.validateKnowledgeQAModel(ctx, agent.Config.ModelID); err != nil {
 		return nil, err
 	}
 
@@ -283,22 +287,26 @@ func canListAllOrgAgents(ctx context.Context) bool {
 	return role == types.TenantRoleAdmin || role == types.TenantRoleOwner
 }
 
-func (s *customAgentService) validateBuiltinKnowledgeQAModel(
+// validateKnowledgeQAModel ensures the agent binds an active KnowledgeQA
+// (chat) model. Tenant-owned and built-in models are both accepted; the
+// previous IsBuiltin-only check rejected models added via Settings and
+// blocked agent creation on deployments without builtin_models.yaml.
+func (s *customAgentService) validateKnowledgeQAModel(
 	ctx context.Context, modelID string,
 ) error {
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {
-		return ErrBuiltinModelRequired
+		return ErrKnowledgeQAModelRequired
 	}
 	if s.modelService == nil {
-		return ErrBuiltinModelRequired
+		return ErrKnowledgeQAModelRequired
 	}
 	model, err := s.modelService.GetModelByID(ctx, modelID)
 	if err != nil || model == nil {
-		return ErrBuiltinModelRequired
+		return ErrKnowledgeQAModelRequired
 	}
-	if !model.IsBuiltin || model.Type != types.ModelTypeKnowledgeQA {
-		return ErrBuiltinModelRequired
+	if model.Type != types.ModelTypeKnowledgeQA {
+		return ErrKnowledgeQAModelRequired
 	}
 	return nil
 }
@@ -339,7 +347,7 @@ func (s *customAgentService) UpdateAgent(ctx context.Context, agent *types.Custo
 	if strings.TrimSpace(agent.Name) == "" {
 		return nil, ErrAgentNameRequired
 	}
-	if err := s.validateBuiltinKnowledgeQAModel(ctx, agent.Config.ModelID); err != nil {
+	if err := s.validateKnowledgeQAModel(ctx, agent.Config.ModelID); err != nil {
 		return nil, err
 	}
 
@@ -505,7 +513,7 @@ func (s *customAgentService) CopyAgent(ctx context.Context, id string) (*types.C
 	if sourceAgent.IsBuiltin || types.IsBuiltinAgentID(sourceAgent.ID) {
 		return nil, ErrBuiltinAgentDisabled
 	}
-	if err := s.validateBuiltinKnowledgeQAModel(ctx, sourceAgent.Config.ModelID); err != nil {
+	if err := s.validateKnowledgeQAModel(ctx, sourceAgent.Config.ModelID); err != nil {
 		return nil, err
 	}
 

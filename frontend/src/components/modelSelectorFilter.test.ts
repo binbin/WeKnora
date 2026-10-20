@@ -61,3 +61,15 @@ test('non-VLLM selectors still filter strictly by type', () => {
   const ids = filterModelsByType(fixtures, 'KnowledgeQA').map((m) => m.id)
   assert.deepEqual(ids, ['chat-vision', 'chat-text'])
 })
+
+test('onlyBuiltin keeps built-in models of the requested type', () => {
+  const withBuiltin: ModelConfig[] = [
+    ...fixtures,
+    model({ id: 'builtin-chat', type: 'KnowledgeQA', is_builtin: true }),
+    model({ id: 'builtin-embed', type: 'Embedding', is_builtin: true }),
+  ]
+  const ids = filterModelsByType(withBuiltin, 'KnowledgeQA', true).map(
+    (item) => item.id,
+  )
+  assert.deepEqual(ids, ['builtin-chat'])
+})

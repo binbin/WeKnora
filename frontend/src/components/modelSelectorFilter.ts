@@ -5,14 +5,19 @@ export type ModelSelectorType = ModelConfig['type']
 export function filterModelsByType(
   allModels: ModelConfig[],
   modelType: ModelSelectorType,
+  onlyBuiltin = false,
 ): ModelConfig[] {
-  if (modelType === 'VLLM') {
-    return allModels.filter(
-      (m) =>
-        m.type === 'VLLM' ||
-        (m.type === 'KnowledgeQA' && m.parameters?.supports_vision === true),
+  const byType = modelType === 'VLLM'
+    ? allModels.filter(
+      (model) =>
+        model.type === 'VLLM' ||
+        (model.type === 'KnowledgeQA' &&
+          model.parameters?.supports_vision === true),
     )
-  }
+    : allModels.filter((model) => model.type === modelType)
 
-  return allModels.filter((m) => m.type === modelType)
+  if (!onlyBuiltin) {
+    return byType
+  }
+  return byType.filter((model) => model.is_builtin === true)
 }

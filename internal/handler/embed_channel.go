@@ -609,6 +609,20 @@ func (h *EmbedChannelHandler) EmbedRelayWebhookEvent(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+func wantsEmbedBufferedJSON(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	if c.Query("stream") == "0" {
+		return true
+	}
+	accept := strings.ToLower(c.GetHeader("Accept"))
+	if strings.Contains(accept, "text/event-stream") {
+		return false
+	}
+	return strings.Contains(accept, "application/json")
+}
+
 func (h *EmbedChannelHandler) delegateEmbedChat(c *gin.Context, agentMode bool) {
 	ch, ok := middleware.EmbedChannelFromContext(c.Request.Context())
 	if !ok {
@@ -632,6 +646,9 @@ func (h *EmbedChannelHandler) delegateEmbedChat(c *gin.Context, agentMode bool) 
 	}
 	c.Request.Body = io.NopCloser(bytes.NewReader(patched))
 	c.Request.ContentLength = int64(len(patched))
+	if wantsEmbedBufferedJSON(c) {
+		c.Set(session.GinKeyEmbedBufferedJSON, true)
+	}
 	if agentMode && ch.AgentID != types.BuiltinQuickAnswerID {
 		h.sessionHandler.AgentQA(c)
 		return

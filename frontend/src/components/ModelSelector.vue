@@ -81,7 +81,7 @@ interface Props {
   clearable?: boolean
   // 可选：外部传入的所有模型列表，如果提供则不调用API
   allModels?: ModelConfig[]
-  // 仅展示内置模型（创建智能体时强制选内置 KnowledgeQA）
+  // 仅展示内置模型（可选；默认展示全部可用模型）
   onlyBuiltin?: boolean
 }
 
@@ -123,10 +123,10 @@ const contextWindowTitle = (tokens?: number) => {
 
 // 外部传入 allModels 时跟着 prop 走；否则用空间级缓存，设置页改完窗口立刻能看见。
 watch(
-  () => [props.allModels, props.modelType, chatResources.allModels] as const,
+  () => [props.allModels, props.modelType, props.onlyBuiltin, chatResources.allModels] as const,
   ([newModels]) => {
     const source = Array.isArray(newModels) ? newModels : chatResources.allModels
-    models.value = filterModelsByType(source, props.modelType)
+    models.value = filterModelsByType(source, props.modelType, props.onlyBuiltin)
   },
   { immediate: true },
 )
@@ -145,7 +145,11 @@ const loadModels = async () => {
   loading.value = true
   try {
     await chatResources.ensureModels()
-    models.value = filterModelsByType(chatResources.allModels, props.modelType)
+    models.value = filterModelsByType(
+      chatResources.allModels,
+      props.modelType,
+      props.onlyBuiltin,
+    )
   } catch (error) {
     console.error(t('model.loadFailed'), error)
     MessagePlugin.error(t('model.loadFailed'))

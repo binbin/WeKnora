@@ -3,6 +3,32 @@
 <head>
     <title>TreeRAG Embed</title>
     <meta charset="utf-8">
+    <!-- IE sniff MUST run before any module scripts. -->
+    <script>
+    (function () {
+      var mode = document.documentMode;
+      var ua = navigator.userAgent || '';
+      var isIE = typeof mode === 'number' || /MSIE \d/.test(ua) || /Trident\//.test(ua);
+      if (!isIE) return;
+      var ieVersion = typeof mode === 'number' ? mode : 0;
+      if (!ieVersion) {
+        var match = /MSIE (\d+)/.exec(ua);
+        ieVersion = match ? parseInt(match[1], 10) : 11;
+      }
+      // IE8+: jQuery legacy shell (Vue3 cannot run on IE). IE7− tip only.
+      if (ieVersion < 8) {
+        location.replace('/legacy-unsupported.html');
+        return;
+      }
+      // Guest links (/w/) use a non-frameable entry; embed keeps iframe-capable.
+      var path = location.pathname + location.search + location.hash;
+      var entry = path.indexOf('/w/') === 0 ? '/legacy-guest.html' : '/legacy-embed.html';
+      location.replace(entry + '?p=' + encodeURIComponent(path));
+    })();
+    </script>
+    <!--[if lt IE 8]>
+    <script>location.replace('/legacy-unsupported.html');</script>
+    <![endif]-->
     <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="renderer" content="webkit">

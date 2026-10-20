@@ -175,6 +175,16 @@ func (r *sessionRepository) QueryPaged(
 		if kw := strings.TrimSpace(q.Keyword); kw != "" {
 			db = db.Where(titleLikeExpr, "%"+escapeLikeKeyword(kw)+"%")
 		}
+		if q.HasMessages {
+			// Guest-link / embed opens create a session before the first turn;
+			// conversation logs should not list those empty shells.
+			db = db.Where(
+				`EXISTS (
+					SELECT 1 FROM messages m
+					WHERE m.session_id = s.id AND m.deleted_at IS NULL
+				)`,
+			)
+		}
 		return db
 	}
 

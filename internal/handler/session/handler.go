@@ -3,6 +3,7 @@ package session
 import (
 	stderrors "errors"
 	"net/http"
+	"strings"
 
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/browserskill"
@@ -234,9 +235,10 @@ func (h *Handler) GetSession(c *gin.Context) {
 // @Param        page_size  query     int     false  "每页数量"
 // @Param        keyword    query     string  false  "标题模糊搜索"
 // @Param        source     query     string  false  "来源过滤：web / embed / api / feishu / wechat / slack / ...（api、embed、IM 渠道需 Admin+）"
-// @Param        agent_id   query     string  false  "按 Agent 过滤（匹配 IM 绑定或会话 last_request_state.agent_id；Admin+ 可见租户内全部）"
-// @Success      200        {object}  map[string]interface{}  "会话列表"
-// @Failure      400        {object}  errors.AppError         "请求参数错误"
+// @Param        agent_id      query     string  false  "按 Agent 过滤（匹配 IM 绑定或会话 last_request_state.agent_id；Admin+ 可见租户内全部）"
+// @Param        has_messages  query     bool    false  "仅返回至少有一条消息的会话（用于对话日志，排除空壳会话）"
+// @Success      200           {object}  map[string]interface{}  "会话列表"
+// @Failure      400           {object}  errors.AppError         "请求参数错误"
 // @Security     Bearer
 // @Security     ApiKeyAuth
 // @Router       /sessions [get]
@@ -254,12 +256,18 @@ func (h *Handler) GetSessionsByTenant(c *gin.Context) {
 	// Response items always include pin state and (when available) IM origin
 	// fields so the frontend can render pin icons / source badges without a
 	// second roundtrip. Unset filter params behave like "no filter".
+	hasMessages := false
+	switch strings.ToLower(strings.TrimSpace(c.Query("has_messages"))) {
+	case "1", "true", "yes":
+		hasMessages = true
+	}
 	result, err := h.sessionService.ListSessions(ctx, &types.SessionListQuery{
-		Keyword:  c.Query("keyword"),
-		Source:   c.Query("source"),
-		AgentID:  c.Query("agent_id"),
-		Page:     pagination.Page,
-		PageSize: pagination.PageSize,
+		Keyword:     c.Query("keyword"),
+		Source:      c.Query("source"),
+		AgentID:     c.Query("agent_id"),
+		HasMessages: hasMessages,
+		Page:        pagination.Page,
+		PageSize:    pagination.PageSize,
 	})
 	if err != nil {
 		logger.ErrorWithFields(ctx, err, nil)

@@ -295,7 +295,9 @@ async function loadAllSessionPages(
 
 async function loadWebSessions(): Promise<LogRow[]> {
   const sessions = await loadAllSessionPages((page) =>
-    getSessionsList(page, PAGE_SIZE, 'web', props.agentId) as Promise<SessionsPageResponse>,
+    getSessionsList(page, PAGE_SIZE, 'web', props.agentId, {
+      hasMessages: true,
+    }) as Promise<SessionsPageResponse>,
   )
   return sessions.map((session) =>
     toRow(session, 'web', t('agentEditor.workspace.logsSourceWeb')),
@@ -343,7 +345,9 @@ async function loadSessionsForEmbedChannel(
   const source = `embed:${channel.id}`
   try {
     const sessions = await loadAllSessionPages((page) =>
-      getSessionsList(page, PAGE_SIZE, source) as Promise<SessionsPageResponse>,
+      getSessionsList(page, PAGE_SIZE, source, undefined, {
+        hasMessages: true,
+      }) as Promise<SessionsPageResponse>,
     )
     return sessions.map((session) =>
       toRow(session, channel.sourceKey, channel.sourceLabel),
@@ -366,6 +370,7 @@ async function loadOrphanEmbedSessions(
         PAGE_SIZE,
         'embed',
         props.agentId,
+        { hasMessages: true },
       ) as Promise<SessionsPageResponse>,
     )
     return sessions
@@ -412,6 +417,7 @@ async function loadImSessions(): Promise<LogRow[]> {
           PAGE_SIZE,
           platform,
           props.agentId,
+          { hasMessages: true },
         ) as Promise<SessionsPageResponse>,
       )
       for (const session of sessions) {
