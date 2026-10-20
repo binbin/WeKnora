@@ -38,21 +38,29 @@
   var instance = null;
   var listeners = {};
 
-  function ieDocumentMode() {
+  function realIeVersion() {
+    var ua = (global.navigator && global.navigator.userAgent) || '';
+    // Trident beats documentMode: intranet Compatibility View reports IE7.
+    var trident = /Trident\/(\d+)/.exec(ua);
+    if (trident) {
+      return parseInt(trident[1], 10) + 4;
+    }
+    var msie = /MSIE (\d+)/.exec(ua);
+    if (msie) {
+      return parseInt(msie[1], 10);
+    }
     if (typeof document !== 'undefined' && typeof document.documentMode === 'number') {
       return document.documentMode;
     }
-    var ua = (global.navigator && global.navigator.userAgent) || '';
-    var match = /MSIE (\d+)/.exec(ua);
-    return match ? parseInt(match[1], 10) : 0;
+    return 0;
   }
 
   function isLegacyIEHost() {
     // IE7 and below cannot host the widget; IE8+ loads iframe → legacy shell.
-    var mode = ieDocumentMode();
-    if (mode > 0) return mode < 8;
+    var ver = realIeVersion();
+    if (ver > 0) return ver < 8;
     var ua = (global.navigator && global.navigator.userAgent) || '';
-    return /MSIE [1-7]\./.test(ua);
+    return /MSIE [1-7]\./.test(ua) && ua.indexOf('Trident/') < 0;
   }
 
   // Minimal Promise for IE9 token refresh (static-token mode never needs it).

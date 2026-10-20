@@ -21,6 +21,15 @@
 | **IE8–11** `/embed/*` | → `legacy-embed.html`（可被 widget iframe） |
 | IE7− | `legacy-unsupported.html` |
 
+### 内网 Compatibility View 坑（已修）
+
+IE 默认「在兼容性视图中显示 Intranet 站点」时：
+
+- `document.documentMode === 7`，UA 里常是 `MSIE 7.0`，但带 `Trident/5.0`（真实 IE9）
+- 条件注释 `<!--[if lt IE 8]>` **会按 IE7 求值** → 误跳 `/legacy-unsupported.html`
+
+嗅探改为：**优先 `Trident/N` 换算真实大版本**（N+4），并去掉条件注释跳转；`X-UA-Compatible: IE=edge` 放在 head 最前。
+
 ### IE8 相对 IE9 的体验差异（已做）
 
 - **对话主路径**：IE8 默认走 `?stream=0` JSON 聚合（等完整回答），不依赖 SSE 渐进读

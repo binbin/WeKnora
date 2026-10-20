@@ -32,11 +32,20 @@
   };
 
   function detectIeVersion() {
-    var mode = document.documentMode;
-    if (typeof mode === 'number') return mode;
     var ua = navigator.userAgent || '';
-    var match = /MSIE (\d+)/.exec(ua);
-    return match ? parseInt(match[1], 10) : 0;
+    // Trident beats documentMode: intranet Compatibility View lies as IE7.
+    var trident = /Trident\/(\d+)/.exec(ua);
+    if (trident) {
+      return parseInt(trident[1], 10) + 4;
+    }
+    var msie = /MSIE (\d+)/.exec(ua);
+    if (msie) {
+      return parseInt(msie[1], 10);
+    }
+    if (typeof document.documentMode === 'number') {
+      return document.documentMode;
+    }
+    return 0;
   }
 
   function preferBufferedChat() {

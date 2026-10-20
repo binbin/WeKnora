@@ -3,19 +3,36 @@
 <head>
     <title>TreeRAG Embed</title>
     <meta charset="utf-8">
+    <!-- Force Edge mode before sniff: intranet Compatibility View otherwise
+         sets documentMode=7 and makes <!--[if lt IE 8]> fire on real IE9. -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <!-- IE sniff MUST run before any module scripts. -->
     <script>
     (function () {
-      var mode = document.documentMode;
       var ua = navigator.userAgent || '';
+      var mode = document.documentMode;
       var isIE = typeof mode === 'number' || /MSIE \d/.test(ua) || /Trident\//.test(ua);
       if (!isIE) return;
-      var ieVersion = typeof mode === 'number' ? mode : 0;
-      if (!ieVersion) {
-        var match = /MSIE (\d+)/.exec(ua);
-        ieVersion = match ? parseInt(match[1], 10) : 11;
+
+      // Prefer Trident token: Compatibility View reports MSIE 7.0 + documentMode 7
+      // even on IE9/10/11. Trident/5=IE9, /6=IE10, /7=IE11; Trident/4=IE8.
+      function realIeVersion() {
+        var trident = /Trident\/(\d+)/.exec(ua);
+        if (trident) {
+          return parseInt(trident[1], 10) + 4;
+        }
+        var msie = /MSIE (\d+)/.exec(ua);
+        if (msie) {
+          return parseInt(msie[1], 10);
+        }
+        if (typeof mode === 'number' && mode > 0) {
+          return mode;
+        }
+        return 11;
       }
-      // IE8+: jQuery legacy shell (Vue3 cannot run on IE). IE7− tip only.
+
+      var ieVersion = realIeVersion();
+      // IE8+: jQuery legacy shell (Vue3 cannot run on IE). True IE7− tip only.
       if (ieVersion < 8) {
         location.replace('/legacy-unsupported.html');
         return;
@@ -26,11 +43,9 @@
       location.replace(entry + '?p=' + encodeURIComponent(path));
     })();
     </script>
-    <!--[if lt IE 8]>
-    <script>location.replace('/legacy-unsupported.html');</script>
-    <![endif]-->
+    <!-- Do NOT use <!--[if lt IE N]> redirects here: under Compatibility View
+         IE9 evaluates them as IE7 and would false-positive to unsupported. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="renderer" content="webkit">
     <link rel="shortcut icon" type="image/png" href="./public/favicon.ico"/>
     <style>
